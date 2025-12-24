@@ -3,7 +3,7 @@ import { AppMode, ShiftTime, ShiftType, ShopperData, ShopperShift, AdminAvailabi
 import { SHIFT_TIMES, formatDateKey, getShopperAllowedRange } from './constants';
 import { Button } from './components/Button';
 import { CalendarView } from './components/CalendarView';
-import { Users, Shield, Download, ArrowRight, UserPlus, CheckCircle, AlertCircle, Save, Trash2, History, XCircle } from 'lucide-react';
+import { Users, Shield, Download, ArrowRight, UserPlus, CheckCircle, AlertCircle, Save, Trash2, History, XCircle, Lock } from 'lucide-react';
 import { isWeekend, startOfWeek, addDays, subDays, getDay, isSameDay, format, isWithinInterval } from 'date-fns';
 
 const STORAGE_KEYS = {
@@ -15,7 +15,12 @@ const STORAGE_KEYS = {
 };
 
 function App() {
-  // State
+  // Auth State
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [password, setPassword] = useState('');
+  const [authError, setAuthError] = useState(false);
+
+  // App State
   const [mode, setMode] = useState<AppMode>(AppMode.HOME);
   const [isInitialized, setIsInitialized] = useState(false);
   const [showRestorePrompt, setShowRestorePrompt] = useState(false);
@@ -120,6 +125,15 @@ function App() {
   // --------------------------------------------------------------------------
   // Handlers
   // --------------------------------------------------------------------------
+
+  const handleLogin = () => {
+    if (password === '7709') {
+      setIsAuthenticated(true);
+      setAuthError(false);
+    } else {
+      setAuthError(true);
+    }
+  };
 
   const handleAdminToggle = (date: string, shift: ShiftTime, type: ShiftType) => {
     setAdminAvailability(prev => {
@@ -419,6 +433,34 @@ function App() {
   // --------------------------------------------------------------------------
   // Views
   // --------------------------------------------------------------------------
+
+  const renderLogin = () => (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <form onSubmit={(e) => { e.preventDefault(); handleLogin(); }} className="bg-white p-8 rounded-2xl shadow-xl max-w-sm w-full border border-gray-100 text-center space-y-6 animate-in fade-in zoom-in duration-300">
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto">
+                <Lock className="w-8 h-8 text-red-600" />
+            </div>
+            <div>
+                <h2 className="text-2xl font-bold text-gray-900">Welcome</h2>
+                <p className="text-gray-500 mt-2">Please enter the access code to continue.</p>
+            </div>
+            <div>
+                <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => { setPassword(e.target.value); setAuthError(false); }}
+                    className={`w-full px-4 py-3 rounded-lg border ${authError ? 'border-red-500 ring-1 ring-red-500' : 'border-gray-300 focus:ring-2 focus:ring-green-500'} outline-none transition-all`}
+                    placeholder="Password"
+                    autoFocus
+                />
+                {authError && <p className="text-red-500 text-sm mt-2 text-left flex items-center gap-1"><AlertCircle className="w-3 h-3"/> Incorrect password</p>}
+            </div>
+            <Button fullWidth onClick={(e) => { e.preventDefault(); handleLogin(); }}>
+                Enter
+            </Button>
+        </form>
+    </div>
+  );
 
   const renderRestorePrompt = () => (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -739,8 +781,9 @@ function App() {
 
   return (
     <>
-      {showRestorePrompt && renderRestorePrompt()}
-      {!showRestorePrompt && (
+      {!isAuthenticated && renderLogin()}
+      {isAuthenticated && showRestorePrompt && renderRestorePrompt()}
+      {isAuthenticated && !showRestorePrompt && (
         <>
           {mode === AppMode.HOME && renderHome()}
           {mode === AppMode.ADMIN && renderAdmin()}
