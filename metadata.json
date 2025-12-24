@@ -1,0 +1,5 @@
+{
+  "name": "Picnic Shift Scheduler",
+  "description": "A shift selection tool for new Picnic shoppers and admins to manage AA and Standard shift availability.",
+  "requestFramePermissions": []
+}
