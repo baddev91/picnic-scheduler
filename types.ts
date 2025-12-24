@@ -19,9 +19,20 @@ export interface ShopperShift {
   type: ShiftType;
 }
 
+export interface ShopperDetails {
+  usePicnicBus: boolean;
+  civilStatus: string;
+  clothingSize: string;
+  shoeSize: string;
+  gloveSize: string; // Auto-calculated
+  isRandstad: boolean;
+  address?: string; // Required if isRandstad is true
+}
+
 export interface ShopperData {
   name: string;
   shifts: ShopperShift[];
+  details?: ShopperDetails;
 }
 
 export enum AppMode {

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { AppMode, ShiftTime, ShiftType, ShopperData, ShopperShift, AdminAvailabilityMap } from './types';
+import { AppMode, ShiftTime, ShiftType, ShopperData, ShopperShift, AdminAvailabilityMap, ShopperDetails } from './types';
 import { SHIFT_TIMES, formatDateKey, getShopperAllowedRange } from './constants';
 import { Button } from './components/Button';
 import { CalendarView } from './components/CalendarView';
-import { Users, Shield, Download, ArrowRight, UserPlus, CheckCircle, AlertCircle, Save, Trash2, History, XCircle, Lock } from 'lucide-react';
+import { Users, Shield, Download, ArrowRight, UserPlus, CheckCircle, AlertCircle, Save, Trash2, History, XCircle, Lock, Bus, Heart, Shirt, Footprints, Hand, MapPin, Building2 } from 'lucide-react';
 import { isWeekend, startOfWeek, addDays, subDays, getDay, isSameDay, format, isWithinInterval } from 'date-fns';
 
 const STORAGE_KEYS = {
@@ -32,6 +32,18 @@ function App() {
   const [shopperNames, setShopperNames] = useState<string[]>([]);
   const [currentShopperIndex, setCurrentShopperIndex] = useState(0);
   const [selections, setSelections] = useState<ShopperData[]>([]);
+  
+  // Modal State for Shopper Details
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [tempDetails, setTempDetails] = useState<ShopperDetails>({
+    usePicnicBus: false,
+    civilStatus: 'Single',
+    clothingSize: 'M',
+    shoeSize: '40',
+    gloveSize: '8 (M)',
+    isRandstad: false,
+    address: ''
+  });
   
   // Temporary Inputs
   const [tempNameInput, setTempNameInput] = useState('');
@@ -63,6 +75,16 @@ function App() {
        localStorage.setItem(STORAGE_KEYS.MODE, mode);
     }
   }, [adminAvailability, shopperNames, selections, currentShopperIndex, mode, isInitialized]);
+
+  // 3. Auto-download on Summary
+  useEffect(() => {
+    if (mode === AppMode.SUMMARY) {
+      const timer = setTimeout(() => {
+        downloadCSV();
+      }, 500); // Short delay to ensure state is settled and UI is rendered
+      return () => clearTimeout(timer);
+    }
+  }, [mode]);
 
   const handleRestoreSession = () => {
     try {
@@ -111,8 +133,6 @@ function App() {
   // --------------------------------------------------------------------------
 
   // Safely parse a "YYYY-MM-DD" string into a Date object at 00:00:00 LOCAL time.
-  // This avoids UTC conversions that `new Date(string)` might perform, ensuring
-  // "2023-10-28" is always treated as that day, regardless of timezone.
   const getSafeDateFromKey = (dateStr: string): Date => {
     const [y, m, d] = dateStr.split('-').map(Number);
     return new Date(y, m - 1, d);
@@ -120,6 +140,21 @@ function App() {
 
   const getDayFromKey = (dateStr: string): number => {
     return getDay(getSafeDateFromKey(dateStr));
+  };
+
+  const calculateGloveSize = (clothingSize: string): string => {
+    // Mapping Logic: XS=6, S=7, M=8, L=9, XL=10, XXL=11, 3XL+=12
+    const map: Record<string, string> = {
+      'XS': '6 (XS)',
+      'S': '7 (S)',
+      'M': '8 (M)',
+      'L': '9 (L)',
+      'XL': '10 (XL)',
+      'XXL': '11 (XXL)',
+      '3XL': '12 (3XL)',
+      '4XL': '12 (4XL)'
+    };
+    return map[clothingSize] || '8 (M)';
   };
 
   // --------------------------------------------------------------------------
@@ -138,26 +173,16 @@ function App() {
   const handleAdminToggle = (date: string, shift: ShiftTime, type: ShiftType) => {
     setAdminAvailability(prev => {
       const dayConfig = prev[date] || {};
-      
-      // If specific shift config doesn't exist, it means ALL types were allowed by default.
-      // So we initialize it with both AA and STANDARD, then toggle the target one.
       const currentTypesForShift = dayConfig[shift] || [ShiftType.AA, ShiftType.STANDARD];
-      
       let newTypes: ShiftType[];
       if (currentTypesForShift.includes(type)) {
-        // Remove it
         newTypes = currentTypesForShift.filter(t => t !== type);
       } else {
-        // Add it back
         newTypes = [...currentTypesForShift, type];
       }
-
       return {
         ...prev,
-        [date]: {
-          ...dayConfig,
-          [shift]: newTypes
-        }
+        [date]: { ...dayConfig, [shift]: newTypes }
       };
     });
   };
@@ -165,28 +190,17 @@ function App() {
   const isRestViolation = (dateStr: string, newTime: ShiftTime, currentShifts: ShopperShift[]): boolean => {
     const earlyShifts = [ShiftTime.OPENING, ShiftTime.MORNING];
     const lateShifts = [ShiftTime.NOON, ShiftTime.AFTERNOON];
-
     const isNewEarly = earlyShifts.includes(newTime);
     const isNewLate = lateShifts.includes(newTime);
 
-    // Use safe parsing for date math
     const date = getSafeDateFromKey(dateStr);
     const prevDateKey = formatDateKey(subDays(date, 1));
     const nextDateKey = formatDateKey(addDays(date, 1));
-
     const prevShift = currentShifts.find(s => s.date === prevDateKey);
     const nextShift = currentShifts.find(s => s.date === nextDateKey);
 
-    // Rule: Cannot do Early if Prev day was Late
-    if (isNewEarly && prevShift && lateShifts.includes(prevShift.time)) {
-      return true;
-    }
-
-    // Rule: Cannot do Late if Next day is Early
-    if (isNewLate && nextShift && earlyShifts.includes(nextShift.time)) {
-      return true;
-    }
-
+    if (isNewEarly && prevShift && lateShifts.includes(prevShift.time)) return true;
+    if (isNewLate && nextShift && earlyShifts.includes(nextShift.time)) return true;
     return false;
   };
 
@@ -194,66 +208,35 @@ function App() {
     const currentName = shopperNames[currentShopperIndex];
     const prevData = selections.find(s => s.name === currentName) || { name: currentName, shifts: [] };
     let newShifts = [...prevData.shifts];
-    const targetDate = getSafeDateFromKey(dateStr); // Use safe date
+    const targetDate = getSafeDateFromKey(dateStr); 
     const allowedRange = getShopperAllowedRange();
 
     if (type === ShiftType.AA) {
-      // ----------------------------------------------------------------------
-      // AA LOGIC (Recurring within valid range)
-      // ----------------------------------------------------------------------
-      
-      // 1. Generate potential recurring dates (Current week + Next week)
-      // We only project forward one week because the range is limited to 2 weeks.
-      const potentialDates = [
-        targetDate,
-        addDays(targetDate, 7),
-      ];
-      
-      // Filter dates to ensure they fall within the allowed window
-      const recurringDates = potentialDates
-        .filter(d => isWithinInterval(d, allowedRange))
-        .map(d => formatDateKey(d));
-
-      // 2. Check current state (Are we adding or removing?)
+      const potentialDates = [targetDate, addDays(targetDate, 7)];
+      const recurringDates = potentialDates.filter(d => isWithinInterval(d, allowedRange)).map(d => formatDateKey(d));
       const isCurrentlySelected = newShifts.some(s => s.date === dateStr && s.time === shift && s.type === ShiftType.AA);
       
       if (isCurrentlySelected) {
-        // REMOVING: Remove AA pattern for these dates
         newShifts = newShifts.filter(s => {
-          // Only remove if it's one of the recurring dates calculated from this interaction
           const isTargetDate = recurringDates.includes(s.date);
-          if (isTargetDate && s.type === ShiftType.AA) {
-             return s.time !== shift;
-          }
+          if (isTargetDate && s.type === ShiftType.AA) return s.time !== shift;
           return true;
         });
       } else {
-        // ADDING: Enforce Max 2 AA rules (1 Weekday, 1 Weekend)
-        
-        // Check 1: Rest Violation
         if (isRestViolation(dateStr, shift, newShifts)) {
           alert("Rest Constraint: You cannot work an Opening/Morning shift after a Noon/Afternoon shift, or vice versa.");
           return;
         }
 
-        // Check 2: Pattern Constraints
         const targetDayIndex = getDayFromKey(dateStr);
         const isTargetWeekend = targetDayIndex === 0 || targetDayIndex === 6;
-        
-        // Find existing AA patterns based on Day of Week
         const uniqueAADaysOfWeek = new Set<number>();
-        newShifts.forEach(s => {
-          if (s.type === ShiftType.AA) {
-             uniqueAADaysOfWeek.add(getDayFromKey(s.date));
-          }
-        });
+        newShifts.forEach(s => { if (s.type === ShiftType.AA) uniqueAADaysOfWeek.add(getDayFromKey(s.date)); });
 
-        // Determine if we have Weekday or Weekend patterns already
         let hasWeekdayPattern = false;
         let hasWeekendPattern = false;
-
         uniqueAADaysOfWeek.forEach(dayIndex => {
-          if (dayIndex === 0 || dayIndex === 6) hasWeekendPattern = true; // 0=Sun, 6=Sat
+          if (dayIndex === 0 || dayIndex === 6) hasWeekendPattern = true;
           else hasWeekdayPattern = true;
         });
 
@@ -266,61 +249,41 @@ function App() {
           return;
         }
 
-        // Check 3: Time Conflict
-        const hasTimeConflict = recurringDates.some(rDate => {
-           return newShifts.some(s => s.date === rDate && s.time !== shift);
-        });
+        const hasTimeConflict = recurringDates.some(rDate => newShifts.some(s => s.date === rDate && s.time !== shift));
         if (hasTimeConflict) {
            alert("You have a shift selected at a different time on one of these days. Please remove it before setting this AA pattern.");
            return;
         }
 
-        // Apply Add
         recurringDates.forEach(rDate => {
-           // Clear existing AA for this date/time just in case
            newShifts = newShifts.filter(s => !(s.date === rDate && s.time === shift && s.type === ShiftType.AA));
-           
-           newShifts.push({
-             date: rDate,
-             time: shift,
-             type: ShiftType.AA
-           });
+           newShifts.push({ date: rDate, time: shift, type: ShiftType.AA });
         });
       }
-
     } else {
-      // ----------------------------------------------------------------------
-      // STANDARD LOGIC (Single day)
-      // ----------------------------------------------------------------------
-      
       if (isRestViolation(dateStr, shift, newShifts)) {
         alert("Rest Constraint: You cannot work an Opening/Morning shift after a Noon/Afternoon shift, or vice versa.");
         return;
       }
-
       const existingAA = newShifts.find(s => s.date === dateStr && s.type === ShiftType.AA);
-      if (existingAA) {
-        if (existingAA.time !== shift) {
-          alert(`You have an AA shift at ${existingAA.time}. Your Standard shift must match the AA time for this day.`);
-          return;
-        }
-      } else {
+      if (existingAA && existingAA.time !== shift) {
+        alert(`You have an AA shift at ${existingAA.time}. Your Standard shift must match the AA time for this day.`);
+        return;
+      } else if (!existingAA) {
         newShifts = newShifts.filter(s => s.date !== dateStr || s.time === shift);
       }
 
       const existingIndex = newShifts.findIndex(s => s.date === dateStr && s.time === shift && s.type === ShiftType.STANDARD);
-      if (existingIndex >= 0) {
-        newShifts.splice(existingIndex, 1);
-      } else {
-        newShifts.push({ date: dateStr, time: shift, type: ShiftType.STANDARD });
-      }
+      if (existingIndex >= 0) newShifts.splice(existingIndex, 1);
+      else newShifts.push({ date: dateStr, time: shift, type: ShiftType.STANDARD });
     }
 
-    // Update State
     const newSelections = [...selections];
     const existingSelectionIndex = newSelections.findIndex(s => s.name === currentName);
+    const existingDetails = existingSelectionIndex >= 0 ? newSelections[existingSelectionIndex].details : undefined;
+    
     if (existingSelectionIndex >= 0) {
-      newSelections[existingSelectionIndex] = { name: currentName, shifts: newShifts };
+      newSelections[existingSelectionIndex] = { name: currentName, shifts: newShifts, details: existingDetails };
     } else {
       newSelections.push({ name: currentName, shifts: newShifts });
     }
@@ -328,44 +291,49 @@ function App() {
   };
 
   const getExportCSV = () => {
-    const header = ['Shopper Name', 'Date', 'Day of Week', 'Shift Time', 'Shift Type'];
+    const header = [
+      'Shopper Name', 'Date', 'Day of Week', 'Shift Time', 'Shift Type', 
+      'Picnic Bus', 'Civil Status', 'Clothes Size', 'Shoe Size', 'Glove Size', 'Agency (Randstad)', 'Address'
+    ];
     
     const rows = selections.flatMap(shopper => {
-      // 1. Group shifts by Date + Time to identify overlaps (AA + Standard)
-      const shiftMap = new Map<string, { date: string; time: string; types: Set<ShiftType> }>();
+      // Get details safe access
+      const d = shopper.details || {
+        usePicnicBus: false, civilStatus: '-', clothingSize: '-', shoeSize: '-', gloveSize: '-', isRandstad: false, address: '-'
+      };
 
+      const shiftMap = new Map<string, { date: string; time: string; types: Set<ShiftType> }>();
       shopper.shifts.forEach(s => {
         const key = `${s.date}|${s.time}`;
-        if (!shiftMap.has(key)) {
-          shiftMap.set(key, { date: s.date, time: s.time, types: new Set() });
-        }
+        if (!shiftMap.has(key)) shiftMap.set(key, { date: s.date, time: s.time, types: new Set() });
         shiftMap.get(key)!.types.add(s.type);
       });
 
-      // 2. Convert to array and sort by date
       const uniqueSlots = Array.from(shiftMap.values());
       uniqueSlots.sort((a, b) => a.date.localeCompare(b.date));
 
-      // 3. Generate CSV rows
       return uniqueSlots.map(slot => {
-        const d = getSafeDateFromKey(slot.date);
-        const dayOfWeek = d.toLocaleDateString('en-US', { weekday: 'long' });
+        const dateObj = getSafeDateFromKey(slot.date);
+        const dayOfWeek = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
         
         let typeLabel = '';
-        if (slot.types.has(ShiftType.AA) && slot.types.has(ShiftType.STANDARD)) {
-          typeLabel = 'AA + Standard'; // Explicitly show it's both
-        } else if (slot.types.has(ShiftType.AA)) {
-          typeLabel = 'AA';
-        } else if (slot.types.has(ShiftType.STANDARD)) {
-          typeLabel = 'Standard';
-        }
+        if (slot.types.has(ShiftType.AA) && slot.types.has(ShiftType.STANDARD)) typeLabel = 'AA + Standard';
+        else if (slot.types.has(ShiftType.AA)) typeLabel = 'AA';
+        else if (slot.types.has(ShiftType.STANDARD)) typeLabel = 'Standard';
 
         return [
           `"${shopper.name}"`,
           slot.date,
           dayOfWeek,
           `"${slot.time}"`,
-          typeLabel
+          typeLabel,
+          d.usePicnicBus ? 'Yes' : 'No',
+          d.civilStatus,
+          d.clothingSize,
+          d.shoeSize,
+          d.gloveSize,
+          d.isRandstad ? 'Yes' : 'No',
+          `"${d.address || ''}"`
         ].join(',');
       });
     });
@@ -374,14 +342,19 @@ function App() {
   };
 
   const downloadCSV = () => {
-    const csvContent = "data:text/csv;charset=utf-8," + getExportCSV();
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "picnic_shifts_export.csv");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    try {
+      const csvContent = "data:text/csv;charset=utf-8," + getExportCSV();
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", "picnic_shifts_export.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (e) {
+      console.error("Export failed", e);
+      alert("Failed to generate CSV export. Please try again.");
+    }
   };
 
   // --------------------------------------------------------------------------
@@ -394,16 +367,12 @@ function App() {
     if (!data) return { valid: false, error: "Please select at least AA shifts." };
 
     const aaShifts = data.shifts.filter(s => s.type === ShiftType.AA);
-    
     if (aaShifts.length === 0) return { valid: false, error: "You must select AA shifts." };
 
-    // Validation: Exactly 1 Weekday Pattern and 1 Weekend Pattern
     const uniqueDays = new Set<number>();
     aaShifts.forEach(s => uniqueDays.add(getDayFromKey(s.date)));
-
     let hasWeekday = false;
     let hasWeekend = false;
-    
     uniqueDays.forEach(d => {
       if (d === 0 || d === 6) hasWeekend = true;
       else hasWeekday = true;
@@ -411,28 +380,224 @@ function App() {
 
     if (!hasWeekday) return { valid: false, error: "You are missing a Weekday AA pattern." };
     if (!hasWeekend) return { valid: false, error: "You are missing a Weekend AA pattern." };
-    
     return { valid: true };
   };
 
-  const handleNextShopper = () => {
+  const handleNextShopperClick = () => {
     const validation = validateCurrentShopper();
     if (!validation.valid) {
       alert(validation.error);
       return;
     }
-
-    if (currentShopperIndex < shopperNames.length - 1) {
-      setCurrentShopperIndex(prev => prev + 1);
+    
+    // Initialize modal with existing details or defaults
+    const currentName = shopperNames[currentShopperIndex];
+    const existing = selections.find(s => s.name === currentName)?.details;
+    
+    if (existing) {
+      setTempDetails({
+        ...existing,
+        address: existing.address || '' // Ensure address is never undefined
+      });
     } else {
-      downloadCSV(); // Auto download
-      setMode(AppMode.SUMMARY);
+      setTempDetails({
+        usePicnicBus: false,
+        civilStatus: 'Single',
+        clothingSize: 'M',
+        shoeSize: '40',
+        gloveSize: '8 (M)',
+        isRandstad: false,
+        address: ''
+      });
+    }
+    
+    setShowDetailsModal(true);
+  };
+
+  const handleDetailsSubmit = () => {
+    if (tempDetails.isRandstad && !tempDetails.address?.trim()) {
+      alert("Address is required if registered with Randstad.");
+      return;
+    }
+
+    try {
+      // Save details
+      const currentName = shopperNames[currentShopperIndex];
+      const newSelections = [...selections];
+      const idx = newSelections.findIndex(s => s.name === currentName);
+      if (idx >= 0) {
+        newSelections[idx].details = tempDetails;
+        setSelections(newSelections);
+      }
+
+      // Close modal immediately
+      setShowDetailsModal(false);
+
+      // Proceed state transition
+      // We rely on the useEffect hook to handle the download if we transition to SUMMARY
+      if (currentShopperIndex < shopperNames.length - 1) {
+        setCurrentShopperIndex(prev => prev + 1);
+      } else {
+        setMode(AppMode.SUMMARY);
+      }
+    } catch (error) {
+      console.error("Error submitting details:", error);
+      alert("An error occurred while saving details. Please try again.");
     }
   };
 
   // --------------------------------------------------------------------------
   // Views
   // --------------------------------------------------------------------------
+
+  const renderDetailsModal = () => {
+    if (!showDetailsModal) return null;
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+         <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="px-6 py-4 border-b bg-gray-50 flex items-center justify-between">
+              <h3 className="text-xl font-bold text-gray-800">Additional Details</h3>
+              <div className="text-sm text-gray-500">{shopperNames[currentShopperIndex]}</div>
+            </div>
+            
+            <div className="p-6 overflow-y-auto space-y-6">
+               {/* 1. Picnic Bus */}
+               <div className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors">
+                  <div className="flex items-center gap-3">
+                     <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
+                       <Bus className="w-5 h-5" />
+                     </div>
+                     <span className="font-medium text-gray-700">Use Free Picnic Bus?</span>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only peer" 
+                      checked={tempDetails.usePicnicBus}
+                      onChange={(e) => setTempDetails({...tempDetails, usePicnicBus: e.target.checked})}
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                  </label>
+               </div>
+
+               {/* 2. Civil Status */}
+               <div className="space-y-2">
+                 <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                    <Heart className="w-4 h-4 text-pink-500" /> Civil Status
+                 </label>
+                 <select 
+                   value={tempDetails.civilStatus}
+                   onChange={(e) => setTempDetails({...tempDetails, civilStatus: e.target.value})}
+                   className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-pink-500 outline-none"
+                 >
+                   <option value="Single">Single (Alleenstaand)</option>
+                   <option value="Married">Married (Gehuwd)</option>
+                   <option value="Cohabiting">Cohabiting (Samenwonend)</option>
+                   <option value="Registered Partnership">Registered Partnership (Geregistreerd partnerschap)</option>
+                   <option value="Divorced">Divorced (Gescheiden)</option>
+                 </select>
+               </div>
+
+               <div className="grid grid-cols-2 gap-4">
+                  {/* 3. Clothing Size */}
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                       <Shirt className="w-4 h-4 text-indigo-500" /> Clothes Size
+                    </label>
+                    <select 
+                      value={tempDetails.clothingSize}
+                      onChange={(e) => {
+                        const newSize = e.target.value;
+                        setTempDetails({
+                          ...tempDetails, 
+                          clothingSize: newSize,
+                          gloveSize: calculateGloveSize(newSize) // Auto update gloves
+                        });
+                      }}
+                      className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    >
+                      {['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL'].map(s => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* 4. Shoe Size */}
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                       <Footprints className="w-4 h-4 text-orange-500" /> Shoe Size
+                    </label>
+                    <select 
+                      value={tempDetails.shoeSize}
+                      onChange={(e) => setTempDetails({...tempDetails, shoeSize: e.target.value})}
+                      className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-orange-500 outline-none"
+                    >
+                      {Array.from({length: 16}, (_, i) => i + 35).map(s => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
+               </div>
+
+               {/* 5. Glove Size (Auto) */}
+               <div className="space-y-2">
+                 <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                    <Hand className="w-4 h-4 text-teal-500" /> Glove Size (Auto)
+                 </label>
+                 <div className="w-full bg-gray-100 border border-gray-200 rounded-lg px-4 py-2 text-gray-600 font-medium">
+                   {tempDetails.gloveSize}
+                 </div>
+                 <p className="text-xs text-gray-400">Calculated based on clothing size.</p>
+               </div>
+
+               <hr className="border-gray-200" />
+
+               {/* 6. Randstad */}
+               <div className="space-y-4">
+                 <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                       <div className="p-2 bg-yellow-100 text-yellow-600 rounded-lg">
+                         <Building2 className="w-5 h-5" />
+                       </div>
+                       <span className="font-medium text-gray-700">Hired via Randstad?</span>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer" 
+                        checked={tempDetails.isRandstad}
+                        onChange={(e) => setTempDetails({...tempDetails, isRandstad: e.target.checked})}
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-500"></div>
+                    </label>
+                 </div>
+                 
+                 {tempDetails.isRandstad && (
+                   <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                     <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
+                        <MapPin className="w-4 h-4 text-red-500" /> Full Address <span className="text-red-500">*</span>
+                     </label>
+                     <input 
+                       type="text" 
+                       value={tempDetails.address || ''} 
+                       onChange={(e) => setTempDetails({...tempDetails, address: e.target.value})}
+                       placeholder="Street, Number, Postcode, City"
+                       className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-yellow-500 outline-none"
+                     />
+                   </div>
+                 )}
+               </div>
+
+            </div>
+
+            <div className="p-4 border-t bg-gray-50 flex justify-end gap-3">
+              <Button variant="secondary" onClick={() => setShowDetailsModal(false)}>Cancel</Button>
+              <Button onClick={handleDetailsSubmit}>Confirm & Continue</Button>
+            </div>
+         </div>
+      </div>
+    );
+  };
 
   const renderLogin = () => (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -625,11 +790,9 @@ function App() {
             fullWidth 
             disabled={shopperNames.length === 0 && !tempNameInput.trim()}
             onClick={() => {
-              // Automatically add any pending name in the input field when starting
               let finalNames = [...shopperNames];
               if (tempNameInput.trim()) {
                 const name = tempNameInput.trim();
-                // Only add if not already in the list
                 if (!finalNames.includes(name)) {
                   finalNames.push(name);
                   setShopperNames(finalNames);
@@ -659,7 +822,6 @@ function App() {
     const aaShifts = currentData?.shifts.filter(s => s.type === ShiftType.AA) || [];
     const stdCount = currentData?.shifts.filter(s => s.type === ShiftType.STANDARD).length || 0;
 
-    // Check AA Coverage status for UI feedback
     const uniqueDays = new Set<number>();
     aaShifts.forEach(s => uniqueDays.add(getDayFromKey(s.date)));
     let hasWeekday = false;
@@ -669,7 +831,6 @@ function App() {
       else hasWeekday = true;
     });
 
-    // Determine if shopper is valid to proceed
     const validation = validateCurrentShopper();
 
     return (
@@ -684,7 +845,6 @@ function App() {
             </div>
             <div className="flex items-center gap-6">
               <div className="hidden md:flex gap-3 text-sm">
-                {/* Visual Status Indicators */}
                 <div className={`px-3 py-1 rounded-full font-medium border flex items-center gap-2 ${hasWeekday ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
                    <span>Weekday AA</span>
                    {hasWeekday ? <CheckCircle className="w-4 h-4"/> : <XCircle className="w-4 h-4"/>}
@@ -701,7 +861,7 @@ function App() {
                 </div>
               </div>
               <Button 
-                onClick={handleNextShopper} 
+                onClick={handleNextShopperClick} 
                 disabled={!validation.valid}
                 className="flex items-center gap-2"
               >
@@ -790,6 +950,7 @@ function App() {
           {mode === AppMode.SHOPPER_SETUP && renderShopperSetup()}
           {mode === AppMode.SHOPPER_FLOW && renderShopperFlow()}
           {mode === AppMode.SUMMARY && renderSummary()}
+          {renderDetailsModal()}
         </>
       )}
     </>

@@ -278,7 +278,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               {/* Indicators */}
               <div className={`absolute top-8 left-2 right-2 bottom-2 flex flex-col gap-1 overflow-hidden ${isDisabled ? 'opacity-50 grayscale' : ''}`}>
                 {mode === 'ADMIN' && hasBlocks && (
-                   <div className="absolute bottom-1 right-1">
+                   <div className="absolute bottom-1 right-1" title="Availability has been modified for this day">
                       <div className="w-2 h-2 rounded-full bg-orange-500"></div>
                    </div>
                 )}
@@ -291,10 +291,26 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
       {/* Legend */}
       <div className="p-4 bg-white text-xs text-gray-500 flex flex-wrap gap-4 items-center justify-center">
-        <div className="flex items-center gap-2"><div className="w-3 h-3 bg-red-500 rounded-sm"></div> AA Shift</div>
-        <div className="flex items-center gap-2"><div className="w-3 h-3 bg-green-500 rounded-sm"></div> Standard Shift</div>
-        {mode === 'ADMIN' && <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-orange-500"></div> Has Restrictions</div>}
-        {mode === 'SHOPPER' && <div className="flex items-center gap-2"><div className="w-3 h-3 bg-gray-200 rounded-sm"></div> Unavailable Date</div>}
+        {mode === 'SHOPPER' && (
+          <>
+            <div className="flex items-center gap-2"><div className="w-3 h-3 bg-red-500 rounded-sm"></div> AA Shift</div>
+            <div className="flex items-center gap-2"><div className="w-3 h-3 bg-green-500 rounded-sm"></div> Standard Shift</div>
+          </>
+        )}
+        
+        {mode === 'ADMIN' && (
+           <div className="flex items-center gap-2">
+             <div className="w-2 h-2 rounded-full bg-orange-500"></div> 
+             Custom Availability
+           </div>
+        )}
+        
+        {mode === 'SHOPPER' && (
+           <div className="flex items-center gap-2">
+             <div className="w-3 h-3 bg-gray-200 rounded-sm"></div> 
+             Unavailable Date
+           </div>
+        )}
       </div>
 
       {renderDayPanel()}
