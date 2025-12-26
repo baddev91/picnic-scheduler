@@ -13,6 +13,9 @@ export enum ShiftType {
 // Map: DateString -> ShiftTime -> Array of allowed ShiftTypes
 export type AdminAvailabilityMap = Record<string, Record<ShiftTime, ShiftType[]>>;
 
+// 0 = Sunday, 1 = Monday, ... 6 = Saturday
+export type WeeklyTemplate = Record<number, Record<ShiftTime, ShiftType[]>>;
+
 export interface ShopperShift {
   date: string;
   time: ShiftTime;

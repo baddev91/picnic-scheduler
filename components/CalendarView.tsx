@@ -63,6 +63,14 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     return !isWithinInterval(date, allowedRange);
   };
 
+  const getShiftLabel = (shift: ShiftTime) => {
+    if (shift.includes('Opening')) return 'Open';
+    if (shift.includes('Morning')) return 'Morn';
+    if (shift.includes('Noon')) return 'Noon';
+    if (shift.includes('Afternoon')) return 'Aft';
+    return 'Shift';
+  };
+
   const renderDayPanel = () => {
     if (!selectedDay) return null;
     const dateKey = formatDateKey(selectedDay);
@@ -214,16 +222,13 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           const isCurrentMonth = day.getMonth() === currentDate.getMonth();
           const isWeekendDay = isWeekend(day);
           const status = getShopperDayStatus(day);
-          
           const isDisabled = isDateDisabledForShopper(day);
           
           // Simplified visual indicator for admin: Are there ANY blocks?
           const hasBlocks = mode === 'ADMIN' && adminAvailability[dateKey] && Object.values(adminAvailability[dateKey]).some((types: ShiftType[]) => types.length < 2);
           
-          // Render Status Badge
-          const renderStatusBadge = () => {
-             if (!status.hasShift) return null;
-
+          // Render Status Badge (When Selected)
+          const renderSelectionBadge = () => {
              const baseClasses = "text-xs px-2 py-1 rounded-md border font-semibold truncate";
              const timeLabel = status.time?.split('(')[0];
 
@@ -252,10 +257,45 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
              return null;
           };
 
+          // Render Availability Preview (When NOT selected)
+          const renderAvailabilityPreview = () => {
+             return (
+               <div className="grid grid-cols-2 gap-1 mt-auto">
+                  {SHIFT_TIMES.map((shift, idx) => {
+                     const isAA = isTypeAvailable(dateKey, shift, ShiftType.AA);
+                     const isStd = isTypeAvailable(dateKey, shift, ShiftType.STANDARD);
+                     const label = getShiftLabel(shift);
+
+                     if (!isAA && !isStd) return <div key={idx} className="h-5"></div>; // Spacer
+
+                     let classNames = "h-6 flex items-center justify-center text-[10px] rounded shadow-sm transition-all cursor-help ";
+                     
+                     if (isAA && isStd) {
+                        classNames += "bg-gradient-to-r from-red-50 to-green-50 text-gray-700 border border-gray-200 border-l-4 border-l-red-500 border-r-4 border-r-green-500 font-medium";
+                     } else if (isAA) {
+                        classNames += "bg-red-100 text-red-900 border border-red-200 border-l-4 border-l-red-600 font-bold";
+                     } else if (isStd) {
+                        classNames += "bg-green-50 text-green-700 border border-green-200 font-medium";
+                     }
+
+                     return (
+                      <div 
+                        key={idx} 
+                        className={classNames} 
+                        title={shift}
+                      >
+                        {label}
+                      </div>
+                     );
+                  })}
+               </div>
+             )
+          }
+
           return (
             <div 
               key={day.toISOString()} 
-              className={`min-h-[100px] relative group transition-colors 
+              className={`min-h-[110px] relative group transition-colors flex flex-col
                 ${isDisabled ? 'bg-gray-100 cursor-not-allowed' : 'bg-white cursor-pointer hover:bg-gray-50'}
                 ${!isCurrentMonth && !isDisabled ? 'bg-gray-50/50 text-gray-400' : ''}
               `}
@@ -264,7 +304,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               }}
             >
               {/* Day Number */}
-              <div className={`absolute top-2 left-2 text-sm font-semibold ${isWeekendDay ? 'text-red-500' : 'text-gray-700'} ${isDisabled ? 'opacity-40' : ''}`}>
+              <div className={`p-2 text-sm font-semibold ${isWeekendDay ? 'text-red-500' : 'text-gray-700'} ${isDisabled ? 'opacity-40' : ''}`}>
                 {format(day, 'd')}
               </div>
               
@@ -275,14 +315,17 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                  </div>
               )}
 
-              {/* Indicators */}
-              <div className={`absolute top-8 left-2 right-2 bottom-2 flex flex-col gap-1 overflow-hidden ${isDisabled ? 'opacity-50 grayscale' : ''}`}>
+              {/* Indicators Container */}
+              <div className={`flex-1 px-2 pb-2 flex flex-col justify-end gap-1 overflow-hidden ${isDisabled ? 'opacity-30 grayscale' : ''}`}>
                 {mode === 'ADMIN' && hasBlocks && (
                    <div className="absolute bottom-1 right-1" title="Availability has been modified for this day">
                       <div className="w-2 h-2 rounded-full bg-orange-500"></div>
                    </div>
                 )}
-                {mode === 'SHOPPER' && renderStatusBadge()}
+                
+                {mode === 'SHOPPER' && (
+                   status.hasShift ? renderSelectionBadge() : renderAvailabilityPreview()
+                )}
               </div>
             </div>
           );
@@ -290,25 +333,65 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       </div>
 
       {/* Legend */}
-      <div className="p-4 bg-white text-xs text-gray-500 flex flex-wrap gap-4 items-center justify-center">
+      <div className="bg-gray-50 border-t px-6 py-4">
         {mode === 'SHOPPER' && (
-          <>
-            <div className="flex items-center gap-2"><div className="w-3 h-3 bg-red-500 rounded-sm"></div> AA Shift</div>
-            <div className="flex items-center gap-2"><div className="w-3 h-3 bg-green-500 rounded-sm"></div> Standard Shift</div>
-          </>
+          <div className="flex flex-col md:flex-row items-center justify-center gap-y-4 gap-x-8">
+            
+            {/* Group 1: What you selected */}
+            <div className="flex items-center gap-4">
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Selected</span>
+              
+              <div className="flex items-center gap-2">
+                <div className="px-2 py-0.5 bg-red-600 text-white text-[10px] font-bold rounded shadow-sm">AA</div>
+                <span className="text-xs text-gray-600 font-medium">Always Available</span>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <div className="px-2 py-0.5 bg-green-600 text-white text-[10px] font-bold rounded shadow-sm">Std</div>
+                <span className="text-xs text-gray-600 font-medium">Standard</span>
+              </div>
+            </div>
+
+            {/* Divider */}
+            <div className="hidden md:block w-px h-8 bg-gray-200"></div>
+
+            {/* Group 2: What is available (The Mini Grid Icons) */}
+            <div className="flex items-center gap-4">
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Availability Key</span>
+              
+              {/* AA Only Icon */}
+              <div className="flex items-center gap-1.5 group">
+                 <div className="w-9 h-5 bg-red-100 border border-red-200 border-l-4 border-l-red-600 text-red-900 text-[9px] flex items-center justify-center font-bold rounded shadow-sm">
+                   Open
+                 </div>
+                 <span className="text-xs text-gray-500">AA Only</span>
+              </div>
+
+              {/* Standard Only Icon */}
+              <div className="flex items-center gap-1.5 group">
+                 <div className="w-9 h-5 bg-green-50 border border-green-200 text-green-700 text-[9px] flex items-center justify-center font-medium rounded shadow-sm">
+                   Open
+                 </div>
+                 <span className="text-xs text-gray-500">Std Only</span>
+              </div>
+
+              {/* Both Icon */}
+              <div className="flex items-center gap-1.5 group">
+                 <div className="w-9 h-5 bg-gradient-to-r from-red-50 to-green-50 border border-gray-200 border-l-4 border-l-red-500 border-r-4 border-r-green-500 text-gray-600 text-[9px] flex items-center justify-center font-bold rounded shadow-sm">
+                   Open
+                 </div>
+                 <span className="text-xs text-gray-500">Both</span>
+              </div>
+            </div>
+
+          </div>
         )}
         
         {mode === 'ADMIN' && (
-           <div className="flex items-center gap-2">
-             <div className="w-2 h-2 rounded-full bg-orange-500"></div> 
-             Custom Availability
-           </div>
-        )}
-        
-        {mode === 'SHOPPER' && (
-           <div className="flex items-center gap-2">
-             <div className="w-3 h-3 bg-gray-200 rounded-sm"></div> 
-             Unavailable Date
+           <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
+             <div className="w-3 h-3 rounded-full bg-orange-500 shadow-sm"></div> 
+             <span className="font-medium">Modified Availability</span>
+             <span className="text-gray-400 text-xs ml-1">(Default is all Open)</span>
            </div>
         )}
       </div>

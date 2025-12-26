@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { AppMode, ShiftTime, ShiftType, ShopperData, ShopperShift, AdminAvailabilityMap, ShopperDetails } from './types';
+import { AppMode, ShiftTime, ShiftType, ShopperData, ShopperShift, AdminAvailabilityMap, ShopperDetails, WeeklyTemplate } from './types';
 import { SHIFT_TIMES, formatDateKey, getShopperAllowedRange } from './constants';
 import { Button } from './components/Button';
 import { CalendarView } from './components/CalendarView';
-import { Users, Shield, Download, ArrowRight, UserPlus, CheckCircle, AlertCircle, Save, Trash2, History, XCircle, Lock, Bus, Heart, Shirt, Footprints, Hand, MapPin, Building2 } from 'lucide-react';
+import { WeeklyTemplateModal } from './components/WeeklyTemplateModal';
+import { Users, Shield, Download, ArrowRight, UserPlus, CheckCircle, AlertCircle, Save, Trash2, History, XCircle, Lock, Bus, Heart, Shirt, Footprints, Hand, MapPin, Building2, Settings2 } from 'lucide-react';
 import { isWeekend, startOfWeek, addDays, subDays, getDay, isSameDay, format, isWithinInterval } from 'date-fns';
 
 const STORAGE_KEYS = {
   ADMIN: 'picnic_admin_availability',
+  TEMPLATE: 'picnic_admin_template',
   SHOPPERS: 'picnic_shopper_names',
   SELECTIONS: 'picnic_selections',
   INDEX: 'picnic_current_index',
@@ -27,6 +29,9 @@ function App() {
   
   // Admin Availability: DateKey -> ShiftTime -> Array[Type]
   const [adminAvailability, setAdminAvailability] = useState<AdminAvailabilityMap>({});
+  // Admin Template: DayIndex -> ShiftTime -> Array[Type]
+  const [weeklyTemplate, setWeeklyTemplate] = useState<WeeklyTemplate>({});
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
   
   // Shopper Data
   const [shopperNames, setShopperNames] = useState<string[]>([]);
@@ -52,54 +57,68 @@ function App() {
   // Persistence Logic
   // --------------------------------------------------------------------------
 
-  // 1. On Mount: Check for existing data
+  // 1. On Mount: Load Admin Data immediately, Check for Shopper Session
   useEffect(() => {
-    const hasSavedData = !!localStorage.getItem(STORAGE_KEYS.ADMIN) || !!localStorage.getItem(STORAGE_KEYS.SHOPPERS);
+    // A. Always load Admin configurations silently
+    try {
+      const savedAdmin = JSON.parse(localStorage.getItem(STORAGE_KEYS.ADMIN) || '{}');
+      const savedTemplate = JSON.parse(localStorage.getItem(STORAGE_KEYS.TEMPLATE) || '{}');
+      if (Object.keys(savedAdmin).length > 0) setAdminAvailability(savedAdmin);
+      if (Object.keys(savedTemplate).length > 0) setWeeklyTemplate(savedTemplate);
+    } catch (e) {
+      console.error("Failed to load admin settings", e);
+    }
+
+    // B. Check if there is an interrupted SHOPPER session
+    const hasShopperData = !!localStorage.getItem(STORAGE_KEYS.SHOPPERS);
     
-    if (hasSavedData) {
+    if (hasShopperData) {
       setShowRestorePrompt(true);
     } else {
       setIsInitialized(true);
     }
   }, []);
 
-  // 2. Auto-save effects (Only run after initialization to prevent overwriting with empty state)
+  // 2. Auto-save effects (Only run after initialization)
   useEffect(() => {
     if (!isInitialized) return;
+    
+    // Admin data is always saved
     localStorage.setItem(STORAGE_KEYS.ADMIN, JSON.stringify(adminAvailability));
+    localStorage.setItem(STORAGE_KEYS.TEMPLATE, JSON.stringify(weeklyTemplate));
+
+    // Shopper data is saved
     localStorage.setItem(STORAGE_KEYS.SHOPPERS, JSON.stringify(shopperNames));
     localStorage.setItem(STORAGE_KEYS.SELECTIONS, JSON.stringify(selections));
     localStorage.setItem(STORAGE_KEYS.INDEX, JSON.stringify(currentShopperIndex));
-    // We optionally save mode, but usually HOME is safer to return to unless deep in flow
+    
     if (mode === AppMode.SHOPPER_FLOW || mode === AppMode.SHOPPER_SETUP) {
        localStorage.setItem(STORAGE_KEYS.MODE, mode);
     }
-  }, [adminAvailability, shopperNames, selections, currentShopperIndex, mode, isInitialized]);
+  }, [adminAvailability, weeklyTemplate, shopperNames, selections, currentShopperIndex, mode, isInitialized]);
 
   // 3. Auto-download on Summary
   useEffect(() => {
     if (mode === AppMode.SUMMARY) {
       const timer = setTimeout(() => {
         downloadCSV();
-      }, 500); // Short delay to ensure state is settled and UI is rendered
+      }, 500); 
       return () => clearTimeout(timer);
     }
   }, [mode]);
 
   const handleRestoreSession = () => {
     try {
-      const savedAdmin = JSON.parse(localStorage.getItem(STORAGE_KEYS.ADMIN) || '{}');
+      // Admin data is already loaded in useEffect, but we load Shopper data here
       const savedShoppers = JSON.parse(localStorage.getItem(STORAGE_KEYS.SHOPPERS) || '[]');
       const savedSelections = JSON.parse(localStorage.getItem(STORAGE_KEYS.SELECTIONS) || '[]');
       const savedIndex = JSON.parse(localStorage.getItem(STORAGE_KEYS.INDEX) || '0');
       const savedMode = localStorage.getItem(STORAGE_KEYS.MODE) as AppMode;
 
-      setAdminAvailability(savedAdmin);
       setShopperNames(savedShoppers);
       setSelections(savedSelections);
       setCurrentShopperIndex(savedIndex);
       
-      // If we were in the middle of shopper flow, verify data integrity before jumping there
       if (savedMode === AppMode.SHOPPER_FLOW && savedShoppers.length > 0) {
         setMode(AppMode.SHOPPER_FLOW);
       } else if (savedMode === AppMode.SHOPPER_SETUP) {
@@ -118,12 +137,21 @@ function App() {
   };
 
   const handleClearSession = () => {
-    localStorage.clear();
-    setAdminAvailability({});
+    // ONLY clear shopper related keys. Preserve ADMIN keys.
+    localStorage.removeItem(STORAGE_KEYS.SHOPPERS);
+    localStorage.removeItem(STORAGE_KEYS.SELECTIONS);
+    localStorage.removeItem(STORAGE_KEYS.INDEX);
+    localStorage.removeItem(STORAGE_KEYS.MODE);
+
+    // Reset Shopper State
     setShopperNames([]);
     setSelections([]);
     setCurrentShopperIndex(0);
+    
+    // Reset Mode
     setMode(AppMode.HOME);
+    
+    // Close Prompt & Set Initialized
     setShowRestorePrompt(false);
     setIsInitialized(true);
   };
@@ -132,7 +160,6 @@ function App() {
   // Helpers
   // --------------------------------------------------------------------------
 
-  // Safely parse a "YYYY-MM-DD" string into a Date object at 00:00:00 LOCAL time.
   const getSafeDateFromKey = (dateStr: string): Date => {
     const [y, m, d] = dateStr.split('-').map(Number);
     return new Date(y, m - 1, d);
@@ -143,7 +170,6 @@ function App() {
   };
 
   const calculateGloveSize = (clothingSize: string): string => {
-    // Mapping Logic: XS=6, S=7, M=8, L=9, XL=10, XXL=11, 3XL+=12
     const map: Record<string, string> = {
       'XS': '6 (XS)',
       'S': '7 (S)',
@@ -185,6 +211,28 @@ function App() {
         [date]: { ...dayConfig, [shift]: newTypes }
       };
     });
+  };
+
+  const handleTemplateApply = (template: WeeklyTemplate, weeks: number, startDate: Date) => {
+    setWeeklyTemplate(template);
+    setShowTemplateModal(false);
+
+    const newAvailability = { ...adminAvailability };
+    
+    for (let i = 0; i < weeks * 7; i++) {
+       const currentLoopDate = addDays(startDate, i);
+       const dateKey = formatDateKey(currentLoopDate);
+       const dayOfWeek = getDay(currentLoopDate); 
+       
+       const templateDayConfig = template[dayOfWeek];
+       
+       if (templateDayConfig) {
+          newAvailability[dateKey] = templateDayConfig;
+       }
+    }
+    
+    setAdminAvailability(newAvailability);
+    alert(`Settings successfully applied for ${weeks} weeks starting from ${format(startDate, 'yyyy-MM-dd')}.`);
   };
 
   const isRestViolation = (dateStr: string, newTime: ShiftTime, currentShifts: ShopperShift[]): boolean => {
@@ -297,7 +345,6 @@ function App() {
     ];
     
     const rows = selections.flatMap(shopper => {
-      // Get details safe access
       const d = shopper.details || {
         usePicnicBus: false, civilStatus: '-', clothingSize: '-', shoeSize: '-', gloveSize: '-', isRandstad: false, address: '-'
       };
@@ -390,14 +437,13 @@ function App() {
       return;
     }
     
-    // Initialize modal with existing details or defaults
     const currentName = shopperNames[currentShopperIndex];
     const existing = selections.find(s => s.name === currentName)?.details;
     
     if (existing) {
       setTempDetails({
         ...existing,
-        address: existing.address || '' // Ensure address is never undefined
+        address: existing.address || '' 
       });
     } else {
       setTempDetails({
@@ -421,7 +467,6 @@ function App() {
     }
 
     try {
-      // Save details
       const currentName = shopperNames[currentShopperIndex];
       const newSelections = [...selections];
       const idx = newSelections.findIndex(s => s.name === currentName);
@@ -430,11 +475,8 @@ function App() {
         setSelections(newSelections);
       }
 
-      // Close modal immediately
       setShowDetailsModal(false);
 
-      // Proceed state transition
-      // We rely on the useEffect hook to handle the download if we transition to SUMMARY
       if (currentShopperIndex < shopperNames.length - 1) {
         setCurrentShopperIndex(prev => prev + 1);
       } else {
@@ -461,7 +503,6 @@ function App() {
             </div>
             
             <div className="p-6 overflow-y-auto space-y-6">
-               {/* 1. Picnic Bus */}
                <div className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors">
                   <div className="flex items-center gap-3">
                      <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
@@ -480,7 +521,6 @@ function App() {
                   </label>
                </div>
 
-               {/* 2. Civil Status */}
                <div className="space-y-2">
                  <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
                     <Heart className="w-4 h-4 text-pink-500" /> Civil Status
@@ -499,7 +539,6 @@ function App() {
                </div>
 
                <div className="grid grid-cols-2 gap-4">
-                  {/* 3. Clothing Size */}
                   <div className="space-y-2">
                     <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
                        <Shirt className="w-4 h-4 text-indigo-500" /> Clothes Size
@@ -511,7 +550,7 @@ function App() {
                         setTempDetails({
                           ...tempDetails, 
                           clothingSize: newSize,
-                          gloveSize: calculateGloveSize(newSize) // Auto update gloves
+                          gloveSize: calculateGloveSize(newSize) 
                         });
                       }}
                       className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 outline-none"
@@ -522,7 +561,6 @@ function App() {
                     </select>
                   </div>
 
-                  {/* 4. Shoe Size */}
                   <div className="space-y-2">
                     <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
                        <Footprints className="w-4 h-4 text-orange-500" /> Shoe Size
@@ -539,7 +577,6 @@ function App() {
                   </div>
                </div>
 
-               {/* 5. Glove Size (Auto) */}
                <div className="space-y-2">
                  <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
                     <Hand className="w-4 h-4 text-teal-500" /> Glove Size (Auto)
@@ -552,7 +589,6 @@ function App() {
 
                <hr className="border-gray-200" />
 
-               {/* 6. Randstad */}
                <div className="space-y-4">
                  <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -636,16 +672,16 @@ function App() {
           </div>
           <h2 className="text-2xl font-bold text-gray-800">Restore Session?</h2>
           <p className="text-gray-500">
-            We found saved data from a previous session (Admin settings or Shopper list). 
-            Would you like to continue where you left off?
+            We found an active shopper session. Would you like to continue where you left off?
+            <br/><span className="text-xs text-gray-400 mt-2 block">(Admin settings remain saved in both cases)</span>
           </p>
         </div>
         <div className="flex flex-col gap-3 mt-8">
           <Button onClick={handleRestoreSession} className="flex items-center justify-center gap-2">
-            <CheckCircle className="w-4 h-4" /> Yes, Restore Data
+            <CheckCircle className="w-4 h-4" /> Yes, Restore Shoppers
           </Button>
           <Button onClick={handleClearSession} variant="secondary" className="flex items-center justify-center gap-2">
-            <Trash2 className="w-4 h-4" /> No, Start Fresh
+            <Trash2 className="w-4 h-4" /> No, Start New Session
           </Button>
         </div>
       </div>
@@ -692,7 +728,15 @@ function App() {
           <Shield className="w-6 h-6 text-red-500" />
           <h1 className="font-bold text-xl text-gray-800">Admin Configuration</h1>
         </div>
-        <Button variant="secondary" onClick={() => setMode(AppMode.HOME)}>Back to Home</Button>
+        <div className="flex gap-3">
+          <Button 
+            onClick={() => setShowTemplateModal(true)}
+            className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 hover:from-purple-600 hover:to-purple-700"
+          >
+            <Settings2 className="w-4 h-4" /> Base Settings
+          </Button>
+          <Button variant="secondary" onClick={() => setMode(AppMode.HOME)}>Back to Home</Button>
+        </div>
       </header>
       <main className="flex-1 p-6 overflow-auto">
          <div className="max-w-4xl mx-auto mb-6">
@@ -703,7 +747,7 @@ function App() {
                 <p className="text-blue-700 text-sm mt-1">
                   Click on a date to configure availability. For each time slot, you can toggle <span className="font-bold text-red-600">AA</span> and <span className="font-bold text-green-600">Standard</span> availability independently.
                   <br/>
-                  <span className="text-xs text-blue-500 mt-1 inline-block">Changes are saved automatically.</span>
+                  <span className="text-xs text-blue-500 mt-1 inline-block">Changes are saved automatically. Use "Base Settings" to apply weekly patterns.</span>
                 </p>
               </div>
            </div>
@@ -712,6 +756,12 @@ function App() {
           mode="ADMIN"
           adminAvailability={adminAvailability}
           onAdminToggle={handleAdminToggle}
+        />
+        <WeeklyTemplateModal 
+          isOpen={showTemplateModal}
+          onClose={() => setShowTemplateModal(false)}
+          savedTemplate={weeklyTemplate}
+          onSaveAndApply={handleTemplateApply}
         />
       </main>
     </div>
