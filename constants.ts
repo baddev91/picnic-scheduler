@@ -25,13 +25,13 @@ export const formatDateKey = (date: Date): string => {
   return format(date, 'yyyy-MM-dd');
 };
 
-// Helper to get the allowed range (Current Week + Next Week)
+// Helper to get the allowed range (Current Week + Next 2 Weeks = 3 Weeks Total)
 export const getShopperAllowedRange = () => {
   const now = new Date();
   // Start Monday of current week
   const start = startOfWeek(now, { weekStartsOn: 1 });
-  // End Sunday of next week (Current + 1 week)
-  const end = endOfWeek(addWeeks(start, 1), { weekStartsOn: 1 });
+  // End Sunday of the week after next (Current + 2 weeks)
+  const end = endOfWeek(addWeeks(start, 2), { weekStartsOn: 1 });
   
   return { start, end };
 };

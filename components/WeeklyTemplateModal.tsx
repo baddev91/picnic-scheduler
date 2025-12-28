@@ -93,9 +93,9 @@ export const WeeklyTemplateModal: React.FC<WeeklyTemplateModalProps> = ({
   // --- Quick Apply Handlers ---
 
   const handleApplyNow = () => {
-    // Current week + Next week (Total 2 weeks, starting from beginning of current week to cover everything)
+    // Current week + Next 2 weeks (Total 3 weeks, starting from beginning of current week)
     const start = startOfWeek(new Date(), { weekStartsOn: 1 });
-    onSaveAndApply(currentTemplate, 2, start);
+    onSaveAndApply(currentTemplate, 3, start);
   };
 
   const handleApplyNextMonth = () => {
@@ -258,8 +258,8 @@ export const WeeklyTemplateModal: React.FC<WeeklyTemplateModalProps> = ({
                         <CalendarClock className="w-5 h-5" />
                       </div>
                       <div>
-                        <div className="font-bold text-gray-800 text-sm">Apply: Current + Next Week</div>
-                        <div className="text-xs text-gray-500">Immediate update (2 weeks)</div>
+                        <div className="font-bold text-gray-800 text-sm">Apply: 3 Week Horizon</div>
+                        <div className="text-xs text-gray-500">Immediate update (3 weeks)</div>
                       </div>
                     </div>
                     <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-purple-600 group-hover:translate-x-1 transition-all" />
