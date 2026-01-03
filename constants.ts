@@ -1,5 +1,5 @@
 import { ShiftTime } from './types';
-import { format, startOfWeek, addWeeks, endOfWeek } from 'date-fns';
+import { format, startOfWeek, addWeeks, endOfWeek, addDays, startOfToday } from 'date-fns';
 
 export const SHIFT_TIMES = [
   ShiftTime.OPENING,
@@ -23,6 +23,13 @@ export const TYPE_COLORS = {
 // Helper to format date consistent with key storage
 export const formatDateKey = (date: Date): string => {
   return format(date, 'yyyy-MM-dd');
+};
+
+export const MIN_DAYS_TO_START = 3;
+
+// Helper to get the strict minimum start date (Today + 3 days)
+export const getShopperMinDate = () => {
+  return addDays(startOfToday(), MIN_DAYS_TO_START);
 };
 
 // Helper to get the allowed range (Current Week + Next 2 Weeks = 3 Weeks Total)

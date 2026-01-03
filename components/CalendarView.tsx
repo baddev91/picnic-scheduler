@@ -1,29 +1,37 @@
 import React, { useState, useMemo } from 'react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths, isWeekend, startOfWeek, endOfWeek, isWithinInterval } from 'date-fns';
-import { ChevronLeft, ChevronRight, Check, Ban, Lock, X } from 'lucide-react';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths, isWeekend, startOfWeek, endOfWeek, isWithinInterval, isAfter, startOfToday, isBefore, addDays } from 'date-fns';
+import { ChevronLeft, ChevronRight, Check, Ban, Lock, X, Plus, Star } from 'lucide-react';
 import { ShiftTime, ShiftType, ShopperShift, AdminAvailabilityMap } from '../types';
-import { SHIFT_TIMES, formatDateKey, getShopperAllowedRange } from '../constants';
+import { SHIFT_TIMES, formatDateKey, getShopperAllowedRange, getShopperMinDate } from '../constants';
 
 interface CalendarViewProps {
   mode: 'ADMIN' | 'SHOPPER';
+  step?: number; // 0 for AA, 1 for Standard
   adminAvailability: AdminAvailabilityMap;
   currentShopperShifts?: ShopperShift[];
+  firstWorkingDay?: string; // YYYY-MM-DD
   onAdminToggle?: (date: string, shift: ShiftTime, type: ShiftType) => void;
   onShopperToggle?: (date: string, shift: ShiftTime, type: ShiftType) => void;
+  onSetFirstWorkingDay?: (date: string) => void;
 }
 
 export const CalendarView: React.FC<CalendarViewProps> = ({
   mode,
+  step = 1,
   adminAvailability,
   currentShopperShifts = [],
+  firstWorkingDay,
   onAdminToggle,
   onShopperToggle,
+  onSetFirstWorkingDay,
 }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
 
   // Get allowed range for Shoppers
   const allowedRange = useMemo(() => getShopperAllowedRange(), []);
+  const minShopperDate = useMemo(() => getShopperMinDate(), []);
+  const today = startOfToday();
 
   const daysInMonth = useMemo(() => {
     const start = startOfWeek(startOfMonth(currentDate), { weekStartsOn: 1 }); // Start on Monday
@@ -34,61 +42,87 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   const handlePrevMonth = () => setCurrentDate(subMonths(currentDate, 1));
   const handleNextMonth = () => setCurrentDate(addMonths(currentDate, 1));
 
-  // Visual feedback for grid cells
   const getShopperDayStatus = (date: Date) => {
     const key = formatDateKey(date);
     const shifts = currentShopperShifts.filter(s => s.date === key);
     
-    const isAA = shifts.some(s => s.type === ShiftType.AA);
-    const isStandard = shifts.some(s => s.type === ShiftType.STANDARD);
+    const aaShift = shifts.find(s => s.type === ShiftType.AA);
+    const stdShift = shifts.find(s => s.type === ShiftType.STANDARD);
     
-    const time = shifts.length > 0 ? shifts[0].time : undefined;
-
     return { 
       hasShift: shifts.length > 0, 
-      isAA,
-      isStandard,
-      time
+      aaShift,
+      stdShift,
+      isFirstWorkingDay: firstWorkingDay === key
     };
   };
 
   const isTypeAvailable = (dateKey: string, time: ShiftTime, type: ShiftType) => {
     if (!adminAvailability[dateKey]) return true;
-    if (!adminAvailability[dateKey][time]) return true;
-    return adminAvailability[dateKey][time].includes(type);
+    const dayConfig = adminAvailability[dateKey];
+    if (!dayConfig || !dayConfig[time]) return true;
+    return dayConfig[time]?.includes(type) ?? true;
   };
 
   const isDateDisabledForShopper = (date: Date) => {
     if (mode === 'ADMIN') return false;
-    return !isWithinInterval(date, allowedRange);
+    // Must be within general allowed range AND after the minimum start date (Today + 3)
+    return !isWithinInterval(date, allowedRange) || isBefore(date, minShopperDate);
   };
 
-  const getShiftLabel = (shift: ShiftTime) => {
-    if (shift.includes('Opening')) return 'Open';
-    if (shift.includes('Morning')) return 'Morn';
-    if (shift.includes('Noon')) return 'Noon';
-    if (shift.includes('Afternoon')) return 'Aft';
-    return 'Shift';
+  // Helper to get short labels for mobile
+  const getShiftLabel = (fullTimeStr: string) => {
+    const main = fullTimeStr.split(' ')[0]; // "Morning", "Opening" etc.
+    const map: Record<string, string> = {
+      'Opening': 'Open',
+      'Morning': 'Morn',
+      'Noon': 'Noon',
+      'Afternoon': 'Aft'
+    };
+    return { desktop: main, mobile: map[main] || main };
   };
 
   const renderDayPanel = () => {
     if (!selectedDay) return null;
     const dateKey = formatDateKey(selectedDay);
+    const isFWD = firstWorkingDay === dateKey;
+    
+    // Safety check: ensure panel doesn't open for disabled days in Shopper mode
+    if (mode === 'SHOPPER' && isDateDisabledForShopper(selectedDay)) {
+        return null;
+    }
 
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
-          <div className="bg-gray-100 p-4 border-b flex justify-between items-center shrink-0">
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
+          <div className="bg-gray-50 p-6 border-b flex justify-between items-center shrink-0">
             <div>
-              <h3 className="text-lg font-bold text-gray-800">{format(selectedDay, 'EEEE, MMMM do')}</h3>
-              <p className="text-sm text-gray-500">{mode === 'ADMIN' ? 'Configure Availability' : 'Select Your Shift'}</p>
+              <h3 className="text-xl font-bold text-gray-900">{format(selectedDay, 'EEEE, MMM do')}</h3>
+              <p className="text-sm text-gray-500">
+                {mode === 'ADMIN' ? 'Configure Availability' : (step === 0 ? 'Select AA Shift' : 'Select Standard Shift')}
+              </p>
             </div>
-            <button onClick={() => setSelectedDay(null)} className="text-gray-500 hover:text-gray-800 transition-colors">
-              <X className="w-6 h-6" />
+            <button onClick={() => setSelectedDay(null)} className="bg-gray-200 hover:bg-gray-300 p-2 rounded-full transition-colors">
+              <X className="w-5 h-5 text-gray-600" />
             </button>
           </div>
 
-          <div className="p-6 space-y-4 overflow-y-auto">
+          <div className="p-4 md:p-6 space-y-3 overflow-y-auto bg-gray-50/50">
+            {/* First Working Day Toggle (Only in Shopper Mode) */}
+            {mode === 'SHOPPER' && onSetFirstWorkingDay && (
+                 <button
+                   onClick={() => onSetFirstWorkingDay(dateKey)}
+                   className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl border transition-all shadow-sm mb-2 ${
+                     isFWD 
+                      ? 'bg-yellow-100 border-yellow-300 text-yellow-800 ring-1 ring-yellow-300' 
+                      : 'bg-white border-gray-200 text-gray-600 hover:bg-yellow-50 hover:border-yellow-200 hover:text-yellow-700'
+                   }`}
+                 >
+                   <Star className={`w-5 h-5 ${isFWD ? 'fill-yellow-500 text-yellow-500' : 'text-current'}`} />
+                   {isFWD ? 'First Working Day Selected' : 'Set as First Working Day'}
+                 </button>
+            )}
+
             {SHIFT_TIMES.map((shift) => {
               const aaAvailable = isTypeAvailable(dateKey, shift, ShiftType.AA);
               const stdAvailable = isTypeAvailable(dateKey, shift, ShiftType.STANDARD);
@@ -97,87 +131,72 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               const isSelectedAA = shiftEntries.some(s => s.type === ShiftType.AA);
               const isSelectedStd = shiftEntries.some(s => s.type === ShiftType.STANDARD);
 
-              if (mode === 'SHOPPER' && !aaAvailable && !stdAvailable) return null;
+              // In Standard step (step 1), hide unavailable options
+              if (mode === 'SHOPPER' && step === 1 && !stdAvailable && !isSelectedStd) return null;
 
               return (
-                <div key={shift} className="w-full flex flex-col gap-2 p-3 border rounded-xl bg-gray-50">
-                  <div className="text-sm font-bold text-gray-700">{shift}</div>
+                <div key={shift} className={`w-full flex flex-col gap-2 md:gap-3 p-3 md:p-4 border rounded-xl bg-white shadow-sm transition-all ${isSelectedAA || isSelectedStd ? 'ring-2 ring-purple-500 border-transparent' : 'border-gray-200'}`}>
+                  <div className="text-sm md:text-base font-bold text-gray-800">{shift}</div>
                   
-                  <div className="grid grid-cols-2 gap-3">
-                    {/* AA BUTTON */}
-                    {mode === 'ADMIN' ? (
+                  <div className="grid grid-cols-1 gap-2 md:gap-3">
+                    {/* AA BUTTON - Only active in Step 0 or Admin */}
+                    {(mode === 'ADMIN' || step === 0) && (
                       <button
-                        onClick={() => onAdminToggle && onAdminToggle(dateKey, shift, ShiftType.AA)}
-                        className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-semibold border transition-all ${
-                          aaAvailable 
-                            ? 'bg-red-100 border-red-300 text-red-800 hover:bg-red-200' 
-                            : 'bg-gray-100 border-gray-300 text-gray-400 opacity-60'
+                        onClick={() => {
+                          if (mode === 'ADMIN' && onAdminToggle) onAdminToggle(dateKey, shift, ShiftType.AA);
+                          if (mode === 'SHOPPER' && onShopperToggle && aaAvailable) onShopperToggle(dateKey, shift, ShiftType.AA);
+                        }}
+                        disabled={mode === 'SHOPPER' && !aaAvailable}
+                        className={`flex items-center justify-between px-4 py-3 rounded-lg text-sm font-semibold border transition-all ${
+                          isSelectedAA
+                            ? 'bg-red-600 text-white border-red-600 shadow-md transform scale-[1.02]' 
+                            : aaAvailable
+                              ? 'bg-white border-red-200 text-red-700 hover:bg-red-50'
+                              : 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
                         }`}
                       >
-                        {aaAvailable ? <Check className="w-4 h-4"/> : <Ban className="w-4 h-4"/>}
-                        AA {aaAvailable ? 'Available' : 'Blocked'}
+                        <span className="flex items-center gap-2">
+                           {isSelectedAA && <Check className="w-4 h-4" />} 
+                           AA (Always Available)
+                        </span>
+                        {!aaAvailable && mode === 'SHOPPER' && <span className="text-xs uppercase">Full</span>}
                       </button>
-                    ) : (
-                      aaAvailable && (
-                        <button
-                          onClick={() => onShopperToggle && onShopperToggle(dateKey, shift, ShiftType.AA)}
-                          className={`py-2 px-3 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-1 shadow-sm ${
-                            isSelectedAA 
-                             ? 'bg-red-600 text-white ring-2 ring-red-300 ring-offset-1' 
-                             : 'bg-white border-gray-200 text-gray-700 hover:bg-red-50 hover:border-red-200 hover:text-red-700'
-                          }`}
-                        >
-                           AA
-                           {isSelectedAA && <Check className="w-3 h-3 ml-1"/>}
-                        </button>
-                      )
                     )}
 
-                    {/* STANDARD BUTTON */}
-                    {mode === 'ADMIN' ? (
+                    {/* STANDARD BUTTON - Only active in Step 1 or Admin */}
+                    {(mode === 'ADMIN' || step === 1) && (
                       <button
-                        onClick={() => onAdminToggle && onAdminToggle(dateKey, shift, ShiftType.STANDARD)}
-                        className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-semibold border transition-all ${
-                          stdAvailable 
-                            ? 'bg-green-100 border-green-300 text-green-800 hover:bg-green-200' 
-                            : 'bg-gray-100 border-gray-300 text-gray-400 opacity-60'
+                        onClick={() => {
+                          if (mode === 'ADMIN' && onAdminToggle) onAdminToggle(dateKey, shift, ShiftType.STANDARD);
+                          if (mode === 'SHOPPER' && onShopperToggle && stdAvailable) onShopperToggle(dateKey, shift, ShiftType.STANDARD);
+                        }}
+                        // In Shopper mode, cannot select Standard if AA is already selected for this slot
+                        disabled={mode === 'SHOPPER' && (!stdAvailable || isSelectedAA)}
+                        className={`flex items-center justify-between px-4 py-3 rounded-lg text-sm font-semibold border transition-all ${
+                          isSelectedStd
+                            ? 'bg-green-600 text-white border-green-600 shadow-md transform scale-[1.02]' 
+                            : stdAvailable && !isSelectedAA
+                              ? 'bg-white border-green-200 text-green-700 hover:bg-green-50'
+                              : 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
                         }`}
                       >
-                         {stdAvailable ? <Check className="w-4 h-4"/> : <Ban className="w-4 h-4"/>}
-                         Standard {stdAvailable ? 'Available' : 'Blocked'}
+                         <span className="flex items-center gap-2">
+                           {isSelectedStd && <Check className="w-4 h-4" />} 
+                           Standard Shift
+                         </span>
+                         {isSelectedAA && mode === 'SHOPPER' && <span className="text-xs">AA Selected</span>}
                       </button>
-                    ) : (
-                      stdAvailable && (
-                        <button
-                          onClick={() => onShopperToggle && onShopperToggle(dateKey, shift, ShiftType.STANDARD)}
-                          className={`py-2 px-3 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-1 shadow-sm ${
-                            isSelectedStd 
-                             ? 'bg-green-600 text-white ring-2 ring-green-300 ring-offset-1' 
-                             : 'bg-white border-gray-200 text-gray-700 hover:bg-green-50 hover:border-green-200 hover:text-green-700'
-                          }`}
-                        >
-                          Standard
-                          {isSelectedStd && <Check className="w-3 h-3 ml-1"/>}
-                        </button>
-                      )
                     )}
                   </div>
                 </div>
               );
             })}
-
-             {mode === 'SHOPPER' && SHIFT_TIMES.every(s => !isTypeAvailable(dateKey, s, ShiftType.AA) && !isTypeAvailable(dateKey, s, ShiftType.STANDARD)) && (
-               <div className="text-center py-6 text-gray-500">
-                 <Lock className="w-10 h-10 mx-auto mb-2 opacity-20" />
-                 No shifts available for this day.
-               </div>
-             )}
           </div>
           
           <div className="p-4 border-t bg-gray-50 flex justify-end shrink-0">
             <button 
               onClick={() => setSelectedDay(null)}
-              className="px-6 py-2 bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 transition-colors"
+              className="px-8 py-3 bg-gray-900 text-white rounded-xl font-bold hover:bg-gray-800 transition-colors shadow-lg"
             >
               Done
             </button>
@@ -190,18 +209,18 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
   return (
-    <div className="w-full max-w-4xl mx-auto bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+    <div className="w-full max-w-5xl mx-auto bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
       {/* Header */}
-      <div className="bg-white p-6 border-b flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+      <div className="bg-white p-4 md:p-6 border-b flex items-center justify-between">
+        <h2 className="text-xl md:text-2xl font-bold text-gray-800 flex items-center gap-2">
            {format(currentDate, 'MMMM yyyy')}
         </h2>
         <div className="flex gap-2">
           <button onClick={handlePrevMonth} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-            <ChevronLeft className="w-6 h-6 text-gray-600" />
+            <ChevronLeft className="w-5 h-5 md:w-6 md:h-6 text-gray-600" />
           </button>
           <button onClick={handleNextMonth} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-            <ChevronRight className="w-6 h-6 text-gray-600" />
+            <ChevronRight className="w-5 h-5 md:w-6 md:h-6 text-gray-600" />
           </button>
         </div>
       </div>
@@ -209,7 +228,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       {/* Grid Header */}
       <div className="grid grid-cols-7 border-b bg-gray-50">
         {weekDays.map(day => (
-          <div key={day} className={`py-3 text-center text-xs font-bold uppercase tracking-wider ${['Sat', 'Sun'].includes(day) ? 'text-red-500' : 'text-gray-500'}`}>
+          <div key={day} className={`py-3 md:py-4 text-center text-[10px] md:text-xs font-bold uppercase tracking-widest ${['Sat', 'Sun'].includes(day) ? 'text-red-500' : 'text-gray-400'}`}>
             {day}
           </div>
         ))}
@@ -223,177 +242,83 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           const isWeekendDay = isWeekend(day);
           const status = getShopperDayStatus(day);
           const isDisabled = isDateDisabledForShopper(day);
+          const isTooSoon = mode === 'SHOPPER' && isDisabled && isAfter(day, today) && isBefore(day, minShopperDate);
           
-          // Simplified visual indicator for admin: Are there ANY blocks?
-          const hasBlocks = mode === 'ADMIN' && adminAvailability[dateKey] && Object.values(adminAvailability[dateKey]).some((types: ShiftType[]) => types.length < 2);
-          
-          // Render Status Badge (When Selected)
-          const renderSelectionBadge = () => {
-             const baseClasses = "text-xs px-2 py-1 rounded-md border font-semibold truncate";
-             const timeLabel = status.time?.split('(')[0];
-
-             if (status.isAA && status.isStandard) {
-                return (
-                  <div className={`${baseClasses} bg-gradient-to-r from-red-100 to-green-100 text-gray-800 border-gray-200`}>
-                     AA + Std
-                     <div className="text-[10px] font-normal opacity-80">{timeLabel}</div>
-                  </div>
-                );
-             } else if (status.isAA) {
-                return (
-                  <div className={`${baseClasses} bg-red-100 text-red-700 border-red-200`}>
-                     AA
-                     <div className="text-[10px] font-normal opacity-80">{timeLabel}</div>
-                  </div>
-                );
-             } else if (status.isStandard) {
-                 return (
-                  <div className={`${baseClasses} bg-green-100 text-green-700 border-green-200`}>
-                     Std
-                     <div className="text-[10px] font-normal opacity-80">{timeLabel}</div>
-                  </div>
-                );
-             }
-             return null;
-          };
-
-          // Render Availability Preview (When NOT selected)
-          const renderAvailabilityPreview = () => {
-             return (
-               <div className="grid grid-cols-2 gap-1 mt-auto">
-                  {SHIFT_TIMES.map((shift, idx) => {
-                     const isAA = isTypeAvailable(dateKey, shift, ShiftType.AA);
-                     const isStd = isTypeAvailable(dateKey, shift, ShiftType.STANDARD);
-                     const label = getShiftLabel(shift);
-
-                     if (!isAA && !isStd) return <div key={idx} className="h-5"></div>; // Spacer
-
-                     let classNames = "h-6 flex items-center justify-center text-[10px] rounded shadow-sm transition-all cursor-help ";
-                     
-                     if (isAA && isStd) {
-                        classNames += "bg-gradient-to-r from-red-50 to-green-50 text-gray-700 border border-gray-200 border-l-4 border-l-red-500 border-r-4 border-r-green-500 font-medium";
-                     } else if (isAA) {
-                        classNames += "bg-red-100 text-red-900 border border-red-200 border-l-4 border-l-red-600 font-bold";
-                     } else if (isStd) {
-                        classNames += "bg-green-50 text-green-700 border border-green-200 font-medium";
-                     }
-
-                     return (
-                      <div 
-                        key={idx} 
-                        className={classNames} 
-                        title={shift}
-                      >
-                        {label}
-                      </div>
-                     );
-                  })}
-               </div>
-             )
-          }
+          const aaLabel = status.aaShift ? getShiftLabel(status.aaShift.time) : null;
+          const stdLabel = status.stdShift ? getShiftLabel(status.stdShift.time) : null;
 
           return (
             <div 
               key={day.toISOString()} 
-              className={`min-h-[110px] relative group transition-colors flex flex-col
-                ${isDisabled ? 'bg-gray-100 cursor-not-allowed' : 'bg-white cursor-pointer hover:bg-gray-50'}
-                ${!isCurrentMonth && !isDisabled ? 'bg-gray-50/50 text-gray-400' : ''}
+              className={`min-h-[80px] md:min-h-[120px] relative transition-all flex flex-col p-1 md:p-2
+                ${isDisabled ? 'bg-gray-100' : 'bg-white hover:bg-blue-50 cursor-pointer active:bg-blue-100'}
+                ${!isCurrentMonth ? 'opacity-40' : ''}
               `}
               onClick={() => {
                 if (!isDisabled) setSelectedDay(day);
               }}
             >
+              {/* First Working Day Indicator */}
+              {status.isFirstWorkingDay && (
+                <div className="absolute top-1 right-1 md:top-2 md:left-2 md:right-auto z-10 pointer-events-none" title="First Working Day">
+                   <Star className="w-3 h-3 md:w-5 md:h-5 text-yellow-500 fill-yellow-500 drop-shadow-sm" />
+                </div>
+              )}
+
               {/* Day Number */}
-              <div className={`p-2 text-sm font-semibold ${isWeekendDay ? 'text-red-500' : 'text-gray-700'} ${isDisabled ? 'opacity-40' : ''}`}>
+              <div className={`text-sm md:text-lg font-semibold mb-1 md:mb-2 ${isWeekendDay ? 'text-red-500' : 'text-gray-700'} ${isDisabled ? 'opacity-40' : ''} ${status.isFirstWorkingDay ? 'mr-3 md:mr-0 md:ml-6' : ''}`}>
                 {format(day, 'd')}
               </div>
               
-              {/* Disabled Lock Icon */}
-              {isDisabled && mode === 'SHOPPER' && (
-                 <div className="absolute top-2 right-2 opacity-10">
-                   <Lock className="w-4 h-4" />
-                 </div>
-              )}
+              {/* Cell Content - Responsive View */}
+              <div className="flex flex-col gap-1 flex-1">
+                {status.aaShift && aaLabel && (
+                  <div className="p-0.5 md:px-2 md:py-1.5 bg-red-100 border border-red-200 text-red-800 rounded md:rounded-lg text-[9px] md:text-xs font-bold shadow-sm flex items-center justify-center md:justify-between">
+                     <span className="hidden md:inline">AA</span>
+                     {/* Show abbreviated on mobile, full on desktop */}
+                     <span className="md:hidden">{aaLabel.mobile}</span>
+                     <span className="hidden md:inline">{aaLabel.desktop}</span>
+                  </div>
+                )}
+                
+                {status.stdShift && stdLabel && (
+                  <div className="p-0.5 md:px-2 md:py-1.5 bg-green-100 border border-green-200 text-green-800 rounded md:rounded-lg text-[9px] md:text-xs font-bold shadow-sm flex items-center justify-center md:justify-between">
+                     <span className="hidden md:inline">Std</span>
+                     <span className="md:hidden">{stdLabel.mobile}</span>
+                     <span className="hidden md:inline">{stdLabel.desktop}</span>
+                  </div>
+                )}
 
-              {/* Indicators Container */}
-              <div className={`flex-1 px-2 pb-2 flex flex-col justify-end gap-1 overflow-hidden ${isDisabled ? 'opacity-30 grayscale' : ''}`}>
-                {mode === 'ADMIN' && hasBlocks && (
-                   <div className="absolute bottom-1 right-1" title="Availability has been modified for this day">
-                      <div className="w-2 h-2 rounded-full bg-orange-500"></div>
+                {/* Empty State Call to Action (Only for active steps - Desktop only) */}
+                {!isDisabled && !status.aaShift && !status.stdShift && mode === 'SHOPPER' && step === 1 && (
+                  <div className="mt-auto text-center opacity-0 group-hover:opacity-40 transition-opacity hidden md:block">
+                    <Plus className="w-6 h-6 text-gray-300 mx-auto" />
+                  </div>
+                )}
+                
+                {/* Admin Indicator */}
+                {mode === 'ADMIN' && adminAvailability[dateKey] && (
+                   <div className="mt-auto flex gap-1 justify-end">
+                      <div className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-orange-400" title="Custom Settings"></div>
                    </div>
                 )}
                 
-                {mode === 'SHOPPER' && (
-                   status.hasShift ? renderSelectionBadge() : renderAvailabilityPreview()
+                {/* Too Soon Label */}
+                {isTooSoon && (
+                     <div className="mt-auto text-center">
+                        <span className="text-[9px] text-gray-400 font-medium bg-gray-200 px-1 rounded">Too Soon</span>
+                     </div>
                 )}
               </div>
+              
+              {isDisabled && mode === 'SHOPPER' && (
+                 <div className="absolute top-2 right-2 opacity-10 hidden md:block">
+                   <Lock className="w-5 h-5" />
+                 </div>
+              )}
             </div>
           );
         })}
-      </div>
-
-      {/* Legend */}
-      <div className="bg-gray-50 border-t px-6 py-4">
-        {mode === 'SHOPPER' && (
-          <div className="flex flex-col md:flex-row items-center justify-center gap-y-4 gap-x-8">
-            
-            {/* Group 1: What you selected */}
-            <div className="flex items-center gap-4">
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Selected</span>
-              
-              <div className="flex items-center gap-2">
-                <div className="px-2 py-0.5 bg-red-600 text-white text-[10px] font-bold rounded shadow-sm">AA</div>
-                <span className="text-xs text-gray-600 font-medium">Always Available</span>
-              </div>
-              
-              <div className="flex items-center gap-2">
-                <div className="px-2 py-0.5 bg-green-600 text-white text-[10px] font-bold rounded shadow-sm">Std</div>
-                <span className="text-xs text-gray-600 font-medium">Standard</span>
-              </div>
-            </div>
-
-            {/* Divider */}
-            <div className="hidden md:block w-px h-8 bg-gray-200"></div>
-
-            {/* Group 2: What is available (The Mini Grid Icons) */}
-            <div className="flex items-center gap-4">
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Availability Key</span>
-              
-              {/* AA Only Icon */}
-              <div className="flex items-center gap-1.5 group">
-                 <div className="w-9 h-5 bg-red-100 border border-red-200 border-l-4 border-l-red-600 text-red-900 text-[9px] flex items-center justify-center font-bold rounded shadow-sm">
-                   Open
-                 </div>
-                 <span className="text-xs text-gray-500">AA Only</span>
-              </div>
-
-              {/* Standard Only Icon */}
-              <div className="flex items-center gap-1.5 group">
-                 <div className="w-9 h-5 bg-green-50 border border-green-200 text-green-700 text-[9px] flex items-center justify-center font-medium rounded shadow-sm">
-                   Open
-                 </div>
-                 <span className="text-xs text-gray-500">Std Only</span>
-              </div>
-
-              {/* Both Icon */}
-              <div className="flex items-center gap-1.5 group">
-                 <div className="w-9 h-5 bg-gradient-to-r from-red-50 to-green-50 border border-gray-200 border-l-4 border-l-red-500 border-r-4 border-r-green-500 text-gray-600 text-[9px] flex items-center justify-center font-bold rounded shadow-sm">
-                   Open
-                 </div>
-                 <span className="text-xs text-gray-500">Both</span>
-              </div>
-            </div>
-
-          </div>
-        )}
-        
-        {mode === 'ADMIN' && (
-           <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
-             <div className="w-3 h-3 rounded-full bg-orange-500 shadow-sm"></div> 
-             <span className="font-medium">Modified Availability</span>
-             <span className="text-gray-400 text-xs ml-1">(Default is all Open)</span>
-           </div>
-        )}
       </div>
 
       {renderDayPanel()}

@@ -1,3 +1,5 @@
+
+
 export enum ShiftTime {
   OPENING = 'Opening (04:00 - 13:00)',
   MORNING = 'Morning (06:00 - 15:00)',
@@ -11,7 +13,7 @@ export enum ShiftType {
 }
 
 // Map: DateString -> ShiftTime -> Array of allowed ShiftTypes
-export type AdminAvailabilityMap = Record<string, Record<ShiftTime, ShiftType[]>>;
+export type AdminAvailabilityMap = Record<string, Partial<Record<ShiftTime, ShiftType[]>>>;
 
 // 0 = Sunday, 1 = Monday, ... 6 = Saturday
 export type WeeklyTemplate = Record<number, Record<ShiftTime, ShiftType[]>>;
@@ -30,6 +32,7 @@ export interface ShopperDetails {
   gloveSize: string; // Auto-calculated
   isRandstad: boolean;
   address?: string; // Required if isRandstad is true
+  firstWorkingDay?: string; // YYYY-MM-DD
 }
 
 export interface ShopperData {
@@ -44,4 +47,18 @@ export enum AppMode {
   SHOPPER_SETUP = 'SHOPPER_SETUP',
   SHOPPER_FLOW = 'SHOPPER_FLOW',
   SUMMARY = 'SUMMARY',
+}
+
+export enum ShopperStep {
+  AA_SELECTION = 0,
+  STANDARD_SELECTION = 1,
+  DETAILS = 2
+}
+
+export enum AdminWizardStep {
+  DASHBOARD = 'DASHBOARD',
+  WIZARD_DAYS = 'WIZARD_DAYS', // Configuring Mon-Sun
+  WIZARD_APPLY = 'WIZARD_APPLY', // Selecting duration
+  CALENDAR_EDIT = 'CALENDAR_EDIT', // Manual overrides
+  VIEW_SUBMISSIONS = 'VIEW_SUBMISSIONS' // New Data Dashboard
 }
