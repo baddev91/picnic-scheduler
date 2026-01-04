@@ -416,6 +416,29 @@ function App() {
       return totalConsecutive > 5;
   };
 
+  // --- NEW RULE: First Working Day must be Morning or Afternoon ---
+  const validateFirstWorkingDayRule = (proposedShifts: ShopperShift[]): { valid: boolean, message?: string } => {
+     if (proposedShifts.length === 0) return { valid: true };
+
+     // Sort to find the very first shift
+     const sorted = [...proposedShifts].sort((a, b) => a.date.localeCompare(b.date));
+     const firstShift = sorted[0];
+
+     // Valid shifts for First Working Day: Morning or Afternoon
+     // Invalid: Opening or Noon
+     const validFirstShifts = [ShiftTime.MORNING, ShiftTime.AFTERNOON];
+
+     if (!validFirstShifts.includes(firstShift.time)) {
+        const dateFormatted = format(getSafeDateFromKey(firstShift.date), 'MMM do');
+        return { 
+          valid: false, 
+          message: `Startup Rule Violation: Your first working day (${dateFormatted}) cannot be a ${firstShift.time.split(' ')[0]} shift.\n\nThe first day must be a 'Morning' or 'Afternoon' shift.` 
+        };
+     }
+
+     return { valid: true };
+  };
+
   const handleShopperToggle = (dateStr: string, shift: ShiftTime, type: ShiftType) => {
     const currentName = shopperNames[currentShopperIndex];
     const prevData = selections.find(s => s.name === currentName) || { name: currentName, shifts: [] };
@@ -443,9 +466,32 @@ function App() {
              alert("Already covered by AA");
              return;
          }
+
+         // --- NEW: Simulate addition and check First Working Day Rule ---
+         const simulatedShifts = [...newShifts, { date: dateStr, time: shift, type: ShiftType.STANDARD }];
+         const fwdCheck = validateFirstWorkingDayRule(simulatedShifts);
+         if (!fwdCheck.valid) {
+             alert(fwdCheck.message);
+             return;
+         }
+
          newShifts.push({ date: dateStr, time: shift, type: ShiftType.STANDARD });
       } else {
          // Removing
+         // --- NEW: Simulate removal and check if the *next* earliest shift violates the rule ---
+         const shiftToRemove = newShifts[existingIndex];
+         const simulatedShifts = newShifts.filter((_, i) => i !== existingIndex);
+         
+         // If we removed the ONLY shift, it's valid (empty list is valid)
+         // If we removed a shift, and there are others left, check the new first one
+         if (simulatedShifts.length > 0) {
+             const fwdCheck = validateFirstWorkingDayRule(simulatedShifts);
+             if (!fwdCheck.valid) {
+                 alert(`Cannot remove this shift.\n\nRemoving ${shift.split(' ')[0]} on ${format(getSafeDateFromKey(dateStr), 'MMM do')} would make your new first day invalid.\n\n${fwdCheck.message}`);
+                 return;
+             }
+         }
+
          newShifts.splice(existingIndex, 1);
       }
     }
@@ -486,6 +532,19 @@ function App() {
   };
   
   const handleSetFirstWorkingDay = (dateStr: string) => {
+      const currentName = shopperNames[currentShopperIndex];
+      const shopperData = selections.find(s => s.name === currentName);
+      
+      // Find the shift on this date to validate it
+      const shiftOnDate = shopperData?.shifts.find(s => s.date === dateStr);
+      if (shiftOnDate) {
+          const validTypes = [ShiftTime.MORNING, ShiftTime.AFTERNOON];
+          if (!validTypes.includes(shiftOnDate.time)) {
+              alert(`Cannot set this date as First Working Day.\n\nThe shift on ${format(getSafeDateFromKey(dateStr), 'MMM do')} is '${shiftOnDate.time.split(' ')[0]}'.\n\nFirst working day must be Morning or Afternoon.`);
+              return;
+          }
+      }
+
       const selectedDate = getSafeDateFromKey(dateStr);
       const minDate = getShopperMinDate();
       
@@ -494,7 +553,6 @@ function App() {
          return;
       }
 
-      const currentName = shopperNames[currentShopperIndex];
       const newSelections = [...selections];
       const idx = newSelections.findIndex(s => s.name === currentName);
       const details = idx >= 0 ? newSelections[idx].details || {} : { usePicnicBus: false, civilStatus: 'Single', clothingSize: 'M', shoeSize: '40', gloveSize: '8 (M)', isRandstad: false, address: '' };
@@ -538,6 +596,14 @@ function App() {
           }
           currentDate = addDays(currentDate, 1);
       }
+
+      // --- NEW: Validate First Working Day on generated shifts ---
+      const fwdCheck = validateFirstWorkingDayRule(newShifts);
+      if (!fwdCheck.valid) {
+          alert(`Cannot apply this schedule.\n\nBased on your selections, your first working day would be invalid.\n\n${fwdCheck.message}\n\nPlease select a different weekday/weekend combination or time.`);
+          return;
+      }
+
       updateShopperSelections(newShifts);
       setShopperStep(ShopperStep.STANDARD_SELECTION);
   };
