@@ -32,6 +32,7 @@ function App() {
   const [adminWizardStep, setAdminWizardStep] = useState<AdminWizardStep>(AdminWizardStep.DASHBOARD);
   const [wizardDayIndex, setWizardDayIndex] = useState<number>(1); // 1 = Monday
   const [tempTemplate, setTempTemplate] = useState<WeeklyTemplate>({});
+  const [savedCloudTemplate, setSavedCloudTemplate] = useState<WeeklyTemplate | null>(null); // New: Store loaded template
   const [applyWeeks, setApplyWeeks] = useState<number>(4);
 
   // Shopper State
@@ -89,6 +90,21 @@ function App() {
       }
   };
 
+  // Helper to save Weekly Template to Supabase
+  const saveTemplateToSupabase = async (template: WeeklyTemplate) => {
+      try {
+          // This creates a new row with id='weekly_template' or updates it if exists
+          const { error } = await supabase
+              .from('app_settings')
+              .upsert({ id: 'weekly_template', value: template });
+          
+          if (error) console.error("Failed to save template to Supabase:", error);
+          else setSavedCloudTemplate(template);
+      } catch (e) {
+          console.error("Error saving template to Supabase:", e);
+      }
+  };
+
   const saveShopperPinToSupabase = async (pin: string) => {
     try {
         const { error } = await supabase
@@ -125,18 +141,10 @@ function App() {
       window.history.replaceState({}, '', window.location.pathname);
     }
 
-    // 2. Load Local Storage Data (Templates only)
-    try {
-      const savedTemplate = JSON.parse(localStorage.getItem(STORAGE_KEYS.TEMPLATE) || '{}');
-      if (Object.keys(savedTemplate).length > 0) setTempTemplate(savedTemplate);
-    } catch (e) {
-      console.error("Failed to load settings", e);
-    }
-
-    // 3. Load Remote Config (Supabase)
+    // 2. Load Remote Config (Supabase)
     const loadRemoteConfig = async () => {
         try {
-            // Fetch Availability
+            // Fetch Availability (Specific Dates)
             const { data: availData } = await supabase
                 .from('app_settings')
                 .select('value')
@@ -145,6 +153,27 @@ function App() {
             
             if (availData?.value) {
                 setAdminAvailability(availData.value);
+            }
+
+            // Fetch Weekly Template (Abstract Pattern)
+            const { data: templateData } = await supabase
+                .from('app_settings')
+                .select('value')
+                .eq('id', 'weekly_template')
+                .single();
+
+            if (templateData?.value) {
+                console.log("Loaded template from Supabase");
+                setSavedCloudTemplate(templateData.value);
+                // ALWAYS prioritize Cloud data over local storage for consistency
+                setTempTemplate(templateData.value);
+            } else {
+                console.log("No cloud template found, checking local storage...");
+                // Only if no cloud data, try local storage
+                try {
+                  const savedTemplate = JSON.parse(localStorage.getItem(STORAGE_KEYS.TEMPLATE) || '{}');
+                  if (Object.keys(savedTemplate).length > 0) setTempTemplate(savedTemplate);
+                } catch (e) { console.error(e); }
             }
 
             // Fetch Shopper PIN
@@ -306,6 +335,29 @@ function App() {
       });
   };
 
+  const resetWizardTemplate = () => {
+    // 7709 PIN PROTECTION for RESET
+    const code = window.prompt("⚠️ DANGER ZONE ⚠️\n\nThis will clear the entire weekly pattern configuration.\n\nEnter Admin PIN to confirm reset:");
+    
+    if (code === '7709') {
+        const initial: WeeklyTemplate = {};
+        [1,2,3,4,5,6,0].forEach(d => {
+            initial[d] = {
+                [ShiftTime.OPENING]: [],
+                [ShiftTime.MORNING]: [],
+                [ShiftTime.NOON]: [],
+                [ShiftTime.AFTERNOON]: []
+            };
+        });
+        setTempTemplate(initial);
+        // We also clear it from cloud to reflect the reset immediately
+        saveTemplateToSupabase(initial);
+        alert("Pattern reset successfully.");
+    } else if (code !== null) {
+        alert("Incorrect PIN. Reset cancelled.");
+    }
+  };
+
   const copyPreviousDay = () => {
       if (wizardDayIndex === 1) return; // Can't copy on Monday
       const prevDayIndex = wizardDayIndex === 0 ? 6 : wizardDayIndex - 1; // Logic for Sun (0) coming after Sat (6)
@@ -335,8 +387,12 @@ function App() {
          }
       }
       
+      // 1. Save specific date availability to Supabase
       setAdminAvailability(newAvailability);
       saveConfigToSupabase(newAvailability);
+      
+      // 2. Save the abstract template to Supabase so it can be reloaded later
+      saveTemplateToSupabase(tempTemplate);
       
       alert(`Schedule generated successfully for ${applyWeeks} weeks! Saved to Cloud.`);
       setAdminWizardStep(AdminWizardStep.DASHBOARD);
@@ -685,17 +741,23 @@ function App() {
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               <button 
                 onClick={() => {
-                    // Reset template to empty defaults
-                    const initial: WeeklyTemplate = {};
-                    [1,2,3,4,5,6,0].forEach(d => {
-                        initial[d] = {
-                            [ShiftTime.OPENING]: [],
-                            [ShiftTime.MORNING]: [],
-                            [ShiftTime.NOON]: [],
-                            [ShiftTime.AFTERNOON]: []
-                        };
-                    });
-                    setTempTemplate(initial);
+                    // Force load from cloud template if available, otherwise check local
+                    if (savedCloudTemplate) {
+                         setTempTemplate(savedCloudTemplate);
+                    } else if (Object.keys(tempTemplate).length === 0) {
+                        // Initialize empty only if strictly nothing exists
+                        const initial: WeeklyTemplate = {};
+                        [1,2,3,4,5,6,0].forEach(d => {
+                            initial[d] = {
+                                [ShiftTime.OPENING]: [],
+                                [ShiftTime.MORNING]: [],
+                                [ShiftTime.NOON]: [],
+                                [ShiftTime.AFTERNOON]: []
+                            };
+                        });
+                        setTempTemplate(initial);
+                    }
+                    
                     setWizardDayIndex(1); // Mon
                     setAdminWizardStep(AdminWizardStep.WIZARD_DAYS);
                 }}
@@ -703,8 +765,8 @@ function App() {
               >
                   <div className="relative z-10">
                       <CalendarRange className="w-10 h-10 text-white mb-4 opacity-90" />
-                      <h3 className="text-2xl font-bold text-white mb-2">Create Weekly Schedule</h3>
-                      <p className="text-purple-100 text-sm">Guided wizard to set AA & Standard slots for each day of the week.</p>
+                      <h3 className="text-2xl font-bold text-white mb-2">Edit Weekly Pattern</h3>
+                      <p className="text-purple-100 text-sm">Guided wizard to set AA & Standard slots. Loads from Cloud if available.</p>
                   </div>
                   <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-8 -mt-8 blur-2xl"></div>
               </button>
@@ -770,11 +832,17 @@ function App() {
                           <h2 className={`text-3xl font-extrabold ${isWeekendDay ? 'text-red-600' : 'text-gray-800'}`}>{dayName}</h2>
                           <p className="text-gray-500 font-medium mt-1">Configure available shifts</p>
                       </div>
-                      {wizardDayIndex !== 1 && (
-                          <button onClick={copyPreviousDay} className="flex items-center gap-2 text-sm font-bold text-purple-600 bg-white px-3 py-2 rounded-lg shadow-sm hover:bg-purple-50 transition-all">
-                              <Copy className="w-4 h-4" /> Copy Previous Day
+                      <div className="flex gap-2">
+                         {/* Clear Template Button */}
+                         <button onClick={resetWizardTemplate} className="flex items-center gap-2 text-sm font-bold text-gray-500 bg-white px-3 py-2 rounded-lg shadow-sm hover:bg-gray-100 hover:text-red-500 transition-all border">
+                              <Trash2 className="w-4 h-4" /> Reset Pattern
                           </button>
-                      )}
+                         {wizardDayIndex !== 1 && (
+                              <button onClick={copyPreviousDay} className="flex items-center gap-2 text-sm font-bold text-purple-600 bg-white px-3 py-2 rounded-lg shadow-sm hover:bg-purple-50 transition-all border border-purple-100">
+                                  <Copy className="w-4 h-4" /> Copy Previous Day
+                              </button>
+                          )}
+                      </div>
                   </div>
 
                   <div className="p-6 overflow-y-auto space-y-4">
