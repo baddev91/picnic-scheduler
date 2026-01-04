@@ -59,6 +59,5 @@ export enum AdminWizardStep {
   DASHBOARD = 'DASHBOARD',
   WIZARD_DAYS = 'WIZARD_DAYS', // Configuring Mon-Sun
   WIZARD_APPLY = 'WIZARD_APPLY', // Selecting duration
-  CALENDAR_EDIT = 'CALENDAR_EDIT', // Manual overrides
   VIEW_SUBMISSIONS = 'VIEW_SUBMISSIONS' // New Data Dashboard
 }

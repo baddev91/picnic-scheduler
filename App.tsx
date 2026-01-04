@@ -290,6 +290,8 @@ function App() {
   // Admin Logic
   // --------------------------------------------------------------------------
 
+  // Keeping handleAdminToggle for potential future use or if needed by CalendarView internal types, 
+  // though we removed the manual edit mode.
   const handleAdminToggle = (date: string, shift: ShiftTime, type: ShiftType) => {
     setAdminAvailability(prev => {
       const dayConfig = prev[date] || {};
@@ -653,6 +655,29 @@ function App() {
           currentDate = addDays(currentDate, 1);
       }
 
+      // --- CRITICAL FIX: Validate that shifts were ACTUALLY generated ---
+      // This prevents the case where a shopper selects a day that the Admin has completely blocked out.
+      
+      const hasWeekdayAA = newShifts.some(s => {
+          const d = getDay(getSafeDateFromKey(s.date));
+          return d >= 1 && d <= 5 && s.type === ShiftType.AA;
+      });
+
+      const hasWeekendAA = newShifts.some(s => {
+          const d = getDay(getSafeDateFromKey(s.date));
+          return (d === 0 || d === 6) && s.type === ShiftType.AA;
+      });
+
+      if (!hasWeekdayAA) {
+          alert("Selection Invalid: No available dates found for your selected Weekday in the current period. This might be due to admin restrictions. Please select a different Weekday.");
+          return;
+      }
+
+      if (!hasWeekendAA) {
+          alert("Selection Invalid: No available dates found for your selected Weekend in the current period. Please select a different Weekend day.");
+          return;
+      }
+
       // --- NEW: Validate First Working Day on generated shifts ---
       const fwdCheck = validateFirstWorkingDayRule(newShifts);
       if (!fwdCheck.valid) {
@@ -738,7 +763,7 @@ function App() {
              </div>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid md:grid-cols-2 gap-6">
               <button 
                 onClick={() => {
                     // Force load from cloud template if available, otherwise check local
@@ -769,15 +794,6 @@ function App() {
                       <p className="text-purple-100 text-sm">Guided wizard to set AA & Standard slots. Loads from Cloud if available.</p>
                   </div>
                   <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-8 -mt-8 blur-2xl"></div>
-              </button>
-
-              <button 
-                onClick={() => setAdminWizardStep(AdminWizardStep.CALENDAR_EDIT)}
-                className="group p-6 bg-white border-2 border-gray-100 rounded-2xl shadow-sm text-left hover:border-orange-200 hover:bg-orange-50 transition-all"
-              >
-                  <CalendarDays className="w-10 h-10 text-orange-500 mb-4" />
-                  <h3 className="text-xl font-bold text-gray-800 mb-2">Manual Calendar Edit</h3>
-                  <p className="text-gray-500 text-sm">Fine-tune specific dates or handle holidays manually.</p>
               </button>
 
               <button 
@@ -952,8 +968,7 @@ function App() {
               <div>
                   <h2 className="text-lg font-bold text-gray-800 leading-none">Admin Panel</h2>
                   <span className="text-xs text-gray-400 font-medium">
-                    {adminWizardStep === AdminWizardStep.CALENDAR_EDIT ? 'Manual Mode' : 
-                     adminWizardStep === AdminWizardStep.VIEW_SUBMISSIONS ? 'Data Viewer' : 'Wizard Mode'}
+                    {adminWizardStep === AdminWizardStep.VIEW_SUBMISSIONS ? 'Data Viewer' : 'Wizard Mode'}
                   </span>
               </div>
           </div>
@@ -974,20 +989,6 @@ function App() {
           {adminWizardStep === AdminWizardStep.WIZARD_DAYS && renderAdminWizardDays()}
           {adminWizardStep === AdminWizardStep.WIZARD_APPLY && renderAdminWizardApply()}
           
-          {adminWizardStep === AdminWizardStep.CALENDAR_EDIT && (
-              <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in">
-                  <div className="bg-orange-50 border border-orange-200 p-4 rounded-xl flex gap-3 text-orange-800 text-sm">
-                      <AlertCircle className="w-5 h-5 shrink-0" />
-                      <p>Manual Mode: Click on specific days to override the generated pattern.</p>
-                  </div>
-                  <CalendarView 
-                      mode="ADMIN" 
-                      adminAvailability={adminAvailability}
-                      onAdminToggle={handleAdminToggle}
-                  />
-              </div>
-          )}
-
           {adminWizardStep === AdminWizardStep.VIEW_SUBMISSIONS && <AdminDataView />}
       </div>
     </div>
@@ -1392,6 +1393,22 @@ function App() {
                   
                   <Button 
                      onClick={() => {
+                        // --- CHECK: Ensure at least one Weekday AA and one Weekend AA exist before proceeding ---
+                        const aaShifts = currentShopperData?.shifts.filter(s => s.type === ShiftType.AA) || [];
+                        const hasWk = aaShifts.some(s => {
+                            const d = getDay(getSafeDateFromKey(s.date));
+                            return d >= 1 && d <= 5;
+                        });
+                        const hasWkend = aaShifts.some(s => {
+                            const d = getDay(getSafeDateFromKey(s.date));
+                            return d === 0 || d === 6;
+                        });
+
+                        if (!hasWk || !hasWkend) {
+                            alert("Incomplete Selection: You must have at least one Weekday AA and one Weekend AA selected.\n\nPlease check your selections.");
+                            return;
+                        }
+
                         setShowDetailsModal(true);
                      }} 
                      className="px-8"
