@@ -1628,11 +1628,14 @@ function App() {
                       onChange={(e) => setTempDetails(prev => ({ ...prev, civilStatus: e.target.value }))}
                       className="w-full p-3 bg-gray-50 border rounded-xl outline-none focus:ring-2 focus:ring-purple-500"
                   >
-                      <option value="Single">Single</option>
-                      <option value="Married">Married</option>
-                      <option value="Registered Partnership">Registered Partnership</option>
-                      <option value="Separated">Separated</option>
+                      <option value="Cohabit">Cohabit</option>
                       <option value="Divorced">Divorced</option>
+                      <option value="Engaged">Engaged</option>
+                      <option value="Legal separation">Legal separation</option>
+                      <option value="Married">Married</option>
+                      <option value="Registered partnership">Registered partnership</option>
+                      <option value="Single">Single</option>
+                      <option value="Unknown">Unknown</option>
                       <option value="Widowed">Widowed</option>
                   </select>
               </div>
