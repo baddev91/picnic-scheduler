@@ -3,28 +3,27 @@ import { AppMode, ShiftTime, ShiftType, ShopperData, ShopperShift, AdminAvailabi
 import { SHIFT_TIMES, formatDateKey, getShopperAllowedRange, getShopperMinDate } from './constants';
 import { Button } from './components/Button';
 import { CalendarView } from './components/CalendarView';
-import { Users, Shield, Download, ArrowRight, UserPlus, CheckCircle, AlertCircle, Save, Trash2, History, XCircle, Lock, Bus, Heart, Shirt, Footprints, Hand, MapPin, Building2, Settings2, CalendarDays, Undo2, PlayCircle, Plus, Check, User, Ban, CloudUpload, Link, Share2, LogIn, RefreshCw, FileDown, Copy, CalendarRange, ChevronRight, ChevronLeft, Star, Table, Sun, Moon, Sunrise, Sunset, Coffee } from 'lucide-react';
+import { Shield, Download, ArrowRight, UserPlus, CheckCircle, AlertCircle, Save, Trash2, History, XCircle, Lock, Bus, Heart, Shirt, Footprints, Hand, MapPin, Building2, Settings2, CalendarDays, Undo2, PlayCircle, Plus, Check, User, Ban, CloudUpload, Link, Share2, LogIn, RefreshCw, FileDown, Copy, CalendarRange, ChevronRight, ChevronLeft, Star, Table, Sun, Moon, Sunrise, Sunset, Coffee, KeyRound, X, ClipboardList, Clock } from 'lucide-react';
 import { isWeekend, startOfWeek, addDays, subDays, getDay, isSameDay, format, isWithinInterval, addWeeks, endOfWeek, nextMonday, startOfToday, isBefore, isAfter } from 'date-fns';
 import { supabase } from './supabaseClient';
 import { AdminDataView } from './components/AdminDataView';
 
 const STORAGE_KEYS = {
-  ADMIN: 'picnic_admin_availability',
   TEMPLATE: 'picnic_admin_template',
-  SHOPPERS: 'picnic_shopper_names',
-  SELECTIONS: 'picnic_selections',
-  INDEX: 'picnic_current_index',
-  MODE: 'picnic_app_mode',
-  STEP: 'picnic_shopper_step',
-  GOOGLE_URL: 'picnic_google_script_url',         // For POST (Writing selections)
-  GOOGLE_CONFIG_URL: 'picnic_google_config_url'   // For GET (Reading availability)
+  // Removed legacy keys
 };
 
 function App() {
-  // Auth State
+  // Auth State (Admin)
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState(false);
+
+  // Auth State (Shopper)
+  const [shopperPinConfig, setShopperPinConfig] = useState<string | null>(null); // The PIN stored in DB
+  const [enteredShopperPin, setEnteredShopperPin] = useState('');
+  const [isShopperVerified, setIsShopperVerified] = useState(false);
+  const [adminShopperPinInput, setAdminShopperPinInput] = useState(''); // For Admin input
 
   // App State
   const [mode, setMode] = useState<AppMode>(AppMode.HOME);
@@ -38,19 +37,13 @@ function App() {
   // Shopper State
   const [shopperStep, setShopperStep] = useState<ShopperStep>(ShopperStep.AA_SELECTION);
   const [isInitialized, setIsInitialized] = useState(false);
-  const [showRestorePrompt, setShowRestorePrompt] = useState(false);
   const [isSelfService, setIsSelfService] = useState(false);
   
   // Data State
   const [adminAvailability, setAdminAvailability] = useState<AdminAvailabilityMap>({});
   
-  // Google Sheets Config
-  const [googleSheetUrl, setGoogleSheetUrl] = useState(''); // POST URL
-  const [googleConfigUrl, setGoogleConfigUrl] = useState(''); // GET URL
-  
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  const [isFetchingConfig, setIsFetchingConfig] = useState(false);
 
   // Shopper Data
   const [shopperNames, setShopperNames] = useState<string[]>([]);
@@ -80,183 +73,121 @@ function App() {
   const [tempNameInput, setTempNameInput] = useState('');
 
   // --------------------------------------------------------------------------
-  // Configuration Fetching (GET)
+  // Configuration Fetching (GET) - From Supabase
   // --------------------------------------------------------------------------
 
-  const fetchAvailabilityConfig = useCallback(async (url: string) => {
-      if (!url) return;
-      setIsFetchingConfig(true);
+  // Helper to save config to Supabase
+  const saveConfigToSupabase = async (config: AdminAvailabilityMap) => {
       try {
-          const response = await fetch(url);
-          const data = await response.json();
+          const { error } = await supabase
+              .from('app_settings')
+              .upsert({ id: 'admin_availability', value: config });
           
-          if (data && typeof data === 'object' && !data.error) {
-              const mappedAvailability: AdminAvailabilityMap = {};
-              
-              Object.keys(data).forEach(dateKey => {
-                  mappedAvailability[dateKey] = {};
-                  const sheetDayData = data[dateKey];
-                  
-                  Object.keys(sheetDayData).forEach(sheetShiftName => {
-                      const matchedShift = SHIFT_TIMES.find(st => st.startsWith(sheetShiftName));
-                      if (matchedShift) {
-                          const types = Array.isArray(sheetDayData[sheetShiftName]) 
-                             ? sheetDayData[sheetShiftName] 
-                             : [sheetDayData[sheetShiftName]];
-                             
-                          mappedAvailability[dateKey][matchedShift] = types;
-                      }
-                  });
-              });
-              
-              setAdminAvailability(mappedAvailability);
-              localStorage.setItem(STORAGE_KEYS.ADMIN, JSON.stringify(mappedAvailability));
-          }
+          if (error) console.error("Failed to save config to Supabase:", error);
       } catch (e) {
-          console.error("Failed to fetch availability config", e);
-      } finally {
-          setIsFetchingConfig(false);
+          console.error("Error saving config to Supabase:", e);
       }
-  }, []);
+  };
+
+  const saveShopperPinToSupabase = async (pin: string) => {
+    try {
+        const { error } = await supabase
+            .from('app_settings')
+            .upsert({ id: 'shopper_auth', value: { pin } });
+        
+        if (error) {
+            alert("Error saving PIN");
+        } else {
+            setShopperPinConfig(pin);
+            alert("Shopper PIN updated successfully!");
+        }
+    } catch (e) {
+        console.error(e);
+    }
+  };
 
   // --------------------------------------------------------------------------
   // Persistence & Initialization
   // --------------------------------------------------------------------------
 
   useEffect(() => {
+    // 1. URL Params Handling
     const params = new URLSearchParams(window.location.search);
-    const magicConfig = params.get('cfg');
-    const legacySheet = params.get('sheet');
     const urlMode = params.get('mode');
     
-    let initialSheetUrl = '';
-    let initialConfigUrl = '';
-    let autoStartShopper = false;
-
-    if (magicConfig) {
-        try {
-            const decoded = JSON.parse(atob(magicConfig));
-            initialSheetUrl = decoded.out || '';
-            initialConfigUrl = decoded.src || '';
-            
-            localStorage.setItem(STORAGE_KEYS.GOOGLE_URL, initialSheetUrl);
-            localStorage.setItem(STORAGE_KEYS.GOOGLE_CONFIG_URL, initialConfigUrl);
-            
-            setGoogleSheetUrl(initialSheetUrl);
-            setGoogleConfigUrl(initialConfigUrl);
-        } catch(e) {}
-    } else if (legacySheet) {
-        try {
-            const url = atob(legacySheet);
-            initialSheetUrl = url;
-            localStorage.setItem(STORAGE_KEYS.GOOGLE_URL, url);
-            setGoogleSheetUrl(url);
-        } catch(e) {}
-    } else {
-        initialSheetUrl = localStorage.getItem(STORAGE_KEYS.GOOGLE_URL) || '';
-        initialConfigUrl = localStorage.getItem(STORAGE_KEYS.GOOGLE_CONFIG_URL) || '';
-        setGoogleSheetUrl(initialSheetUrl);
-        setGoogleConfigUrl(initialConfigUrl);
-    }
-
     if (urlMode === 'shopper') {
-      autoStartShopper = true;
       setIsSelfService(true);
       setIsAuthenticated(true); 
       setMode(AppMode.SHOPPER_SETUP);
-      if (initialConfigUrl) fetchAvailabilityConfig(initialConfigUrl);
     }
     
-    if (magicConfig || legacySheet || urlMode) {
+    if (urlMode) {
       window.history.replaceState({}, '', window.location.pathname);
     }
 
+    // 2. Load Local Storage Data (Templates only)
     try {
-      const savedAdmin = JSON.parse(localStorage.getItem(STORAGE_KEYS.ADMIN) || '{}');
-      if (Object.keys(savedAdmin).length > 0) setAdminAvailability(savedAdmin);
-
       const savedTemplate = JSON.parse(localStorage.getItem(STORAGE_KEYS.TEMPLATE) || '{}');
       if (Object.keys(savedTemplate).length > 0) setTempTemplate(savedTemplate);
     } catch (e) {
       console.error("Failed to load settings", e);
     }
 
-    const hasShopperData = !!localStorage.getItem(STORAGE_KEYS.SHOPPERS);
-    
-    if (hasShopperData && !autoStartShopper) {
-      setShowRestorePrompt(true);
-    } else {
-      setIsInitialized(true);
-    }
-  }, [fetchAvailabilityConfig]);
+    // 3. Load Remote Config (Supabase)
+    const loadRemoteConfig = async () => {
+        try {
+            // Fetch Availability
+            const { data: availData } = await supabase
+                .from('app_settings')
+                .select('value')
+                .eq('id', 'admin_availability')
+                .single();
+            
+            if (availData?.value) {
+                setAdminAvailability(availData.value);
+            }
+
+            // Fetch Shopper PIN
+            const { data: pinData } = await supabase
+                .from('app_settings')
+                .select('value')
+                .eq('id', 'shopper_auth')
+                .single();
+            
+            if (pinData?.value?.pin) {
+                setShopperPinConfig(pinData.value.pin);
+                setAdminShopperPinInput(pinData.value.pin);
+            }
+        } catch (err) {
+            console.error("Error loading remote config:", err);
+        }
+    };
+    loadRemoteConfig();
+
+    setIsInitialized(true);
+  }, []);
 
   useEffect(() => {
     if (!isInitialized) return;
-    
-    localStorage.setItem(STORAGE_KEYS.ADMIN, JSON.stringify(adminAvailability));
     localStorage.setItem(STORAGE_KEYS.TEMPLATE, JSON.stringify(tempTemplate));
-    localStorage.setItem(STORAGE_KEYS.GOOGLE_URL, googleSheetUrl);
-    localStorage.setItem(STORAGE_KEYS.GOOGLE_CONFIG_URL, googleConfigUrl);
-
-    localStorage.setItem(STORAGE_KEYS.SHOPPERS, JSON.stringify(shopperNames));
-    localStorage.setItem(STORAGE_KEYS.SELECTIONS, JSON.stringify(selections));
-    localStorage.setItem(STORAGE_KEYS.INDEX, JSON.stringify(currentShopperIndex));
-    
-    if (mode === AppMode.SHOPPER_FLOW || mode === AppMode.SHOPPER_SETUP) {
-       localStorage.setItem(STORAGE_KEYS.MODE, mode);
-       localStorage.setItem(STORAGE_KEYS.STEP, JSON.stringify(shopperStep));
-    }
-  }, [adminAvailability, tempTemplate, googleSheetUrl, googleConfigUrl, shopperNames, selections, currentShopperIndex, mode, shopperStep, isInitialized]);
+  }, [tempTemplate, isInitialized]);
 
   // --------------------------------------------------------------------------
   // Core Logic
   // --------------------------------------------------------------------------
 
-  const downloadCSV = () => {
-    const staticHeaders = ['Name', 'First Working Day', 'Bus', 'Civil Status', 'Clothing', 'Shoe', 'Glove', 'Randstad', 'Address'];
-    const shiftHeaders = Array.from({length: 12}, (_, i) => `Shift ${i+1}`);
-    const headers = [...staticHeaders, ...shiftHeaders];
-    
-    const rows: string[] = [];
-    
-    selections.forEach(shopper => {
-      const sortedShifts = [...shopper.shifts].sort((a, b) => a.date.localeCompare(b.date));
-      const rowData = [
-          shopper.name,
-          shopper.details?.firstWorkingDay || 'Not Set',
-          shopper.details?.usePicnicBus ? 'Yes' : 'No',
-          shopper.details?.civilStatus || '',
-          shopper.details?.clothingSize || '',
-          shopper.details?.shoeSize || '',
-          shopper.details?.gloveSize || '',
-          shopper.details?.isRandstad ? 'Yes' : 'No',
-          shopper.details?.address || ''
-      ];
+  const generateRandomPin = () => {
+      const pin = Math.floor(100000 + Math.random() * 900000).toString();
+      setAdminShopperPinInput(pin);
+  };
 
-      for (let i = 0; i < 12; i++) {
-        const s = sortedShifts[i];
-        if (s) {
-            const shortTime = s.time.split('(')[0].trim();
-            rowData.push(`${s.date} | ${shortTime} | ${s.type}`);
-        } else {
-            rowData.push('');
-        }
+  const handleVerifyShopperPin = () => {
+      if (enteredShopperPin === shopperPinConfig) {
+          setIsShopperVerified(true);
+      } else {
+          alert("Incorrect PIN");
+          setEnteredShopperPin('');
       }
-      rows.push(rowData.map(f => `"${f}"`).join(','));
-    });
-    
-    const csvContent = [headers.join(','), ...rows].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    if (link.download !== undefined) {
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', `picnic_shifts_${format(new Date(), 'yyyy-MM-dd')}.csv`);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
   };
 
   const handleSubmitData = async () => {
@@ -264,7 +195,7 @@ function App() {
     setSyncStatus('idle');
 
     try {
-        // 1. Supabase Sync (Primary)
+        // Supabase Sync
         for (const shopper of selections) {
             const { data: shopperData, error: shopperError } = await supabase
                 .from('shoppers')
@@ -293,36 +224,6 @@ function App() {
             }
         }
 
-        // 2. Google Sheets Sync (Backup - Optional)
-        if (googleSheetUrl) {
-            const formattedData = selections.map(shopper => {
-                const sortedShifts = [...shopper.shifts].sort((a, b) => a.date.localeCompare(b.date));
-                const rowObj: any = {
-                    name: shopper.name,
-                    firstWorkingDay: shopper.details?.firstWorkingDay || 'Not Set',
-                    bus: shopper.details?.usePicnicBus ? 'Yes' : 'No',
-                    civilStatus: shopper.details?.civilStatus || '',
-                    clothing: shopper.details?.clothingSize || '',
-                    shoe: shopper.details?.shoeSize || '',
-                    glove: shopper.details?.gloveSize || '',
-                    randstad: shopper.details?.isRandstad ? 'Yes' : 'No',
-                    address: shopper.details?.address || ''
-                };
-                for (let i = 0; i < 12; i++) {
-                    const s = sortedShifts[i];
-                    const key = `shift_${i+1}`;
-                    rowObj[key] = s ? `${s.date} | ${s.time.split('(')[0].trim()} | ${s.type}` : '';
-                }
-                return rowObj;
-            });
-
-            await fetch(googleSheetUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify({ data: formattedData }),
-            });
-        }
-
         setSyncStatus('success');
     } catch (error: any) {
         console.error("Sync error", error);
@@ -333,55 +234,27 @@ function App() {
     }
   };
 
-  const handleRestoreSession = () => {
-    try {
-      const savedShoppers = JSON.parse(localStorage.getItem(STORAGE_KEYS.SHOPPERS) || '[]');
-      const savedSelections = JSON.parse(localStorage.getItem(STORAGE_KEYS.SELECTIONS) || '[]');
-      const savedIndex = JSON.parse(localStorage.getItem(STORAGE_KEYS.INDEX) || '0');
-      const savedMode = localStorage.getItem(STORAGE_KEYS.MODE) as AppMode;
-      const savedStep = Number(localStorage.getItem(STORAGE_KEYS.STEP) || 0);
-
-      setShopperNames(savedShoppers);
-      setSelections(savedSelections);
-      setCurrentShopperIndex(savedIndex);
-      
-      if (savedMode === AppMode.SHOPPER_FLOW && savedShoppers.length > 0) {
-        setMode(AppMode.SHOPPER_FLOW);
-        setShopperStep(savedStep);
-      } else if (savedMode === AppMode.SHOPPER_SETUP) {
-        setMode(AppMode.SHOPPER_SETUP);
-      } else {
-        setMode(AppMode.HOME);
-      }
-    } catch (e) {
-      handleClearSession();
-    } finally {
-      setShowRestorePrompt(false);
-      setIsInitialized(true);
-    }
-  };
-
   const handleClearSession = () => {
-    localStorage.removeItem(STORAGE_KEYS.SHOPPERS);
-    localStorage.removeItem(STORAGE_KEYS.SELECTIONS);
-    localStorage.removeItem(STORAGE_KEYS.INDEX);
-    localStorage.removeItem(STORAGE_KEYS.MODE);
-    localStorage.removeItem(STORAGE_KEYS.STEP);
-
+    // Reset local state only, no localStorage reliance for restoration
     setShopperNames([]);
     setSelections([]);
     setCurrentShopperIndex(0);
     setShopperStep(ShopperStep.AA_SELECTION);
     
+    // Reset AA Wizard State
+    setAaSelection({
+        weekday: { dayIndex: null, time: null },
+        weekend: { dayIndex: null, time: null }
+    });
+
+    setIsShopperVerified(false);
+    setSyncStatus('idle');
+    
     if (isSelfService) {
         setMode(AppMode.SHOPPER_SETUP);
-        if(googleConfigUrl) fetchAvailabilityConfig(googleConfigUrl);
     } else {
         setMode(AppMode.HOME);
     }
-    
-    setShowRestorePrompt(false);
-    setIsInitialized(true);
   };
 
   // --------------------------------------------------------------------------
@@ -398,10 +271,16 @@ function App() {
       } else {
         newTypes = [...currentTypesForShift, type];
       }
-      return {
+      
+      const newState = {
         ...prev,
         [date]: { ...dayConfig, [shift]: newTypes }
       };
+      
+      // Save changes to Supabase immediately
+      saveConfigToSupabase(newState);
+      
+      return newState;
     });
   };
 
@@ -455,25 +334,20 @@ function App() {
             newAvailability[dateKey] = templateDayConfig;
          }
       }
+      
       setAdminAvailability(newAvailability);
-      alert(`Schedule generated successfully for ${applyWeeks} weeks!`);
+      saveConfigToSupabase(newAvailability);
+      
+      alert(`Schedule generated successfully for ${applyWeeks} weeks! Saved to Cloud.`);
       setAdminWizardStep(AdminWizardStep.DASHBOARD);
   };
 
   const handleCopyMagicLink = () => {
-      if (!googleSheetUrl) {
-          alert("Please configure the OUTPUT URL first.");
-          return;
-      }
-      const baseUrl = window.location.origin + window.location.pathname;
-      const configPayload = JSON.stringify({
-          out: googleSheetUrl,
-          src: googleConfigUrl || googleSheetUrl
-      });
-      const encodedConfig = btoa(configPayload);
-      const magicLink = `${baseUrl}?cfg=${encodedConfig}&mode=shopper`;
-      navigator.clipboard.writeText(magicLink).then(() => {
-          alert("Shopper Link Copied!\n\nThis link contains your configuration.");
+      // Simple link generation
+      const link = `${window.location.origin}/?mode=shopper`;
+      
+      navigator.clipboard.writeText(link).then(() => {
+          alert("Shopper Link Copied!\n\n" + link + "\n\nUse this link on the iPad/Kiosk. It will require the PIN to enter.");
       });
   };
 
@@ -492,21 +366,6 @@ function App() {
       'XL': '10 (XL)', 'XXL': '11 (XXL)', '3XL': '12 (3XL)', '4XL': '12 (4XL)'
     };
     return map[clothingSize] || '8 (M)';
-  };
-
-  const checkPatternAvailability = (dayIndex: number, time: ShiftTime): boolean => {
-      const range = getShopperAllowedRange();
-      let currentDate = range.start;
-      
-      while (currentDate <= range.end) {
-          if (getDay(currentDate) === dayIndex) {
-              const key = formatDateKey(currentDate);
-              const dayConfig = adminAvailability[key];
-              if (dayConfig && dayConfig[time] && !dayConfig[time].includes(ShiftType.AA)) return false;
-          }
-          currentDate = addDays(currentDate, 1);
-      }
-      return true;
   };
 
   const handleLogin = () => {
@@ -531,24 +390,63 @@ function App() {
     return false;
   };
 
+  // Check if adding this date would create a streak of more than 5 consecutive days
+  const isConsecutiveDaysViolation = (dateStr: string, currentShifts: ShopperShift[]): boolean => {
+      const targetDate = getSafeDateFromKey(dateStr);
+      const shiftDates = new Set(currentShifts.map(s => s.date));
+
+      // Calculate consecutive days BEFORE target date
+      let consecutiveBefore = 0;
+      let checkDate = subDays(targetDate, 1);
+      while (shiftDates.has(formatDateKey(checkDate))) {
+          consecutiveBefore++;
+          checkDate = subDays(checkDate, 1);
+      }
+
+      // Calculate consecutive days AFTER target date
+      let consecutiveAfter = 0;
+      checkDate = addDays(targetDate, 1);
+      while (shiftDates.has(formatDateKey(checkDate))) {
+          consecutiveAfter++;
+          checkDate = addDays(checkDate, 1);
+      }
+
+      // Total including the potential new day
+      const totalConsecutive = consecutiveBefore + 1 + consecutiveAfter;
+      return totalConsecutive > 5;
+  };
+
   const handleShopperToggle = (dateStr: string, shift: ShiftTime, type: ShiftType) => {
     const currentName = shopperNames[currentShopperIndex];
     const prevData = selections.find(s => s.name === currentName) || { name: currentName, shifts: [] };
     let newShifts = [...prevData.shifts];
     
     if (type === ShiftType.STANDARD) {
-      if (isRestViolation(dateStr, shift, newShifts)) {
-        alert("Rest Constraint Violation");
-        return;
-      }
       const existingIndex = newShifts.findIndex(s => s.date === dateStr && s.time === shift && s.type === ShiftType.STANDARD);
-      if (existingIndex >= 0) newShifts.splice(existingIndex, 1);
-      else {
-         if (newShifts.some(s => s.date === dateStr && s.type === ShiftType.AA)) {
+      
+      // If adding a new shift (not removing)
+      if (existingIndex === -1) {
+          // 1. Check Rest Violation
+          if (isRestViolation(dateStr, shift, newShifts)) {
+            alert("Rest Constraint Violation: Not enough rest between shifts.");
+            return;
+          }
+          
+          // 2. Check 5-Day consecutive limit
+          if (isConsecutiveDaysViolation(dateStr, newShifts)) {
+              alert("Limit reached: You cannot work more than 5 consecutive days.");
+              return;
+          }
+
+          // 3. Check if AA already selected
+          if (newShifts.some(s => s.date === dateStr && s.type === ShiftType.AA)) {
              alert("Already covered by AA");
              return;
          }
          newShifts.push({ date: dateStr, time: shift, type: ShiftType.STANDARD });
+      } else {
+         // Removing
+         newShifts.splice(existingIndex, 1);
       }
     }
     updateShopperSelections(newShifts);
@@ -626,8 +524,8 @@ function App() {
           
           const checkAvailability = (t: ShiftTime) => {
               const dayConfig = adminAvailability[dateStr];
-              if (!dayConfig) return true;
-              if (!dayConfig[t]) return true; 
+              if (!dayConfig) return true; // Available if no config
+              if (!dayConfig[t]) return true; // Available if no restriction on time
               return dayConfig[t]?.includes(ShiftType.AA) ?? true;
           };
 
@@ -673,48 +571,49 @@ function App() {
                 </div>
                 <div>
                     <h2 className="text-xl font-bold text-gray-900">System Configuration</h2>
-                    <p className="text-gray-500 text-sm">Connect your Google Sheet to sync data.</p>
+                    <p className="text-gray-500 text-sm">Manage access settings.</p>
                 </div>
              </div>
              
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                    <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1">
-                        <CloudUpload className="w-3 h-3" /> Output URL (Write)
-                    </label>
-                    <input 
-                        value={googleSheetUrl} 
-                        onChange={e => setGoogleSheetUrl(e.target.value)} 
-                        className="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
-                        placeholder="Apps Script URL..."
-                    />
-                </div>
-                <div className="space-y-2">
-                    <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1">
-                        <FileDown className="w-3 h-3" /> Source URL (Read)
-                    </label>
-                    <div className="flex gap-2">
-                        <input 
-                            value={googleConfigUrl} 
-                            onChange={e => setGoogleConfigUrl(e.target.value)} 
-                            className="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
-                            placeholder="Apps Script URL..."
-                        />
-                        {googleConfigUrl && (
-                             <button onClick={() => fetchAvailabilityConfig(googleConfigUrl)} className="p-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-600">
-                                 <RefreshCw className={`w-4 h-4 ${isFetchingConfig ? 'animate-spin' : ''}`} />
-                             </button>
-                        )}
+             {/* Shopper Access Control */}
+             <div className="mt-6 pt-6 border-t">
+                <h3 className="text-sm font-bold text-gray-700 uppercase mb-3 flex items-center gap-2">
+                    <KeyRound className="w-4 h-4" /> Shopper Access Control
+                </h3>
+                <div className="flex flex-col md:flex-row gap-4 items-end">
+                    <div className="flex-1 space-y-2 w-full">
+                        <label className="text-xs text-gray-500 font-medium">6-Digit Access PIN</label>
+                        <div className="flex gap-2">
+                            <input 
+                                value={adminShopperPinInput} 
+                                onChange={e => setAdminShopperPinInput(e.target.value.replace(/[^0-9]/g, '').slice(0,6))}
+                                className="w-full border rounded-lg p-2 text-sm font-mono tracking-widest text-center focus:ring-2 focus:ring-purple-500 outline-none"
+                                placeholder="000000"
+                            />
+                            <button 
+                                onClick={generateRandomPin}
+                                className="p-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-600"
+                                title="Generate Random PIN"
+                            >
+                                <RefreshCw className="w-4 h-4" />
+                            </button>
+                            <Button 
+                                onClick={() => saveShopperPinToSupabase(adminShopperPinInput)} 
+                                disabled={adminShopperPinInput.length !== 6}
+                                className="whitespace-nowrap"
+                            >
+                                <Save className="w-4 h-4 mr-2" /> Save PIN
+                            </Button>
+                        </div>
                     </div>
                 </div>
              </div>
-             {googleSheetUrl && (
-                 <div className="mt-4 pt-4 border-t flex justify-end">
-                     <Button onClick={handleCopyMagicLink} variant="outline" className="text-sm">
-                         <Share2 className="w-4 h-4 mr-2" /> Copy Shopper Link
-                     </Button>
-                 </div>
-             )}
+
+             <div className="mt-4 pt-4 border-t flex justify-end">
+                 <Button onClick={handleCopyMagicLink} variant="outline" className="text-sm">
+                     <Share2 className="w-4 h-4 mr-2" /> Copy Shopper Link
+                 </Button>
+             </div>
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -961,6 +860,39 @@ function App() {
   );
 
   const renderShopperSetup = () => {
+    // If PIN is configured and user not verified, show PIN Screen
+    if (shopperPinConfig && !isShopperVerified) {
+        return (
+            <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
+                <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm text-center space-y-6 animate-in zoom-in-95">
+                    <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto">
+                        <KeyRound className="w-8 h-8 text-purple-600" />
+                    </div>
+                    <div>
+                        <h2 className="text-xl font-bold text-gray-900">Protected Session</h2>
+                        <p className="text-gray-500 text-sm mt-1">Please enter the PIN to continue.</p>
+                    </div>
+                    <div className="space-y-4">
+                        <input 
+                            type="text" 
+                            inputMode="numeric"
+                            maxLength={6}
+                            value={enteredShopperPin}
+                            onChange={(e) => setEnteredShopperPin(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleVerifyShopperPin()}
+                            className="w-full text-center text-2xl tracking-[0.5em] font-mono py-3 border-b-2 border-gray-300 focus:border-purple-600 outline-none bg-transparent transition-colors"
+                            placeholder="••••••"
+                            autoFocus
+                        />
+                        <Button onClick={handleVerifyShopperPin} fullWidth className="bg-purple-600 hover:bg-purple-700">
+                            Verify PIN
+                        </Button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 flex items-center justify-center p-4 md:p-6">
          <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col animate-in zoom-in duration-300">
@@ -1014,43 +946,450 @@ function App() {
                >
                  Start Scheduling <ArrowRight className="w-5 h-5 ml-2" />
                </Button>
-               
-               {isFetchingConfig && (
-                   <div className="text-center text-xs text-gray-400 flex items-center justify-center gap-2">
-                       <RefreshCw className="w-3 h-3 animate-spin" /> Updating availability...
-                   </div>
-               )}
             </div>
-            
-            {!isSelfService && (
-                <div className="p-4 bg-gray-50 border-t text-center">
-                    <button onClick={() => setMode(AppMode.HOME)} className="text-sm text-gray-500 hover:text-gray-800">
-                        Back to Admin Menu
-                    </button>
-                </div>
-            )}
-            
-            {isSelfService && (
-                <div className="pb-4 text-center">
-                     <button onClick={() => {
-                         setIsAuthenticated(false);
-                         setIsSelfService(false);
-                         setMode(AppMode.HOME);
-                     }} className="text-xs text-gray-300 hover:text-gray-400 flex items-center justify-center gap-1 mx-auto">
-                        <LogIn className="w-3 h-3" /> Admin Login
-                     </button>
-                </div>
-            )}
          </div>
       </div>
     );
   };
 
+  const renderLogin = () => (
+    <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
+      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm space-y-6">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Lock className="w-8 h-8 text-green-600" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900">Admin Access</h2>
+          <p className="text-gray-500 mt-1">Enter password to continue</p>
+        </div>
+
+        <div className="space-y-4">
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+            className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-green-500 focus:ring-4 focus:ring-green-50 outline-none transition-all"
+            placeholder="Password"
+            autoFocus
+          />
+          
+          {authError && (
+            <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg flex items-center gap-2">
+              <AlertCircle className="w-4 h-4" /> Incorrect password
+            </div>
+          )}
+
+          <Button onClick={handleLogin} fullWidth className="py-3">
+            Unlock Dashboard
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderHome = () => (
+    <div className="min-h-screen bg-gray-50 p-6 flex flex-col items-center justify-center">
+      <div className="max-w-4xl w-full grid md:grid-cols-2 gap-8">
+        
+        {/* Admin Card */}
+        <button 
+          onClick={() => setMode(AppMode.ADMIN)}
+          className="group relative bg-white p-8 rounded-3xl shadow-lg border-2 border-transparent hover:border-purple-200 hover:shadow-2xl transition-all text-left overflow-hidden"
+        >
+          <div className="absolute top-0 right-0 w-32 h-32 bg-purple-50 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
+          <div className="relative z-10">
+            <div className="w-14 h-14 bg-purple-100 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-purple-600 transition-colors">
+              <Shield className="w-8 h-8 text-purple-600 group-hover:text-white transition-colors" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Admin Dashboard</h2>
+            <p className="text-gray-500">Configure weekly availability patterns, manage access PINs, and view submitted data.</p>
+          </div>
+        </button>
+
+        {/* Kiosk Card - RENAMED to SER Shopper Mode */}
+        <button 
+          onClick={() => setMode(AppMode.SHOPPER_SETUP)}
+          className="group relative bg-gradient-to-br from-green-500 to-emerald-600 p-8 rounded-3xl shadow-lg hover:shadow-2xl hover:scale-[1.02] transition-all text-left overflow-hidden"
+        >
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-bl-full -mr-8 -mt-8"></div>
+          <div className="relative z-10">
+            <div className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mb-6">
+              <UserPlus className="w-8 h-8 text-white" />
+            </div>
+            <h2 className="text-2xl font-bold text-white mb-2">Start SER Shopper Mode</h2>
+            <p className="text-green-50">Launch the shopper signup flow. Designed for iPad/Tablet use.</p>
+          </div>
+        </button>
+      </div>
+      
+      <div className="mt-12 text-center text-gray-400 text-sm">
+        <p>Picnic Shift Scheduler v2.0</p>
+      </div>
+    </div>
+  );
+
+  const renderAAWizard = () => {
+      const WEEKDAYS = [
+          { index: 1, name: 'Monday' }, { index: 2, name: 'Tuesday' }, { index: 3, name: 'Wednesday' },
+          { index: 4, name: 'Thursday' }, { index: 5, name: 'Friday' }
+      ];
+      const WEEKENDS = [
+          { index: 6, name: 'Saturday' }, { index: 0, name: 'Sunday' }
+      ];
+      
+      const isComplete = aaSelection.weekday.dayIndex !== null && aaSelection.weekday.time !== null &&
+                         aaSelection.weekend.dayIndex !== null && aaSelection.weekend.time !== null;
+
+      return (
+          <div className="h-full bg-gray-50 p-4 md:p-6 overflow-y-auto">
+              <div className="max-w-3xl mx-auto space-y-6">
+                  {/* Instructions */}
+                  <div className="bg-red-50 border border-red-100 p-4 rounded-xl flex gap-3">
+                      <div className="bg-white p-2 rounded-lg h-fit text-red-600 shadow-sm">
+                          <CalendarRange className="w-5 h-5" />
+                      </div>
+                      <div>
+                          <h3 className="font-bold text-red-800">Required: Pick your "Always Available" Shifts</h3>
+                          <p className="text-sm text-red-600 mt-1">
+                              You must select <strong>1 Weekday</strong> and <strong>1 Weekend day</strong> that you can guarantee every week.
+                          </p>
+                      </div>
+                  </div>
+
+                  <div className="grid md:grid-cols-2 gap-6">
+                      {/* Weekday Selection */}
+                      <div className="bg-white p-6 rounded-2xl shadow-sm border space-y-4">
+                          <h4 className="font-bold text-gray-900 flex items-center gap-2">
+                              <Sun className="w-5 h-5 text-orange-500" /> 1. Select a Weekday
+                          </h4>
+                          
+                          <div className="grid grid-cols-2 gap-2">
+                              {WEEKDAYS.map(d => (
+                                  <button
+                                      key={d.index}
+                                      onClick={() => setAaSelection(prev => ({ ...prev, weekday: { ...prev.weekday, dayIndex: d.index } }))}
+                                      className={`py-2 px-3 rounded-lg text-sm font-medium border-2 transition-all ${
+                                          aaSelection.weekday.dayIndex === d.index 
+                                          ? 'border-purple-600 bg-purple-50 text-purple-700' 
+                                          : 'border-transparent bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                      }`}
+                                  >
+                                      {d.name}
+                                  </button>
+                              ))}
+                          </div>
+
+                          <div className="space-y-2 pt-2 border-t">
+                               <p className="text-xs font-bold text-gray-400 uppercase">Preferred Time</p>
+                               <div className="grid grid-cols-1 gap-2">
+                                  {SHIFT_TIMES.map(t => (
+                                      <button
+                                          key={t}
+                                          onClick={() => setAaSelection(prev => ({ ...prev, weekday: { ...prev.weekday, time: t } }))}
+                                          className={`py-2 px-3 rounded-lg text-sm text-left font-medium border-2 transition-all ${
+                                              aaSelection.weekday.time === t
+                                              ? 'border-purple-600 bg-purple-50 text-purple-700'
+                                              : 'border-gray-100 bg-white text-gray-600 hover:border-gray-200'
+                                          }`}
+                                      >
+                                          {t.split('(')[0]} <span className="text-xs text-gray-400 font-normal block">{t.match(/\((.*?)\)/)?.[1]}</span>
+                                      </button>
+                                  ))}
+                               </div>
+                          </div>
+                      </div>
+
+                      {/* Weekend Selection */}
+                      <div className="bg-white p-6 rounded-2xl shadow-sm border space-y-4">
+                          <h4 className="font-bold text-gray-900 flex items-center gap-2">
+                              <Star className="w-5 h-5 text-yellow-500" /> 2. Select a Weekend
+                          </h4>
+                          
+                          <div className="grid grid-cols-2 gap-2">
+                              {WEEKENDS.map(d => (
+                                  <button
+                                      key={d.index}
+                                      onClick={() => setAaSelection(prev => ({ ...prev, weekend: { ...prev.weekend, dayIndex: d.index } }))}
+                                      className={`py-2 px-3 rounded-lg text-sm font-medium border-2 transition-all ${
+                                          aaSelection.weekend.dayIndex === d.index 
+                                          ? 'border-purple-600 bg-purple-50 text-purple-700' 
+                                          : 'border-transparent bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                      }`}
+                                  >
+                                      {d.name}
+                                  </button>
+                              ))}
+                          </div>
+
+                          <div className="space-y-2 pt-2 border-t">
+                               <p className="text-xs font-bold text-gray-400 uppercase">Preferred Time</p>
+                               <div className="grid grid-cols-1 gap-2">
+                                  {SHIFT_TIMES.map(t => (
+                                      <button
+                                          key={t}
+                                          onClick={() => setAaSelection(prev => ({ ...prev, weekend: { ...prev.weekend, time: t } }))}
+                                          className={`py-2 px-3 rounded-lg text-sm text-left font-medium border-2 transition-all ${
+                                              aaSelection.weekend.time === t
+                                              ? 'border-purple-600 bg-purple-50 text-purple-700'
+                                              : 'border-gray-100 bg-white text-gray-600 hover:border-gray-200'
+                                          }`}
+                                      >
+                                          {t.split('(')[0]} <span className="text-xs text-gray-400 font-normal block">{t.match(/\((.*?)\)/)?.[1]}</span>
+                                      </button>
+                                  ))}
+                               </div>
+                          </div>
+                      </div>
+                  </div>
+                  
+                  <div className="pt-6">
+                      <Button 
+                          fullWidth 
+                          disabled={!isComplete} 
+                          onClick={handleAAWizardSubmit}
+                          className="py-4 text-lg shadow-xl"
+                      >
+                          Confirm & Continue <ArrowRight className="w-5 h-5 ml-2" />
+                      </Button>
+                      <p className="text-center text-xs text-gray-400 mt-2">
+                          * Actual dates will be generated based on admin availability.
+                      </p>
+                  </div>
+              </div>
+          </div>
+      );
+  };
+
+  const renderShopperFlow = () => {
+    const currentName = shopperNames[currentShopperIndex];
+    const isStepAA = shopperStep === ShopperStep.AA_SELECTION;
+    const isStepStd = shopperStep === ShopperStep.STANDARD_SELECTION;
+    
+    // Quick Stats
+    const currentShopperData = selections.find(s => s.name === currentName);
+    const aaCount = currentShopperData?.shifts.filter(s => s.type === ShiftType.AA).length || 0;
+    const stdCount = currentShopperData?.shifts.filter(s => s.type === ShiftType.STANDARD).length || 0;
+
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col">
+        {/* Header */}
+        <div className="bg-white px-6 py-4 shadow-sm border-b sticky top-0 z-20 flex justify-between items-center shrink-0">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <User className="w-5 h-5 text-gray-400" /> {currentName}
+            </h2>
+            <div className="flex items-center gap-2 text-sm text-gray-500">
+               <span className={`px-2 py-0.5 rounded-full font-bold text-xs ${isStepAA ? 'bg-red-100 text-red-700' : 'bg-gray-100'}`}>
+                 1. Always Available
+               </span>
+               <ChevronRight className="w-3 h-3" />
+               <span className={`px-2 py-0.5 rounded-full font-bold text-xs ${isStepStd ? 'bg-green-100 text-green-700' : 'bg-gray-100'}`}>
+                 2. Standard Shifts
+               </span>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-4">
+             <div className="hidden md:flex gap-4 text-xs font-medium text-gray-500">
+                <span>Selected AA: <strong className="text-red-600">{aaCount}</strong></span>
+                <span>Selected Standard: <strong className="text-green-600">{stdCount}</strong></span>
+             </div>
+             {/* Hide Details button in AA step to focus on Wizard */}
+             {!isStepAA && (
+                 <Button variant="outline" onClick={() => setShowDetailsModal(true)} className="text-sm">
+                    Details
+                 </Button>
+             )}
+          </div>
+        </div>
+
+        {/* Content - CONDITIONAL RENDERING */}
+        <div className="flex-1 overflow-y-auto">
+          {isStepAA ? (
+              // RENDER WIZARD FOR AA STEP
+              renderAAWizard()
+          ) : (
+              // RENDER CALENDAR FOR STANDARD STEP
+              <div className="p-4 md:p-6">
+                  {/* Instructions for Standard */}
+                  <div className="max-w-5xl mx-auto mb-6">
+                     <div className="p-4 rounded-xl border flex gap-4 bg-green-50 border-green-100">
+                        <div className="p-2 rounded-lg h-fit bg-white text-green-600">
+                           <CheckCircle className="w-5 h-5" />
+                        </div>
+                        <div>
+                           <h3 className="font-bold text-green-800">
+                              Select "Standard" Shifts
+                           </h3>
+                           <p className="text-sm mt-1 text-green-600">
+                              Tap individual dates to pick up standard shifts. Watch out for rest times!
+                           </p>
+                        </div>
+                     </div>
+                  </div>
+
+                  <CalendarView 
+                    mode="SHOPPER"
+                    step={1}
+                    adminAvailability={adminAvailability}
+                    currentShopperShifts={currentShopperData?.shifts}
+                    firstWorkingDay={currentShopperData?.details?.firstWorkingDay}
+                    onShopperToggle={handleShopperToggle}
+                    onSetFirstWorkingDay={handleSetFirstWorkingDay}
+                  />
+              </div>
+          )}
+        </div>
+
+        {/* Footer Actions - Only visible in STANDARD step, as Wizard has its own button */}
+        {!isStepAA && (
+            <div className="bg-white p-4 border-t sticky bottom-0 z-20 pb-8 md:pb-4">
+               <div className="max-w-5xl mx-auto flex justify-between items-center">
+                  <Button 
+                    variant="secondary" 
+                    onClick={() => {
+                       // Resetting back to AA means resetting the wizard essentially
+                       setShopperStep(ShopperStep.AA_SELECTION);
+                    }}
+                  >
+                     Back to AA Wizard
+                  </Button>
+                  
+                  <Button 
+                     onClick={() => {
+                        setShowDetailsModal(true);
+                     }} 
+                     className="px-8"
+                  >
+                     Review & Finish <ArrowRight className="w-4 h-4 ml-2" />
+                  </Button>
+               </div>
+            </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderSummary = () => {
+    const shopper = selections[currentShopperIndex];
+    if (!shopper) return null;
+
+    const shifts = [...shopper.shifts].sort((a, b) => a.date.localeCompare(b.date));
+
+    // Helper to shorten time text for mobile
+    const getShortTime = (t: string) => t.split(' ')[0].replace('(', '').replace(')', '');
+
+    return (
+        <div className="h-[100dvh] bg-gray-50 flex flex-col items-center justify-center p-2 sm:p-4 overflow-hidden">
+            <div className="w-full max-w-md bg-white rounded-2xl shadow-xl flex flex-col h-full max-h-[900px] border border-gray-100 overflow-hidden">
+                
+                {/* 1. Header (Ultra Compact) */}
+                <div className="bg-gray-900 px-4 py-3 text-white flex justify-between items-center shrink-0">
+                    <h2 className="text-base font-bold flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4 text-green-400" /> Confirm Selection
+                    </h2>
+                    {isSyncing ? <RefreshCw className="w-4 h-4 animate-spin text-gray-400" /> : 
+                     syncStatus === 'success' ? <span className="text-xs bg-green-900/50 text-green-400 px-2 py-0.5 rounded font-bold">SAVED</span> : 
+                     <span className="text-xs text-gray-400">{shifts.length} Shifts</span>}
+                </div>
+
+                {/* 2. Identity Section (Horizontal & Dense) */}
+                <div className="bg-white p-3 border-b flex items-center justify-between gap-2 shrink-0">
+                    <div className="flex flex-col min-w-0">
+                        <h3 className="font-bold text-gray-900 truncate text-lg leading-tight">{shopper.name}</h3>
+                        <div className="flex flex-wrap gap-1.5 mt-1 text-[10px] font-bold text-gray-600">
+                             <span className="bg-gray-100 px-1.5 py-0.5 rounded flex items-center gap-1"><Shirt className="w-3 h-3" /> {shopper.details?.clothingSize} / {shopper.details?.shoeSize}</span>
+                             <span className="bg-gray-100 px-1.5 py-0.5 rounded flex items-center gap-1"><Hand className="w-3 h-3" /> {shopper.details?.gloveSize}</span>
+                             {shopper.details?.usePicnicBus && <span className="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded flex items-center gap-1"><Bus className="w-3 h-3" /> Bus</span>}
+                             {shopper.details?.isRandstad && <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded flex items-center gap-1"><Building2 className="w-3 h-3" /> Randstad</span>}
+                        </div>
+                    </div>
+                    <button onClick={() => setShowDetailsModal(true)} className="p-2 bg-gray-50 rounded-lg text-gray-400 hover:text-purple-600 hover:bg-purple-50 transition-all shrink-0">
+                         <Settings2 className="w-5 h-5" />
+                    </button>
+                </div>
+
+                {/* 3. Shifts Grid (The core fix for no-scroll) */}
+                <div className="flex-1 overflow-y-auto p-2 bg-gray-50/50">
+                    {shifts.length === 0 ? (
+                        <div className="h-full flex flex-col items-center justify-center text-gray-400 space-y-2 opacity-50">
+                             <CalendarDays className="w-12 h-12" />
+                             <p className="text-sm">No shifts selected</p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                            {shifts.map((s, i) => {
+                                const dateObj = new Date(s.date);
+                                const isAA = s.type === ShiftType.AA;
+                                return (
+                                    <div key={i} className={`relative flex flex-col items-center justify-center p-2 rounded-xl border shadow-sm text-center transition-all ${
+                                        isAA 
+                                        ? 'bg-white border-red-200 shadow-red-100/50' 
+                                        : 'bg-white border-green-200 shadow-green-100/50'
+                                    }`}>
+                                        {/* Status Line */}
+                                        <div className={`absolute top-0 left-0 w-full h-1 rounded-t-xl ${isAA ? 'bg-red-500' : 'bg-green-500'}`} />
+                                        
+                                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mt-1">
+                                            {format(dateObj, 'EEE')}
+                                        </div>
+                                        <div className="text-sm font-black text-gray-800 leading-none mb-1">
+                                            {format(dateObj, 'd')}
+                                        </div>
+                                        <div className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full truncate max-w-full ${
+                                            isAA ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
+                                        }`}>
+                                            {getShortTime(s.time)}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+
+                {/* 4. Footer Actions (Fixed) */}
+                <div className="p-3 bg-white border-t shrink-0">
+                    {syncStatus === 'success' ? (
+                        <div className="space-y-2">
+                            <div className="bg-green-50 text-green-800 p-2 rounded-lg text-center text-xs font-bold border border-green-100">
+                                Selection Confirmed!
+                            </div>
+                            <Button onClick={handleClearSession} fullWidth className="py-3 text-sm">
+                                Start New Session
+                            </Button>
+                        </div>
+                    ) : (
+                        <div className="flex gap-2">
+                             <Button 
+                                onClick={() => setMode(AppMode.SHOPPER_FLOW)} 
+                                variant="secondary"
+                                className="flex-1 py-3 text-sm"
+                                disabled={isSyncing}
+                             >
+                                Back
+                             </Button>
+                             <Button 
+                                onClick={handleSubmitData} 
+                                disabled={isSyncing}
+                                className="flex-[2] py-3 text-sm bg-gray-900 hover:bg-black shadow-lg"
+                             >
+                                {isSyncing ? 'Saving...' : 'Confirm'}
+                             </Button>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+  };
+
   const renderDetailsModal = () => {
     if (!showDetailsModal) return null;
-    
-    // Auto-calculate glove size based on clothing size if not manually set
-    const handleClothingChange = (size: string) => {
+
+    // Helper to calculate glove size live
+    const updateClothing = (size: string) => {
         setTempDetails(prev => ({
             ...prev,
             clothingSize: size,
@@ -1059,564 +1398,123 @@ function App() {
     };
 
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="p-4 md:p-6 border-b bg-green-50 flex justify-between items-center">
-               <div>
-                  <h3 className="text-lg md:text-xl font-bold text-green-900">Shopper Details</h3>
-                  <p className="text-green-700 text-sm">Finalize info for {shopperNames[currentShopperIndex]}</p>
-               </div>
-               <button onClick={() => setShowDetailsModal(false)} className="p-2 hover:bg-green-100 rounded-full text-green-800 transition-colors">
-                 <XCircle className="w-6 h-6" />
-               </button>
-            </div>
+      <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
+        <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in slide-in-from-bottom-10">
+           <div className="px-6 py-4 border-b flex justify-between items-center bg-gray-50">
+              <h3 className="font-bold text-lg text-gray-800">Complete Profile</h3>
+              <button onClick={() => setShowDetailsModal(false)} className="p-2 hover:bg-gray-200 rounded-full">
+                  <X className="w-5 h-5 text-gray-500" />
+              </button>
+           </div>
 
-            <div className="p-4 md:p-8 overflow-y-auto space-y-4 md:space-y-6">
-               {/* Transport */}
-               <div className="space-y-2 md:space-y-3">
-                  <label className="flex items-center gap-2 text-sm font-bold text-gray-700 uppercase tracking-wide">
-                     <Bus className="w-4 h-4" /> Transport
-                  </label>
-                  <label className="flex items-center gap-3 p-3 md:p-4 border rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
-                     <div className={`w-5 h-5 rounded border flex items-center justify-center ${tempDetails.usePicnicBus ? 'bg-green-500 border-green-500' : 'border-gray-300 bg-white'}`}>
-                        {tempDetails.usePicnicBus && <Check className="w-3 h-3 text-white" />}
-                     </div>
-                     <input 
-                       type="checkbox" 
-                       className="hidden" 
-                       checked={tempDetails.usePicnicBus}
-                       onChange={(e) => setTempDetails({...tempDetails, usePicnicBus: e.target.checked})}
-                     />
-                     <span className="font-medium text-gray-800">Use Picnic Bus Service</span>
-                  </label>
-               </div>
-
-               {/* Personal Info Grid */}
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                  <div className="space-y-2">
-                     <label className="flex items-center gap-2 text-sm font-bold text-gray-700 uppercase">
-                        <Heart className="w-4 h-4" /> Civil Status (Dutch)
-                     </label>
-                     <select 
-                       value={tempDetails.civilStatus}
-                       onChange={(e) => setTempDetails({...tempDetails, civilStatus: e.target.value})}
-                       className="w-full border rounded-xl px-4 py-3 bg-white outline-none focus:ring-2 focus:ring-green-500"
-                     >
-                       <option value="Unmarried (Ongehuwd)">Unmarried (Ongehuwd)</option>
-                       <option value="Married (Gehuwd)">Married (Gehuwd)</option>
-                       <option value="Registered Partnership (Geregistreerd partnerschap)">Registered Partnership (Geregistreerd partnerschap)</option>
-                       <option value="Divorced (Gescheiden)">Divorced (Gescheiden)</option>
-                       <option value="Widowed (Weduwe/Weduwnaar)">Widowed (Weduwe/Weduwnaar)</option>
-                     </select>
-                  </div>
-
-                  <div className="space-y-2">
-                     <label className="flex items-center gap-2 text-sm font-bold text-gray-700 uppercase">
-                        <Building2 className="w-4 h-4" /> Agency
-                     </label>
-                     <label className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer">
-                        <input 
-                           type="checkbox" 
-                           checked={tempDetails.isRandstad}
-                           onChange={(e) => setTempDetails({...tempDetails, isRandstad: e.target.checked})}
-                           className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
-                        />
-                        <span className="font-medium text-gray-800">Is Randstad?</span>
-                     </label>
-                  </div>
-               </div>
-
-               {/* Sizes */}
-               <div className="space-y-2">
-                  <h4 className="flex items-center gap-2 text-sm font-bold text-gray-700 uppercase border-b pb-2">Equipment Sizes</h4>
-                  <div className="grid grid-cols-3 gap-3 md:gap-4">
-                      <div>
-                         <label className="text-[10px] md:text-xs text-gray-500 mb-1 block flex items-center gap-1"><Shirt className="w-3 h-3"/> Clothing</label>
-                         <select 
-                            value={tempDetails.clothingSize}
-                            onChange={(e) => handleClothingChange(e.target.value)}
-                            className="w-full border rounded-lg px-2 py-2 text-sm"
-                         >
-                            {['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL'].map(s => <option key={s} value={s}>{s}</option>)}
-                         </select>
-                      </div>
-                      <div>
-                         <label className="text-[10px] md:text-xs text-gray-500 mb-1 block flex items-center gap-1"><Footprints className="w-3 h-3"/> Shoes</label>
-                         <select 
-                            value={tempDetails.shoeSize}
-                            onChange={(e) => setTempDetails({...tempDetails, shoeSize: e.target.value})}
-                            className="w-full border rounded-lg px-2 py-2 text-sm"
-                         >
-                            {Array.from({length: 15}, (_, i) => 35 + i).map(s => <option key={s} value={s.toString()}>{s}</option>)}
-                         </select>
-                      </div>
-                      <div>
-                         <label className="text-[10px] md:text-xs text-gray-500 mb-1 block flex items-center gap-1"><Hand className="w-3 h-3"/> Gloves</label>
-                         <input 
-                            value={tempDetails.gloveSize}
-                            readOnly
-                            className="w-full border rounded-lg px-2 py-2 text-sm bg-gray-50 text-gray-500 cursor-not-allowed"
-                         />
-                      </div>
-                  </div>
-               </div>
-
-               {/* Address (Conditional) */}
-               {tempDetails.isRandstad && (
-                   <div className="space-y-2 animate-in slide-in-from-top-2">
-                      <label className="flex items-center gap-2 text-sm font-bold text-gray-700 uppercase">
-                         <MapPin className="w-4 h-4" /> Full Address
-                      </label>
-                      <textarea 
-                         value={tempDetails.address}
-                         onChange={(e) => setTempDetails({...tempDetails, address: e.target.value})}
-                         placeholder="Street, Number, Postcode, City"
-                         className="w-full border rounded-xl px-4 py-3 min-h-[80px] outline-none focus:ring-2 focus:ring-green-500"
-                      />
-                   </div>
-               )}
-
-            </div>
-
-            <div className="p-4 md:p-6 border-t bg-gray-50 flex justify-end gap-3">
-               <Button variant="secondary" onClick={() => setShowDetailsModal(false)}>Cancel</Button>
-               <Button onClick={handleDetailsSubmit} disabled={tempDetails.isRandstad && !tempDetails.address?.trim()}>
-                  Save & Continue
-               </Button>
-            </div>
-         </div>
-      </div>
-    );
-  };
-
-  const renderSummary = () => {
-    const currentShopperName = shopperNames[currentShopperIndex];
-    // Fallback if data is missing, though flow guarantees it exists
-    const shopperData = selections.find(s => s.name === currentShopperName) || { 
-        name: currentShopperName, 
-        shifts: [], 
-        details: { 
-            usePicnicBus: false, 
-            civilStatus: '-', 
-            clothingSize: '-', 
-            shoeSize: '-', 
-            gloveSize: '-', 
-            isRandstad: false,
-            address: ''
-        } 
-    };
-
-    const details = shopperData.details || {};
-    const sortedShifts = [...shopperData.shifts].sort((a, b) => a.date.localeCompare(b.date));
-
-    return (
-    <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4">
-       
-       <div className="mb-4 text-center">
-          <h2 className="text-xl font-bold text-gray-800">Registration Complete!</h2>
-          <p className="text-sm text-gray-500">Please take a screenshot of this ticket.</p>
-       </div>
-
-       {/* THE TICKET / RECEIPT CARD */}
-       <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-200 relative">
-          
-          {/* Header */}
-          <div className="bg-gradient-to-r from-green-600 to-emerald-700 p-6 text-white relative overflow-hidden">
-             <div className="relative z-10">
-                <div className="flex justify-between items-start">
-                    <div>
-                        <p className="text-green-100 text-xs font-bold uppercase tracking-wider mb-1">Shopper Name</p>
-                        <h1 className="text-2xl font-extrabold truncate pr-2">{shopperData.name}</h1>
-                    </div>
-                    <div className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center">
-                        <User className="w-6 h-6 text-white" />
-                    </div>
-                </div>
-                
-                <div className="mt-6 p-3 bg-white/10 rounded-xl backdrop-blur-sm border border-white/20 flex items-center gap-3">
-                    <div className="bg-white text-green-700 p-2 rounded-lg">
-                        <Star className="w-5 h-5 fill-current" />
-                    </div>
-                    <div>
-                        <p className="text-[10px] text-green-100 uppercase font-bold">First Working Day</p>
-                        <p className="text-lg font-bold">
-                            {details.firstWorkingDay ? format(getSafeDateFromKey(details.firstWorkingDay), 'EEEE, MMM do') : 'Not Set'}
-                        </p>
-                    </div>
-                </div>
-             </div>
-             
-             {/* Decorative circles */}
-             <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
-             <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
-          </div>
-
-          {/* Details Grid */}
-          <div className="p-5 bg-gray-50 border-b border-dashed border-gray-300 grid grid-cols-3 gap-2 text-center">
-             <div className="bg-white p-2 rounded-xl border border-gray-100 shadow-sm flex flex-col items-center justify-center gap-1">
-                <Shirt className="w-4 h-4 text-gray-400" />
-                <span className="text-xs font-bold text-gray-700">{details.clothingSize}</span>
-                <span className="text-[9px] text-gray-400 uppercase">Size</span>
-             </div>
-             <div className="bg-white p-2 rounded-xl border border-gray-100 shadow-sm flex flex-col items-center justify-center gap-1">
-                <Footprints className="w-4 h-4 text-gray-400" />
-                <span className="text-xs font-bold text-gray-700">{details.shoeSize}</span>
-                <span className="text-[9px] text-gray-400 uppercase">Shoe</span>
-             </div>
-             <div className="bg-white p-2 rounded-xl border border-gray-100 shadow-sm flex flex-col items-center justify-center gap-1">
-                <Bus className={`w-4 h-4 ${details.usePicnicBus ? 'text-green-500' : 'text-gray-400'}`} />
-                <span className="text-xs font-bold text-gray-700">{details.usePicnicBus ? 'Yes' : 'No'}</span>
-                <span className="text-[9px] text-gray-400 uppercase">Bus</span>
-             </div>
-          </div>
-
-          {/* Shifts List */}
-          <div className="p-5 bg-white">
-             <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <CalendarDays className="w-4 h-4" /> Selected Shifts
-             </h3>
-             
-             <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
-                {sortedShifts.length === 0 ? (
-                    <div className="text-center py-4 text-gray-400 text-sm italic">No shifts selected</div>
-                ) : (
-                    sortedShifts.map((shift, idx) => {
-                        const dateObj = getSafeDateFromKey(shift.date);
-                        const isAA = shift.type === ShiftType.AA;
-                        return (
-                            <div key={idx} className="flex items-center justify-between p-2.5 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors">
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-1.5 h-8 rounded-full ${isAA ? 'bg-red-500' : 'bg-green-500'}`}></div>
-                                    <div>
-                                        <p className="text-sm font-bold text-gray-800">{format(dateObj, 'EEE, MMM do')}</p>
-                                        <p className="text-[10px] text-gray-500 font-medium">{shift.time.split('(')[0].trim()}</p>
-                                    </div>
-                                </div>
-                                <span className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase ${
-                                    isAA ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
-                                }`}>
-                                    {isAA ? 'AA' : 'Std'}
-                                </span>
-                            </div>
-                        );
-                    })
-                )}
-             </div>
-          </div>
-
-          {/* Footer Receipt Cut */}
-          <div className="relative h-4 bg-gray-100">
-             <div className="absolute -top-2 left-0 w-full h-4 bg-white" 
-                  style={{clipPath: 'polygon(0% 0%, 5% 100%, 10% 0%, 15% 100%, 20% 0%, 25% 100%, 30% 0%, 35% 100%, 40% 0%, 45% 100%, 50% 0%, 55% 100%, 60% 0%, 65% 100%, 70% 0%, 75% 100%, 80% 0%, 85% 100%, 90% 0%, 95% 100%, 100% 0%)'}}>
-             </div>
-          </div>
-       </div>
-
-       {/* Actions */}
-       <div className="mt-6 flex flex-col w-full max-w-sm gap-3">
-          <Button 
-            onClick={handleSubmitData} 
-            disabled={isSyncing || syncStatus === 'success'}
-            className={`flex items-center justify-center gap-2 text-white py-3 shadow-lg rounded-xl font-bold ${
-                syncStatus === 'success' ? 'bg-green-600' : 
-                syncStatus === 'error' ? 'bg-red-600' : 'bg-gray-900 hover:bg-black'
-            }`}
-            fullWidth
-          >
-            {isSyncing ? 'Saving...' : syncStatus === 'success' ? 'Saved!' : 'Submit Schedule'}
-          </Button>
-
-          <div className="grid grid-cols-2 gap-3">
-              {!isSelfService && (
-                <Button onClick={downloadCSV} variant="secondary" className="text-xs">
-                   <Download className="w-3 h-3 mr-1 inline" /> CSV
-                </Button>
-              )}
+           <div className="p-6 overflow-y-auto space-y-6">
               
-              <Button onClick={handleClearSession} variant="secondary" className={`text-xs ${isSelfService ? 'col-span-2' : ''}`}>
-                 {isSelfService ? 'Exit / New User' : 'New Session'}
-              </Button>
-          </div>
-       </div>
-    </div>
-  );
-  };
-
-  const renderLogin = () => (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
-      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm text-center space-y-6">
-        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
-          <Lock className="w-8 h-8 text-green-600" />
-        </div>
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Admin Access</h2>
-          <p className="text-gray-500 text-sm mt-1">Please enter the access code.</p>
-        </div>
-        <div className="space-y-4">
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-            className="w-full px-4 py-3 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-green-500 text-center text-lg tracking-widest"
-            placeholder="••••"
-            autoFocus
-          />
-          {authError && <p className="text-red-500 text-sm font-medium animate-pulse">Incorrect access code</p>}
-          <Button onClick={handleLogin} fullWidth className="shadow-lg">
-            Unlock
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderRestorePrompt = () => (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
-      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md text-center space-y-6 animate-in zoom-in-95">
-        <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto">
-          <History className="w-8 h-8 text-blue-600" />
-        </div>
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">Previous Session Found</h2>
-          <p className="text-gray-500 text-sm mt-1">Would you like to continue where you left off?</p>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <Button variant="secondary" onClick={handleClearSession}>
-            Start New
-          </Button>
-          <Button onClick={handleRestoreSession}>
-            Continue
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderHome = () => (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6">
-      <div className="max-w-4xl w-full grid md:grid-cols-2 gap-8">
-        
-        {/* Admin Card */}
-        <button 
-          onClick={() => setMode(AppMode.ADMIN)}
-          className="group bg-white p-8 rounded-3xl shadow-xl hover:shadow-2xl transition-all text-left border border-gray-100 relative overflow-hidden"
-        >
-          <div className="relative z-10 space-y-4">
-            <div className="w-14 h-14 bg-orange-100 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-              <Shield className="w-7 h-7 text-orange-600" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">Admin Panel</h2>
-              <p className="text-gray-500 mt-2">Configure availability patterns, manage settings, and generate schedules.</p>
-            </div>
-            <div className="flex items-center text-orange-600 font-bold mt-4">
-              Enter Dashboard <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-            </div>
-          </div>
-          <div className="absolute top-0 right-0 w-32 h-32 bg-orange-50 rounded-full -mr-8 -mt-8 blur-2xl group-hover:bg-orange-100 transition-colors"></div>
-        </button>
-
-        {/* Shopper Card */}
-        <button 
-          onClick={() => setMode(AppMode.SHOPPER_SETUP)}
-          className="group bg-gradient-to-br from-green-600 to-emerald-700 p-8 rounded-3xl shadow-xl hover:shadow-2xl transition-all text-left relative overflow-hidden"
-        >
-          <div className="relative z-10 space-y-4">
-            <div className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-              <UserPlus className="w-7 h-7 text-white" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold text-white">Shopper Flow</h2>
-              <p className="text-green-100 mt-2">Start the registration process for new shoppers (Kiosk Mode).</p>
-            </div>
-            <div className="flex items-center text-white font-bold mt-4">
-              Start Session <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-            </div>
-          </div>
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-8 -mt-8 blur-2xl"></div>
-        </button>
-
-      </div>
-      
-      <div className="mt-12 text-center">
-         <p className="text-sm text-gray-400 font-medium">Picnic Shift Scheduler v2.0</p>
-      </div>
-    </div>
-  );
-
-  const renderAAWizardStep = () => {
-    return (
-      <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-         <div className="bg-white p-6 rounded-2xl border border-purple-100 shadow-sm mb-6">
-            <div className="flex items-center gap-4 mb-6">
-                <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center text-purple-600">
-                    <CalendarRange className="w-6 h-6" />
-                </div>
-                <div>
-                    <h3 className="text-lg font-bold text-gray-900">Weekly Availability Pattern</h3>
-                    <p className="text-sm text-gray-500">Please select exactly <strong className="text-purple-600">1 Weekday</strong> and <strong className="text-purple-600">1 Weekend Day</strong>.</p>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Weekday Selection */}
-                <div className="p-4 rounded-xl border-2 border-gray-100 hover:border-purple-200 transition-all bg-gray-50">
-                    <h4 className="text-sm font-bold text-gray-700 uppercase mb-3 flex items-center gap-2">
-                        <Sun className="w-4 h-4 text-orange-500" /> Weekday Preference
-                    </h4>
-                    <div className="space-y-3">
-                        <div>
-                            <label className="text-xs font-semibold text-gray-500 mb-1 block">Day</label>
-                            <select 
-                                className="w-full p-2 rounded-lg border outline-none focus:ring-2 focus:ring-purple-500 bg-white"
-                                value={aaSelection.weekday.dayIndex ?? ""}
-                                onChange={(e) => setAaSelection(prev => ({...prev, weekday: { ...prev.weekday, dayIndex: Number(e.target.value) }}))}
-                            >
-                                <option value="">Select Day...</option>
-                                {[1,2,3,4,5].map(d => <option key={d} value={d}>{format(new Date(2024, 0, d), 'EEEE')}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="text-xs font-semibold text-gray-500 mb-1 block">Shift</label>
-                            <select 
-                                className="w-full p-2 rounded-lg border outline-none focus:ring-2 focus:ring-purple-500 bg-white"
-                                value={aaSelection.weekday.time ?? ""}
-                                onChange={(e) => setAaSelection(prev => ({...prev, weekday: { ...prev.weekday, time: e.target.value as ShiftTime }}))}
-                            >
-                                <option value="">Select Shift...</option>
-                                {SHIFT_TIMES.map(t => <option key={t} value={t}>{t}</option>)}
-                            </select>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Weekend Selection */}
-                <div className="p-4 rounded-xl border-2 border-gray-100 hover:border-purple-200 transition-all bg-gray-50">
-                    <h4 className="text-sm font-bold text-gray-700 uppercase mb-3 flex items-center gap-2">
-                        <Coffee className="w-4 h-4 text-red-500" /> Weekend Preference
-                    </h4>
-                    <div className="space-y-3">
-                        <div>
-                            <label className="text-xs font-semibold text-gray-500 mb-1 block">Day</label>
-                            <select 
-                                className="w-full p-2 rounded-lg border outline-none focus:ring-2 focus:ring-purple-500 bg-white"
-                                value={aaSelection.weekend.dayIndex ?? ""}
-                                onChange={(e) => setAaSelection(prev => ({...prev, weekend: { ...prev.weekend, dayIndex: Number(e.target.value) }}))}
-                            >
-                                <option value="">Select Day...</option>
-                                {[6,0].map(d => <option key={d} value={d}>{d === 0 ? 'Sunday' : 'Saturday'}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="text-xs font-semibold text-gray-500 mb-1 block">Shift</label>
-                            <select 
-                                className="w-full p-2 rounded-lg border outline-none focus:ring-2 focus:ring-purple-500 bg-white"
-                                value={aaSelection.weekend.time ?? ""}
-                                onChange={(e) => setAaSelection(prev => ({...prev, weekend: { ...prev.weekend, time: e.target.value as ShiftTime }}))}
-                            >
-                                <option value="">Select Shift...</option>
-                                {SHIFT_TIMES.map(t => <option key={t} value={t}>{t}</option>)}
-                            </select>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div className="mt-8 flex justify-end items-center gap-4 border-t pt-6">
-                <div className="text-sm text-gray-500">
-                    {(aaSelection.weekday.dayIndex !== null && aaSelection.weekday.time && aaSelection.weekend.dayIndex !== null && aaSelection.weekend.time) 
-                        ? <span className="text-green-600 font-bold flex items-center gap-1"><CheckCircle className="w-4 h-4"/> Ready to apply</span> 
-                        : "Select 1 Weekday & 1 Weekend option to continue"}
-                </div>
-                <button 
-                    onClick={handleAAWizardSubmit}
-                    disabled={!(aaSelection.weekday.dayIndex !== null && aaSelection.weekday.time && aaSelection.weekend.dayIndex !== null && aaSelection.weekend.time)}
-                    className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-8 py-3 rounded-xl font-bold shadow-lg transition-transform active:scale-95 flex items-center gap-2"
-                >
-                    Apply Pattern <ArrowRight className="w-5 h-5" />
-                </button>
-            </div>
-         </div>
-      </div>
-    );
-  };
-
-  const renderShopperFlow = () => {
-    const currentName = shopperNames[currentShopperIndex];
-    const currentData = selections.find(s => s.name === currentName);
-    const currentShifts = currentData ? currentData.shifts : [];
-    
-    const steps = ['AA Pattern', 'Extra Shifts', 'Details'];
-    const progress = ((shopperStep + 1) / 3) * 100;
-
-    return (
-      <div className="min-h-screen bg-gray-50 flex flex-col">
-        {/* Header with Progress */}
-        <div className="bg-white border-b sticky top-0 z-30 px-4 md:px-8 py-4 shadow-sm">
-           <div className="max-w-5xl mx-auto">
-              <div className="flex justify-between items-center mb-4">
-                 <div>
-                    <h2 className="text-xl font-bold text-gray-900">
-                      {shopperStep === ShopperStep.AA_SELECTION ? 'Step 1: Set Weekly AA' : 'Step 2: Add Extra Shifts'}
-                    </h2>
-                    <p className="text-sm text-gray-500">Shopper: <span className="font-bold text-purple-600">{currentName}</span></p>
-                 </div>
-                 <div className="flex gap-2">
-                    <Button variant="secondary" onClick={() => {
-                        if (shopperStep === ShopperStep.STANDARD_SELECTION) setShopperStep(ShopperStep.AA_SELECTION);
-                        else setMode(AppMode.SHOPPER_SETUP);
-                    }} className="text-sm">
-                      <Undo2 className="w-4 h-4 md:mr-2" /> <span className="hidden md:inline">Back</span>
-                    </Button>
-                    
-                    {shopperStep === ShopperStep.STANDARD_SELECTION && (
-                        <Button onClick={handleNextShopperClick} className="text-sm shadow-md bg-green-600 hover:bg-green-700">
-                          Finish & Details <ArrowRight className="w-4 h-4 ml-2" />
-                        </Button>
-                    )}
+              {/* Bus */}
+              <div className="space-y-3">
+                 <label className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                    <Bus className="w-4 h-4" /> Transport
+                 </label>
+                 <div className="grid grid-cols-2 gap-4">
+                    <button 
+                       onClick={() => setTempDetails(prev => ({ ...prev, usePicnicBus: true }))}
+                       className={`p-4 rounded-xl border-2 transition-all text-sm font-bold ${
+                           tempDetails.usePicnicBus ? 'border-purple-600 bg-purple-50 text-purple-700' : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                       }`}
+                    >
+                       I need the Picnic Bus
+                    </button>
+                    <button 
+                       onClick={() => setTempDetails(prev => ({ ...prev, usePicnicBus: false }))}
+                       className={`p-4 rounded-xl border-2 transition-all text-sm font-bold ${
+                           !tempDetails.usePicnicBus ? 'border-purple-600 bg-purple-50 text-purple-700' : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                       }`}
+                    >
+                       I have my own transport
+                    </button>
                  </div>
               </div>
-              
-              {/* Progress Bar */}
-              <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
-                 <div className="h-full bg-gradient-to-r from-purple-500 to-green-500 transition-all duration-500" style={{ width: `${progress}%` }} />
+
+              {/* Sizes */}
+              <div className="space-y-3">
+                  <label className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                     <Shirt className="w-4 h-4" /> Sizes
+                  </label>
+                  <div className="grid grid-cols-2 gap-4">
+                     <div>
+                        <label className="text-xs text-gray-500 mb-1 block">Clothing Size</label>
+                        <select 
+                            value={tempDetails.clothingSize}
+                            onChange={(e) => updateClothing(e.target.value)}
+                            className="w-full p-3 bg-gray-50 border rounded-xl outline-none focus:ring-2 focus:ring-purple-500"
+                        >
+                            {['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL'].map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                     </div>
+                     <div>
+                        <label className="text-xs text-gray-500 mb-1 block">Shoe Size</label>
+                        <select 
+                            value={tempDetails.shoeSize}
+                            onChange={(e) => setTempDetails(prev => ({ ...prev, shoeSize: e.target.value }))}
+                            className="w-full p-3 bg-gray-50 border rounded-xl outline-none focus:ring-2 focus:ring-purple-500"
+                        >
+                            {Array.from({length: 15}, (_, i) => 35 + i).map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                     </div>
+                  </div>
+                  <div className="bg-gray-50 p-3 rounded-lg flex justify-between items-center text-sm">
+                      <span className="text-gray-500">Calculated Glove Size:</span>
+                      <span className="font-bold text-gray-900">{tempDetails.gloveSize}</span>
+                  </div>
+              </div>
+
+              {/* Civil Status */}
+              <div className="space-y-2">
+                  <label className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                     <Heart className="w-4 h-4" /> Civil Status
+                  </label>
+                  <select 
+                      value={tempDetails.civilStatus}
+                      onChange={(e) => setTempDetails(prev => ({ ...prev, civilStatus: e.target.value }))}
+                      className="w-full p-3 bg-gray-50 border rounded-xl outline-none focus:ring-2 focus:ring-purple-500"
+                  >
+                      <option value="Unmarried (Ongehuwd)">Unmarried (Ongehuwd)</option>
+                      <option value="Married (Gehuwd)">Married (Gehuwd)</option>
+                  </select>
+              </div>
+
+              {/* Randstad */}
+              <div className="space-y-3 pt-4 border-t">
+                  <div className="flex items-center gap-3">
+                      <input 
+                         type="checkbox" 
+                         id="randstad"
+                         checked={tempDetails.isRandstad}
+                         onChange={(e) => setTempDetails(prev => ({ ...prev, isRandstad: e.target.checked }))}
+                         className="w-5 h-5 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                      />
+                      <label htmlFor="randstad" className="font-bold text-gray-800">
+                         Registered via Randstad?
+                      </label>
+                  </div>
+                  
+                  {tempDetails.isRandstad && (
+                      <div className="animate-in slide-in-from-top-2">
+                          <label className="text-xs text-gray-500 mb-1 block">Home Address (Required for Taxi)</label>
+                          <input 
+                              value={tempDetails.address}
+                              onChange={(e) => setTempDetails(prev => ({ ...prev, address: e.target.value }))}
+                              placeholder="Street, Number, City"
+                              className="w-full p-3 bg-white border-2 border-orange-100 rounded-xl outline-none focus:border-orange-500"
+                          />
+                      </div>
+                  )}
               </div>
            </div>
-        </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-8">
-           <div className="max-w-5xl mx-auto space-y-6">
-              
-              {/* Instructions Banner */}
-              <div className="flex items-start gap-3 p-4 bg-blue-50 text-blue-800 rounded-xl text-sm border border-blue-100">
-                 <div className="p-1 bg-blue-100 rounded-full mt-0.5"><CheckCircle className="w-3 h-3" /></div>
-                 <div>
-                    <p className="font-bold">{shopperStep === ShopperStep.AA_SELECTION ? 'Select your recurring AA shifts' : 'Review and add extra days'}</p>
-                    <p className="opacity-80 mt-1">
-                        {shopperStep === ShopperStep.AA_SELECTION 
-                          ? "You must select exactly one weekday (Mon-Fri) and one weekend day (Sat-Sun) to be Always Available." 
-                          : "Your AA shifts are set. Now, tap any open date below if you want to add extra 'Standard' shifts."}
-                    </p>
-                 </div>
-              </div>
-
-              {/* STEP 0: NEW AA WIZARD (No Calendar) */}
-              {shopperStep === ShopperStep.AA_SELECTION && renderAAWizardStep()}
-
-              {/* STEP 1: CALENDAR (For Standard Shifts) */}
-              {shopperStep === ShopperStep.STANDARD_SELECTION && (
-                 <CalendarView 
-                    mode="SHOPPER" 
-                    step={shopperStep}
-                    adminAvailability={adminAvailability}
-                    currentShopperShifts={currentShifts}
-                    firstWorkingDay={currentData?.details?.firstWorkingDay}
-                    onShopperToggle={handleShopperToggle}
-                    onSetFirstWorkingDay={handleSetFirstWorkingDay}
-                 />
-              )}
+           <div className="p-4 border-t bg-gray-50">
+              <Button onClick={handleDetailsSubmit} fullWidth disabled={tempDetails.isRandstad && !tempDetails.address}>
+                 Save Profile
+              </Button>
            </div>
         </div>
       </div>
@@ -1626,8 +1524,7 @@ function App() {
   return (
     <>
       {!isAuthenticated && renderLogin()}
-      {isAuthenticated && showRestorePrompt && renderRestorePrompt()}
-      {isAuthenticated && !showRestorePrompt && (
+      {isAuthenticated && (
         <>
           {mode === AppMode.HOME && renderHome()}
           {mode === AppMode.ADMIN && renderAdmin()}

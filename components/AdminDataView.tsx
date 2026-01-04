@@ -17,6 +17,9 @@ export const AdminDataView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
+  
+  // Track which row is in "Confirm Delete" state
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -37,14 +40,53 @@ export const AdminDataView: React.FC = () => {
     fetchData();
   }, []);
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!window.confirm(`Are you sure you want to delete ${name}? This cannot be undone.`)) return;
+  const handleDelete = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    
+    // If not in confirm state, set it
+    if (deleteConfirmId !== id) {
+        setDeleteConfirmId(id);
+        // Auto-reset after 3 seconds if not clicked
+        setTimeout(() => {
+            setDeleteConfirmId(prev => (prev === id ? null : prev));
+        }, 3000);
+        return;
+    }
 
-    const { error } = await supabase.from('shoppers').delete().eq('id', id);
-    if (error) {
-      alert('Error deleting record');
-    } else {
+    // Proceed to delete
+    try {
+      // 1. Delete associated Shifts first (Manual Cascade)
+      // We don't verify count here because there might be 0 shifts.
+      const { error: shiftsError } = await supabase
+        .from('shifts')
+        .delete()
+        .eq('shopper_id', id);
+
+      if (shiftsError) throw new Error(`Failed to delete shifts: ${shiftsError.message}`);
+
+      // 2. Delete the Shopper
+      // IMPORTANT: count: 'exact' ensures we know if a row was ACTUALLY deleted
+      const { error: shopperError, count } = await supabase
+        .from('shoppers')
+        .delete({ count: 'exact' })
+        .eq('id', id);
+
+      if (shopperError) throw new Error(`Failed to delete shopper: ${shopperError.message}`);
+
+      // Check if anything was actually deleted
+      if (count === 0) {
+          alert("Error: Database reported success but 0 records were deleted.\n\nThis usually means Supabase RLS (Row Level Security) is enabled and blocking the delete.\n\nPlease go to Supabase > Authentication > Policies and enable DELETE for public/anon users.");
+          setDeleteConfirmId(null);
+          return;
+      }
+
+      // 3. Update UI only if DB confirmed deletion
       setData(prev => prev.filter(item => item.id !== id));
+      setDeleteConfirmId(null);
+      
+    } catch (err: any) {
+      console.error('Delete flow error:', err);
+      alert(`Error deleting record: ${err.message}`);
     }
   };
 
@@ -210,10 +252,19 @@ export const AdminDataView: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 text-right">
                           <button 
-                            onClick={(e) => { e.stopPropagation(); handleDelete(item.id, item.name); }}
-                            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                            onClick={(e) => handleDelete(e, item.id)}
+                            className={`p-2 rounded-lg transition-all border ${
+                                deleteConfirmId === item.id 
+                                ? 'bg-red-600 text-white border-red-700 hover:bg-red-700 w-24 text-center' 
+                                : 'text-gray-400 hover:text-red-600 hover:bg-red-50 border-transparent'
+                            }`}
+                            title="Delete Record"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            {deleteConfirmId === item.id ? (
+                                <span className="text-xs font-bold">Confirm?</span>
+                            ) : (
+                                <Trash2 className="w-4 h-4" />
+                            )}
                           </button>
                         </td>
                       </tr>

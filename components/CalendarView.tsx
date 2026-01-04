@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths, isWeekend, startOfWeek, endOfWeek, isWithinInterval, isAfter, startOfToday, isBefore, addDays } from 'date-fns';
-import { ChevronLeft, ChevronRight, Check, Ban, Lock, X, Plus, Star } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, Ban, Lock, X, Plus, Star, Calendar as CalendarIcon, Clock } from 'lucide-react';
 import { ShiftTime, ShiftType, ShopperShift, AdminAvailabilityMap } from '../types';
 import { SHIFT_TIMES, formatDateKey, getShopperAllowedRange, getShopperMinDate } from '../constants';
 
@@ -80,6 +80,233 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       'Afternoon': 'Aft'
     };
     return { desktop: main, mobile: map[main] || main };
+  };
+
+  // --- RENDERERS ---
+
+  const renderMobileListView = () => {
+    // In mobile list view for Shoppers, we only show relevant days (within range)
+    // We iterate through the allowed range instead of the calendar month to show a continuous list
+    
+    let daysToList = daysInMonth;
+    
+    if (mode === 'SHOPPER') {
+       const rangeStart = allowedRange.start;
+       const rangeEnd = allowedRange.end;
+       daysToList = eachDayOfInterval({ start: rangeStart, end: rangeEnd });
+    }
+
+    return (
+      <div className="space-y-4 pb-20">
+        {daysToList.map((day) => {
+           const dateKey = formatDateKey(day);
+           const isDisabled = isDateDisabledForShopper(day);
+           
+           // Skip past/disabled days in Shopper Mode list view to reduce scrolling
+           if (isDisabled && mode === 'SHOPPER') return null;
+
+           const status = getShopperDayStatus(day);
+           const isFWD = status.isFirstWorkingDay;
+
+           return (
+             <div key={dateKey} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                {/* Mobile Card Header */}
+                <div className={`p-3 flex justify-between items-center ${isWeekend(day) ? 'bg-red-50' : 'bg-gray-50'}`}>
+                   <div className="flex items-center gap-3">
+                      <div className={`text-center px-3 py-1 rounded-lg ${isWeekend(day) ? 'bg-white text-red-600 font-bold shadow-sm' : 'bg-white text-gray-700 font-bold border'}`}>
+                          <div className="text-xs uppercase">{format(day, 'EEE')}</div>
+                          <div className="text-lg leading-none">{format(day, 'd')}</div>
+                      </div>
+                      <div className="text-sm text-gray-500">
+                          {format(day, 'MMMM yyyy')}
+                      </div>
+                   </div>
+                   
+                   {/* FWD Toggle Mobile */}
+                   {mode === 'SHOPPER' && onSetFirstWorkingDay && (
+                      <button 
+                        onClick={() => onSetFirstWorkingDay(dateKey)}
+                        className={`p-2 rounded-full transition-all ${isFWD ? 'bg-yellow-100 text-yellow-600 ring-2 ring-yellow-400' : 'text-gray-300 hover:text-yellow-400'}`}
+                      >
+                         <Star className={`w-5 h-5 ${isFWD ? 'fill-current' : ''}`} />
+                      </button>
+                   )}
+                </div>
+
+                {/* Mobile Shift Grid */}
+                <div className="p-3 grid grid-cols-2 gap-2">
+                   {SHIFT_TIMES.map((shift) => {
+                      const aaAvailable = isTypeAvailable(dateKey, shift, ShiftType.AA);
+                      const stdAvailable = isTypeAvailable(dateKey, shift, ShiftType.STANDARD);
+                      
+                      const shiftEntries = currentShopperShifts.filter(s => s.date === dateKey && s.time === shift);
+                      const isSelectedAA = shiftEntries.some(s => s.type === ShiftType.AA);
+                      const isSelectedStd = shiftEntries.some(s => s.type === ShiftType.STANDARD);
+                      
+                      const label = shift.split(' ')[0]; // Opening, Morning...
+                      const time = shift.match(/\((.*?)\)/)?.[1];
+
+                      // Only show Standard options in Step 1
+                      if (mode === 'SHOPPER' && step === 1 && !stdAvailable && !isSelectedStd) {
+                          return null; 
+                      }
+
+                      return (
+                        <button
+                          key={shift}
+                          disabled={mode === 'SHOPPER' && ((step === 1 && isSelectedAA) || (step === 1 && !stdAvailable))}
+                          onClick={() => {
+                             if (mode === 'SHOPPER' && onShopperToggle && step === 1 && stdAvailable) {
+                                onShopperToggle(dateKey, shift, ShiftType.STANDARD);
+                             }
+                          }}
+                          className={`
+                            relative flex flex-col items-center justify-center p-3 rounded-lg border text-center transition-all
+                            ${isSelectedAA 
+                                ? 'bg-red-50 border-red-200 text-red-700' 
+                                : isSelectedStd 
+                                    ? 'bg-green-100 border-green-500 text-green-800 ring-1 ring-green-500 shadow-md' 
+                                    : 'bg-white border-gray-100 text-gray-600 hover:border-green-300 hover:bg-green-50'}
+                            ${(step === 1 && isSelectedAA) ? 'opacity-50 cursor-not-allowed' : ''}
+                          `}
+                        >
+                            <span className="text-sm font-bold">{label}</span>
+                            <span className="text-[10px] text-gray-400">{time}</span>
+                            
+                            {isSelectedAA && <span className="absolute top-1 right-1 text-[9px] font-bold bg-white/50 px-1 rounded text-red-600">AA</span>}
+                            {isSelectedStd && <CheckCircleIcon className="absolute top-1 right-1 w-3 h-3 text-green-600" />}
+                        </button>
+                      );
+                   })}
+                   
+                   {/* Empty State for Grid layout stability */}
+                   {currentShopperShifts.filter(s => s.date === dateKey).length === 0 && (
+                       <div className="col-span-2 text-center py-2 text-xs text-gray-300 italic">
+                           Tap a shift to select
+                       </div>
+                   )}
+                </div>
+             </div>
+           );
+        })}
+      </div>
+    );
+  };
+
+  const renderDesktopGridView = () => {
+    return (
+      <div className="w-full max-w-5xl mx-auto bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
+        {/* Header */}
+        <div className="bg-white p-4 md:p-6 border-b flex items-center justify-between">
+          <h2 className="text-xl md:text-2xl font-bold text-gray-800 flex items-center gap-2">
+            {format(currentDate, 'MMMM yyyy')}
+          </h2>
+          <div className="flex gap-2">
+            <button onClick={handlePrevMonth} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+              <ChevronLeft className="w-5 h-5 md:w-6 md:h-6 text-gray-600" />
+            </button>
+            <button onClick={handleNextMonth} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+              <ChevronRight className="w-5 h-5 md:w-6 md:h-6 text-gray-600" />
+            </button>
+          </div>
+        </div>
+
+        {/* Grid Header */}
+        <div className="grid grid-cols-7 border-b bg-gray-50">
+          {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
+            <div key={day} className={`py-3 md:py-4 text-center text-[10px] md:text-xs font-bold uppercase tracking-widest ${['Sat', 'Sun'].includes(day) ? 'text-red-500' : 'text-gray-400'}`}>
+              {day}
+            </div>
+          ))}
+        </div>
+
+        {/* Grid Body */}
+        <div className="grid grid-cols-7 auto-rows-fr bg-gray-200 gap-px border-b">
+          {daysInMonth.map((day) => {
+            const dateKey = formatDateKey(day);
+            const isCurrentMonth = day.getMonth() === currentDate.getMonth();
+            const isWeekendDay = isWeekend(day);
+            const status = getShopperDayStatus(day);
+            const isDisabled = isDateDisabledForShopper(day);
+            const isTooSoon = mode === 'SHOPPER' && isDisabled && isAfter(day, today) && isBefore(day, minShopperDate);
+            
+            const aaLabel = status.aaShift ? getShiftLabel(status.aaShift.time) : null;
+            const stdLabel = status.stdShift ? getShiftLabel(status.stdShift.time) : null;
+
+            return (
+              <div 
+                key={day.toISOString()} 
+                className={`min-h-[80px] md:min-h-[120px] relative transition-all flex flex-col p-1 md:p-2
+                  ${isDisabled ? 'bg-gray-100' : 'bg-white hover:bg-blue-50 cursor-pointer active:bg-blue-100'}
+                  ${!isCurrentMonth ? 'opacity-40' : ''}
+                `}
+                onClick={() => {
+                  if (!isDisabled) setSelectedDay(day);
+                }}
+              >
+                {/* First Working Day Indicator */}
+                {status.isFirstWorkingDay && (
+                  <div className="absolute top-1 right-1 md:top-2 md:left-2 md:right-auto z-10 pointer-events-none" title="First Working Day">
+                    <Star className="w-3 h-3 md:w-5 md:h-5 text-yellow-500 fill-yellow-500 drop-shadow-sm" />
+                  </div>
+                )}
+
+                {/* Day Number */}
+                <div className={`text-sm md:text-lg font-semibold mb-1 md:mb-2 ${isWeekendDay ? 'text-red-500' : 'text-gray-700'} ${isDisabled ? 'opacity-40' : ''} ${status.isFirstWorkingDay ? 'mr-3 md:mr-0 md:ml-6' : ''}`}>
+                  {format(day, 'd')}
+                </div>
+                
+                {/* Cell Content - Responsive View */}
+                <div className="flex flex-col gap-1 flex-1">
+                  {status.aaShift && aaLabel && (
+                    <div className="p-0.5 md:px-2 md:py-1.5 bg-red-100 border border-red-200 text-red-800 rounded md:rounded-lg text-[9px] md:text-xs font-bold shadow-sm flex items-center justify-center md:justify-between">
+                      <span className="hidden md:inline">AA</span>
+                      <span className="md:hidden">{aaLabel.mobile}</span>
+                      <span className="hidden md:inline">{aaLabel.desktop}</span>
+                    </div>
+                  )}
+                  
+                  {status.stdShift && stdLabel && (
+                    <div className="p-0.5 md:px-2 md:py-1.5 bg-green-100 border border-green-200 text-green-800 rounded md:rounded-lg text-[9px] md:text-xs font-bold shadow-sm flex items-center justify-center md:justify-between">
+                      <span className="hidden md:inline">Std</span>
+                      <span className="md:hidden">{stdLabel.mobile}</span>
+                      <span className="hidden md:inline">{stdLabel.desktop}</span>
+                    </div>
+                  )}
+
+                  {/* Empty State Call to Action (Only for active steps - Desktop only) */}
+                  {!isDisabled && !status.aaShift && !status.stdShift && mode === 'SHOPPER' && step === 1 && (
+                    <div className="mt-auto text-center opacity-0 group-hover:opacity-40 transition-opacity hidden md:block">
+                      <Plus className="w-6 h-6 text-gray-300 mx-auto" />
+                    </div>
+                  )}
+                  
+                  {/* Admin Indicator */}
+                  {mode === 'ADMIN' && adminAvailability[dateKey] && (
+                    <div className="mt-auto flex gap-1 justify-end">
+                        <div className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-orange-400" title="Custom Settings"></div>
+                    </div>
+                  )}
+                  
+                  {/* Too Soon Label */}
+                  {isTooSoon && (
+                      <div className="mt-auto text-center">
+                          <span className="text-[9px] text-gray-400 font-medium bg-gray-200 px-1 rounded">Too Soon</span>
+                      </div>
+                  )}
+                </div>
+                
+                {isDisabled && mode === 'SHOPPER' && (
+                  <div className="absolute top-2 right-2 opacity-10 hidden md:block">
+                    <Lock className="w-5 h-5" />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
   };
 
   const renderDayPanel = () => {
@@ -206,122 +433,22 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     );
   };
 
-  const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const CheckCircleIcon = (props: any) => (
+      <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+  );
 
   return (
-    <div className="w-full max-w-5xl mx-auto bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
-      {/* Header */}
-      <div className="bg-white p-4 md:p-6 border-b flex items-center justify-between">
-        <h2 className="text-xl md:text-2xl font-bold text-gray-800 flex items-center gap-2">
-           {format(currentDate, 'MMMM yyyy')}
-        </h2>
-        <div className="flex gap-2">
-          <button onClick={handlePrevMonth} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-            <ChevronLeft className="w-5 h-5 md:w-6 md:h-6 text-gray-600" />
-          </button>
-          <button onClick={handleNextMonth} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-            <ChevronRight className="w-5 h-5 md:w-6 md:h-6 text-gray-600" />
-          </button>
+    <>
+        {/* Mobile View: Vertical List */}
+        <div className="md:hidden">
+            {renderMobileListView()}
         </div>
-      </div>
 
-      {/* Grid Header */}
-      <div className="grid grid-cols-7 border-b bg-gray-50">
-        {weekDays.map(day => (
-          <div key={day} className={`py-3 md:py-4 text-center text-[10px] md:text-xs font-bold uppercase tracking-widest ${['Sat', 'Sun'].includes(day) ? 'text-red-500' : 'text-gray-400'}`}>
-            {day}
-          </div>
-        ))}
-      </div>
-
-      {/* Grid Body */}
-      <div className="grid grid-cols-7 auto-rows-fr bg-gray-200 gap-px border-b">
-        {daysInMonth.map((day) => {
-          const dateKey = formatDateKey(day);
-          const isCurrentMonth = day.getMonth() === currentDate.getMonth();
-          const isWeekendDay = isWeekend(day);
-          const status = getShopperDayStatus(day);
-          const isDisabled = isDateDisabledForShopper(day);
-          const isTooSoon = mode === 'SHOPPER' && isDisabled && isAfter(day, today) && isBefore(day, minShopperDate);
-          
-          const aaLabel = status.aaShift ? getShiftLabel(status.aaShift.time) : null;
-          const stdLabel = status.stdShift ? getShiftLabel(status.stdShift.time) : null;
-
-          return (
-            <div 
-              key={day.toISOString()} 
-              className={`min-h-[80px] md:min-h-[120px] relative transition-all flex flex-col p-1 md:p-2
-                ${isDisabled ? 'bg-gray-100' : 'bg-white hover:bg-blue-50 cursor-pointer active:bg-blue-100'}
-                ${!isCurrentMonth ? 'opacity-40' : ''}
-              `}
-              onClick={() => {
-                if (!isDisabled) setSelectedDay(day);
-              }}
-            >
-              {/* First Working Day Indicator */}
-              {status.isFirstWorkingDay && (
-                <div className="absolute top-1 right-1 md:top-2 md:left-2 md:right-auto z-10 pointer-events-none" title="First Working Day">
-                   <Star className="w-3 h-3 md:w-5 md:h-5 text-yellow-500 fill-yellow-500 drop-shadow-sm" />
-                </div>
-              )}
-
-              {/* Day Number */}
-              <div className={`text-sm md:text-lg font-semibold mb-1 md:mb-2 ${isWeekendDay ? 'text-red-500' : 'text-gray-700'} ${isDisabled ? 'opacity-40' : ''} ${status.isFirstWorkingDay ? 'mr-3 md:mr-0 md:ml-6' : ''}`}>
-                {format(day, 'd')}
-              </div>
-              
-              {/* Cell Content - Responsive View */}
-              <div className="flex flex-col gap-1 flex-1">
-                {status.aaShift && aaLabel && (
-                  <div className="p-0.5 md:px-2 md:py-1.5 bg-red-100 border border-red-200 text-red-800 rounded md:rounded-lg text-[9px] md:text-xs font-bold shadow-sm flex items-center justify-center md:justify-between">
-                     <span className="hidden md:inline">AA</span>
-                     {/* Show abbreviated on mobile, full on desktop */}
-                     <span className="md:hidden">{aaLabel.mobile}</span>
-                     <span className="hidden md:inline">{aaLabel.desktop}</span>
-                  </div>
-                )}
-                
-                {status.stdShift && stdLabel && (
-                  <div className="p-0.5 md:px-2 md:py-1.5 bg-green-100 border border-green-200 text-green-800 rounded md:rounded-lg text-[9px] md:text-xs font-bold shadow-sm flex items-center justify-center md:justify-between">
-                     <span className="hidden md:inline">Std</span>
-                     <span className="md:hidden">{stdLabel.mobile}</span>
-                     <span className="hidden md:inline">{stdLabel.desktop}</span>
-                  </div>
-                )}
-
-                {/* Empty State Call to Action (Only for active steps - Desktop only) */}
-                {!isDisabled && !status.aaShift && !status.stdShift && mode === 'SHOPPER' && step === 1 && (
-                  <div className="mt-auto text-center opacity-0 group-hover:opacity-40 transition-opacity hidden md:block">
-                    <Plus className="w-6 h-6 text-gray-300 mx-auto" />
-                  </div>
-                )}
-                
-                {/* Admin Indicator */}
-                {mode === 'ADMIN' && adminAvailability[dateKey] && (
-                   <div className="mt-auto flex gap-1 justify-end">
-                      <div className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-orange-400" title="Custom Settings"></div>
-                   </div>
-                )}
-                
-                {/* Too Soon Label */}
-                {isTooSoon && (
-                     <div className="mt-auto text-center">
-                        <span className="text-[9px] text-gray-400 font-medium bg-gray-200 px-1 rounded">Too Soon</span>
-                     </div>
-                )}
-              </div>
-              
-              {isDisabled && mode === 'SHOPPER' && (
-                 <div className="absolute top-2 right-2 opacity-10 hidden md:block">
-                   <Lock className="w-5 h-5" />
-                 </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {renderDayPanel()}
-    </div>
+        {/* Desktop View: Grid Calendar */}
+        <div className="hidden md:block">
+            {renderDesktopGridView()}
+            {renderDayPanel()}
+        </div>
+    </>
   );
 };
