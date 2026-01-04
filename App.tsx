@@ -62,7 +62,7 @@ function App() {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [tempDetails, setTempDetails] = useState<ShopperDetails>({
     usePicnicBus: false,
-    civilStatus: 'Unmarried (Ongehuwd)',
+    civilStatus: 'Single',
     clothingSize: 'M',
     shoeSize: '40',
     gloveSize: '8 (M)',
@@ -461,7 +461,7 @@ function App() {
       const minDate = getShopperMinDate();
       
       // Default: Keep existing or use Min Date
-      const existingDetails = idx >= 0 ? newSelections[idx].details || {} : { usePicnicBus: false, civilStatus: 'Unmarried (Ongehuwd)', clothingSize: 'M', shoeSize: '40', gloveSize: '8 (M)', isRandstad: false, address: '' };
+      const existingDetails = idx >= 0 ? newSelections[idx].details || {} : { usePicnicBus: false, civilStatus: 'Single', clothingSize: 'M', shoeSize: '40', gloveSize: '8 (M)', isRandstad: false, address: '' };
       let finalFWD = existingDetails.firstWorkingDay || formatDateKey(minDate);
 
       // FORCE FWD to be the earliest shift selected
@@ -497,7 +497,7 @@ function App() {
       const currentName = shopperNames[currentShopperIndex];
       const newSelections = [...selections];
       const idx = newSelections.findIndex(s => s.name === currentName);
-      const details = idx >= 0 ? newSelections[idx].details || {} : { usePicnicBus: false, civilStatus: 'Unmarried (Ongehuwd)', clothingSize: 'M', shoeSize: '40', gloveSize: '8 (M)', isRandstad: false, address: '' };
+      const details = idx >= 0 ? newSelections[idx].details || {} : { usePicnicBus: false, civilStatus: 'Single', clothingSize: 'M', shoeSize: '40', gloveSize: '8 (M)', isRandstad: false, address: '' };
       const newDetails = { ...details, firstWorkingDay: dateStr } as ShopperDetails;
       
       if (idx >= 0) newSelections[idx] = { ...newSelections[idx], details: newDetails };
@@ -1477,8 +1477,12 @@ function App() {
                       onChange={(e) => setTempDetails(prev => ({ ...prev, civilStatus: e.target.value }))}
                       className="w-full p-3 bg-gray-50 border rounded-xl outline-none focus:ring-2 focus:ring-purple-500"
                   >
-                      <option value="Unmarried (Ongehuwd)">Unmarried (Ongehuwd)</option>
-                      <option value="Married (Gehuwd)">Married (Gehuwd)</option>
+                      <option value="Single">Single</option>
+                      <option value="Married">Married</option>
+                      <option value="Registered Partnership">Registered Partnership</option>
+                      <option value="Separated">Separated</option>
+                      <option value="Divorced">Divorced</option>
+                      <option value="Widowed">Widowed</option>
                   </select>
               </div>
 
