@@ -1,12 +1,18 @@
 import React, { useState, useMemo } from 'react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths, isWeekend, startOfWeek, endOfWeek, isWithinInterval, isAfter, startOfToday, isBefore, addDays } from 'date-fns';
-import { ChevronLeft, ChevronRight, Check, Ban, Lock, X, Plus, Star, Calendar as CalendarIcon, Clock } from 'lucide-react';
+import { format, endOfMonth, eachDayOfInterval, addMonths, isWeekend, endOfWeek, isWithinInterval, isAfter, isBefore, addDays, addWeeks } from 'date-fns';
+import startOfMonth from 'date-fns/startOfMonth';
+import subMonths from 'date-fns/subMonths';
+import startOfWeek from 'date-fns/startOfWeek';
+import startOfToday from 'date-fns/startOfToday';
+import parseISO from 'date-fns/parseISO';
+import { ChevronLeft, ChevronRight, Check, Ban, Lock, X, Plus, Star, Calendar as CalendarIcon, Clock, PlayCircle } from 'lucide-react';
 import { ShiftTime, ShiftType, ShopperShift, AdminAvailabilityMap } from '../types';
 import { SHIFT_TIMES, formatDateKey, getShopperAllowedRange, getShopperMinDate } from '../constants';
 
 interface CalendarViewProps {
   mode: 'ADMIN' | 'SHOPPER';
-  step?: number; // 0 for AA, 1 for Standard
+  step?: number; // 0 for AA, 1 for FWD, 2 for Standard
+  isFWDSelection?: boolean; // New Prop for specific styling/logic
   adminAvailability: AdminAvailabilityMap;
   currentShopperShifts?: ShopperShift[];
   firstWorkingDay?: string; // YYYY-MM-DD
@@ -18,6 +24,7 @@ interface CalendarViewProps {
 export const CalendarView: React.FC<CalendarViewProps> = ({
   mode,
   step = 1,
+  isFWDSelection = false,
   adminAvailability,
   currentShopperShifts = [],
   firstWorkingDay,
@@ -66,8 +73,30 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
   const isDateDisabledForShopper = (date: Date) => {
     if (mode === 'ADMIN') return false;
-    // Must be within general allowed range AND after the minimum start date (Today + 3)
-    return !isWithinInterval(date, allowedRange) || isBefore(date, minShopperDate);
+    
+    const dateKey = formatDateKey(date);
+
+    // 1. If First Working Day is selected (Step 2+), enforce Strict Range
+    if (step >= 2 && firstWorkingDay) {
+        // Block dates BEFORE the start date
+        if (dateKey < firstWorkingDay) return true;
+
+        // Block dates AFTER the allowed window (Sunday of the following week)
+        const fwdDate = parseISO(firstWorkingDay);
+        // Calculate: Start Date -> +1 Week -> End of that Week (Sunday)
+        const limitDate = endOfWeek(addWeeks(fwdDate, 1), { weekStartsOn: 1 });
+        
+        if (isAfter(date, limitDate)) return true;
+    } 
+    // 2. Otherwise use generic min date (Today+3) for earlier steps
+    else {
+        if (isBefore(date, minShopperDate)) return true;
+    }
+
+    // 3. General Global Range Check (Max 8 weeks out) - failsafe
+    if (!isWithinInterval(date, allowedRange)) return true;
+
+    return false;
   };
 
   // Helper to get short labels for mobile
@@ -86,14 +115,36 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
   const renderMobileListView = () => {
     // In mobile list view for Shoppers, we only show relevant days (within range)
-    // We iterate through the allowed range instead of the calendar month to show a continuous list
-    
-    let daysToList = daysInMonth;
+    let daysToList: Date[] = [];
     
     if (mode === 'SHOPPER') {
-       const rangeStart = allowedRange.start;
-       const rangeEnd = allowedRange.end;
-       daysToList = eachDayOfInterval({ start: rangeStart, end: rangeEnd });
+       let rangeStart = allowedRange.start;
+       let rangeEnd = allowedRange.end;
+
+       // If FWD is selected (Step 2), TIGHTEN the list range
+       if (step >= 2 && firstWorkingDay) {
+           const fwdDate = parseISO(firstWorkingDay);
+           
+           // Start exactly on FWD
+           if (isAfter(fwdDate, rangeStart)) {
+               rangeStart = fwdDate;
+           }
+
+           // End exactly on the Sunday of the following week
+           const limitDate = endOfWeek(addWeeks(fwdDate, 1), { weekStartsOn: 1 });
+           if (isBefore(limitDate, rangeEnd)) {
+               rangeEnd = limitDate;
+           }
+       }
+
+       // Generate dates
+       // Safety: Ensure start isn't after end
+       if (!isAfter(rangeStart, rangeEnd)) {
+           daysToList = eachDayOfInterval({ start: rangeStart, end: rangeEnd });
+       }
+    } else {
+       // Fallback for Admin or non-shopper mode (though logic handles Shopper mostly)
+       daysToList = daysInMonth; 
     }
 
     return (
@@ -122,14 +173,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                       </div>
                    </div>
                    
-                   {/* FWD Toggle Mobile */}
-                   {mode === 'SHOPPER' && onSetFirstWorkingDay && (
-                      <button 
-                        onClick={() => onSetFirstWorkingDay(dateKey)}
-                        className={`p-2 rounded-full transition-all ${isFWD ? 'bg-yellow-100 text-yellow-600 ring-2 ring-yellow-400' : 'text-gray-300 hover:text-yellow-400'}`}
-                      >
-                         <Star className={`w-5 h-5 ${isFWD ? 'fill-current' : ''}`} />
-                      </button>
+                   {/* Star icon just for visuals in FWD mode */}
+                   {isFWDSelection && isFWD && (
+                      <div className="p-2 bg-yellow-100 rounded-full text-yellow-600">
+                         <Star className="w-5 h-5 fill-current" />
+                      </div>
                    )}
                 </div>
 
@@ -146,17 +194,23 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                       const label = shift.split(' ')[0]; // Opening, Morning...
                       const time = shift.match(/\((.*?)\)/)?.[1];
 
-                      // Only show Standard options in Step 1
-                      if (mode === 'SHOPPER' && step === 1 && !stdAvailable && !isSelectedStd) {
+                      // FWD Mode Logic: Only show Morning/Afternoon buttons
+                      const isFWDAllowed = shift === ShiftTime.MORNING || shift === ShiftTime.AFTERNOON;
+                      if (isFWDSelection && !isFWDAllowed) return null;
+
+                      // Only show Standard options in Step 1 or 2
+                      if (mode === 'SHOPPER' && !isFWDSelection && step >= 1 && !stdAvailable && !isSelectedStd) {
                           return null; 
                       }
 
                       return (
                         <button
                           key={shift}
-                          disabled={mode === 'SHOPPER' && ((step === 1 && isSelectedAA) || (step === 1 && !stdAvailable))}
+                          // FWD Mode: Disable if not Morning/Afternoon or not available
+                          // Standard Mode: Generally allow clicking to handle logic in App.tsx
+                          disabled={mode === 'SHOPPER' && !stdAvailable}
                           onClick={() => {
-                             if (mode === 'SHOPPER' && onShopperToggle && step === 1 && stdAvailable) {
+                             if (mode === 'SHOPPER' && onShopperToggle && stdAvailable) {
                                 onShopperToggle(dateKey, shift, ShiftType.STANDARD);
                              }
                           }}
@@ -167,24 +221,23 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                                 : isSelectedStd 
                                     ? 'bg-green-100 border-green-500 text-green-800 ring-1 ring-green-500 shadow-md' 
                                     : 'bg-white border-gray-100 text-gray-600 hover:border-green-300 hover:bg-green-50'}
-                            ${(step === 1 && isSelectedAA) ? 'opacity-50 cursor-not-allowed' : ''}
+                            ${(mode === 'SHOPPER' && !stdAvailable) ? 'opacity-50 cursor-not-allowed' : ''}
                           `}
                         >
                             <span className="text-sm font-bold">{label}</span>
                             <span className="text-[10px] text-gray-400">{time}</span>
                             
-                            {isSelectedAA && <span className="absolute top-1 right-1 text-[9px] font-bold bg-white/50 px-1 rounded text-red-600">AA</span>}
-                            {isSelectedStd && <CheckCircleIcon className="absolute top-1 right-1 w-3 h-3 text-green-600" />}
+                            {isFWDSelection && (
+                                <span className="absolute top-1 right-1">
+                                    <PlayCircle className="w-3 h-3 text-purple-500" />
+                                </span>
+                            )}
+                            
+                            {isSelectedAA && !isFWDSelection && <span className="absolute top-1 right-1 text-[9px] font-bold bg-white/50 px-1 rounded text-red-600">AA</span>}
+                            {isSelectedStd && !isFWDSelection && <CheckCircleIcon className="absolute top-1 right-1 w-3 h-3 text-green-600" />}
                         </button>
                       );
                    })}
-                   
-                   {/* Empty State for Grid layout stability */}
-                   {currentShopperShifts.filter(s => s.date === dateKey).length === 0 && (
-                       <div className="col-span-2 text-center py-2 text-xs text-gray-300 italic">
-                           Tap a shift to select
-                       </div>
-                   )}
                 </div>
              </div>
            );
@@ -239,6 +292,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                 className={`min-h-[80px] md:min-h-[120px] relative transition-all flex flex-col p-1 md:p-2
                   ${isDisabled ? 'bg-gray-100' : 'bg-white hover:bg-blue-50 cursor-pointer active:bg-blue-100'}
                   ${!isCurrentMonth ? 'opacity-40' : ''}
+                  ${isFWDSelection && status.isFirstWorkingDay ? 'bg-yellow-50 ring-2 ring-inset ring-yellow-400' : ''}
                 `}
                 onClick={() => {
                   if (!isDisabled) setSelectedDay(day);
@@ -258,7 +312,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                 
                 {/* Cell Content - Responsive View */}
                 <div className="flex flex-col gap-1 flex-1">
-                  {status.aaShift && aaLabel && (
+                  {status.aaShift && aaLabel && !isFWDSelection && (
                     <div className="p-0.5 md:px-2 md:py-1.5 bg-red-100 border border-red-200 text-red-800 rounded md:rounded-lg text-[9px] md:text-xs font-bold shadow-sm flex items-center justify-center md:justify-between">
                       <span className="hidden md:inline">AA</span>
                       <span className="md:hidden">{aaLabel.mobile}</span>
@@ -266,7 +320,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                     </div>
                   )}
                   
-                  {status.stdShift && stdLabel && (
+                  {status.stdShift && stdLabel && !isFWDSelection && (
                     <div className="p-0.5 md:px-2 md:py-1.5 bg-green-100 border border-green-200 text-green-800 rounded md:rounded-lg text-[9px] md:text-xs font-bold shadow-sm flex items-center justify-center md:justify-between">
                       <span className="hidden md:inline">Std</span>
                       <span className="md:hidden">{stdLabel.mobile}</span>
@@ -274,11 +328,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                     </div>
                   )}
 
-                  {/* Empty State Call to Action (Only for active steps - Desktop only) */}
-                  {!isDisabled && !status.aaShift && !status.stdShift && mode === 'SHOPPER' && step === 1 && (
-                    <div className="mt-auto text-center opacity-0 group-hover:opacity-40 transition-opacity hidden md:block">
-                      <Plus className="w-6 h-6 text-gray-300 mx-auto" />
-                    </div>
+                  {/* FWD Selection Mode Indicators */}
+                  {isFWDSelection && !status.isFirstWorkingDay && !isDisabled && (
+                      <div className="mt-auto text-center opacity-0 group-hover:opacity-60 transition-opacity hidden md:block">
+                          <span className="text-xs text-purple-600 font-bold bg-purple-50 px-2 py-1 rounded">Select Start</span>
+                      </div>
                   )}
                   
                   {/* Admin Indicator */}
@@ -326,7 +380,14 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
             <div>
               <h3 className="text-xl font-bold text-gray-900">{format(selectedDay, 'EEEE, MMM do')}</h3>
               <p className="text-sm text-gray-500">
-                {mode === 'ADMIN' ? 'Configure Availability' : (step === 0 ? 'Select AA Shift' : 'Select Standard Shift')}
+                {mode === 'ADMIN' 
+                  ? 'Configure Availability' 
+                  : isFWDSelection 
+                    ? 'Confirm First Day' 
+                    : step === 0 
+                        ? 'Select AA Shift' 
+                        : 'Select Standard Shift'
+                }
               </p>
             </div>
             <button onClick={() => setSelectedDay(null)} className="bg-gray-200 hover:bg-gray-300 p-2 rounded-full transition-colors">
@@ -335,21 +396,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           </div>
 
           <div className="p-4 md:p-6 space-y-3 overflow-y-auto bg-gray-50/50">
-            {/* First Working Day Toggle (Only in Shopper Mode) */}
-            {mode === 'SHOPPER' && onSetFirstWorkingDay && (
-                 <button
-                   onClick={() => onSetFirstWorkingDay(dateKey)}
-                   className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl border transition-all shadow-sm mb-2 ${
-                     isFWD 
-                      ? 'bg-yellow-100 border-yellow-300 text-yellow-800 ring-1 ring-yellow-300' 
-                      : 'bg-white border-gray-200 text-gray-600 hover:bg-yellow-50 hover:border-yellow-200 hover:text-yellow-700'
-                   }`}
-                 >
-                   <Star className={`w-5 h-5 ${isFWD ? 'fill-yellow-500 text-yellow-500' : 'text-current'}`} />
-                   {isFWD ? 'First Working Day Selected' : 'Set as First Working Day'}
-                 </button>
-            )}
-
             {SHIFT_TIMES.map((shift) => {
               const aaAvailable = isTypeAvailable(dateKey, shift, ShiftType.AA);
               const stdAvailable = isTypeAvailable(dateKey, shift, ShiftType.STANDARD);
@@ -358,16 +404,23 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               const isSelectedAA = shiftEntries.some(s => s.type === ShiftType.AA);
               const isSelectedStd = shiftEntries.some(s => s.type === ShiftType.STANDARD);
 
-              // In Standard step (step 1), hide unavailable options
-              if (mode === 'SHOPPER' && step === 1 && !stdAvailable && !isSelectedStd) return null;
+              // In FWD Selection mode, disable Opening and Noon
+              const isFWDAllowed = shift === ShiftTime.MORNING || shift === ShiftTime.AFTERNOON;
+              const isFWDButtonDisabled = isFWDSelection && !isFWDAllowed;
+
+              // Hide completely if not allowed in Standard step (unless it's the AA override scenario)
+              if (mode === 'SHOPPER' && !isFWDSelection && step >= 1 && !stdAvailable && !isSelectedStd) return null;
 
               return (
-                <div key={shift} className={`w-full flex flex-col gap-2 md:gap-3 p-3 md:p-4 border rounded-xl bg-white shadow-sm transition-all ${isSelectedAA || isSelectedStd ? 'ring-2 ring-purple-500 border-transparent' : 'border-gray-200'}`}>
-                  <div className="text-sm md:text-base font-bold text-gray-800">{shift}</div>
+                <div key={shift} className={`w-full flex flex-col gap-2 md:gap-3 p-3 md:p-4 border rounded-xl bg-white shadow-sm transition-all ${isSelectedAA || isSelectedStd ? 'ring-2 ring-purple-500 border-transparent' : 'border-gray-200'} ${isFWDButtonDisabled ? 'opacity-50' : ''}`}>
+                  <div className="text-sm md:text-base font-bold text-gray-800 flex justify-between">
+                      {shift}
+                      {isFWDButtonDisabled && <span className="text-xs text-red-500 font-normal">Not allowed for 1st day</span>}
+                  </div>
                   
                   <div className="grid grid-cols-1 gap-2 md:gap-3">
                     {/* AA BUTTON - Only active in Step 0 or Admin */}
-                    {(mode === 'ADMIN' || step === 0) && (
+                    {(mode === 'ADMIN' || (step === 0 && !isFWDSelection)) && (
                       <button
                         onClick={() => {
                           if (mode === 'ADMIN' && onAdminToggle) onAdminToggle(dateKey, shift, ShiftType.AA);
@@ -390,28 +443,28 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                       </button>
                     )}
 
-                    {/* STANDARD BUTTON - Only active in Step 1 or Admin */}
-                    {(mode === 'ADMIN' || step === 1) && (
+                    {/* STANDARD BUTTON - Active in Step 2 (Std) OR FWD Selection */}
+                    {(mode === 'ADMIN' || step >= 1 || isFWDSelection) && (
                       <button
                         onClick={() => {
                           if (mode === 'ADMIN' && onAdminToggle) onAdminToggle(dateKey, shift, ShiftType.STANDARD);
                           if (mode === 'SHOPPER' && onShopperToggle && stdAvailable) onShopperToggle(dateKey, shift, ShiftType.STANDARD);
                         }}
-                        // In Shopper mode, cannot select Standard if AA is already selected for this slot
-                        disabled={mode === 'SHOPPER' && (!stdAvailable || isSelectedAA)}
+                        disabled={mode === 'SHOPPER' && (isFWDButtonDisabled || !stdAvailable)}
                         className={`flex items-center justify-between px-4 py-3 rounded-lg text-sm font-semibold border transition-all ${
                           isSelectedStd
                             ? 'bg-green-600 text-white border-green-600 shadow-md transform scale-[1.02]' 
-                            : stdAvailable && !isSelectedAA
+                            : stdAvailable && (!isSelectedAA || isFWD)
                               ? 'bg-white border-green-200 text-green-700 hover:bg-green-50'
                               : 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
                         }`}
                       >
                          <span className="flex items-center gap-2">
                            {isSelectedStd && <Check className="w-4 h-4" />} 
-                           Standard Shift
+                           {isFWDSelection ? 'Start Here' : 'Standard Shift'}
                          </span>
-                         {isSelectedAA && mode === 'SHOPPER' && <span className="text-xs">AA Selected</span>}
+                         {isSelectedAA && !isFWD && mode === 'SHOPPER' && !isFWDSelection && <span className="text-xs">AA Selected</span>}
+                         {isSelectedAA && isFWD && mode === 'SHOPPER' && <span className="text-xs text-orange-500 font-bold">Override AA?</span>}
                       </button>
                     )}
                   </div>

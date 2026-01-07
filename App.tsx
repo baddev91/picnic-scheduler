@@ -1,10 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AppMode, ShiftTime, ShiftType, ShopperData, ShopperShift, AdminAvailabilityMap, ShopperDetails, WeeklyTemplate, ShopperStep, AdminWizardStep } from './types';
 import { SHIFT_TIMES, formatDateKey, getShopperAllowedRange, getShopperMinDate } from './constants';
 import { Button } from './components/Button';
 import { CalendarView } from './components/CalendarView';
+import { MobileInstructionModal } from './components/MobileInstructionModal';
 import { Shield, Download, ArrowRight, UserPlus, CheckCircle, AlertCircle, Save, Trash2, History, XCircle, Lock, Bus, Heart, Shirt, Footprints, Hand, MapPin, Building2, Settings2, CalendarDays, Undo2, PlayCircle, Plus, Check, User, Ban, CloudUpload, Link, Share2, LogIn, RefreshCw, FileDown, Copy, CalendarRange, ChevronRight, ChevronLeft, Star, Table, Sun, Moon, Sunrise, Sunset, Coffee, KeyRound, X, ClipboardList, Clock, ToggleLeft, ToggleRight, Camera } from 'lucide-react';
-import { isWeekend, startOfWeek, addDays, subDays, getDay, isSameDay, format, isWithinInterval, addWeeks, endOfWeek, nextMonday, startOfToday, isBefore, isAfter } from 'date-fns';
+import { isWeekend, addDays, getDay, isSameDay, format, isWithinInterval, addWeeks, endOfWeek, isBefore, isAfter } from 'date-fns';
+import startOfWeek from 'date-fns/startOfWeek';
+import subDays from 'date-fns/subDays';
+import nextMonday from 'date-fns/nextMonday';
+import startOfToday from 'date-fns/startOfToday';
 import { supabase } from './supabaseClient';
 import { AdminDataView } from './components/AdminDataView';
 
@@ -41,6 +46,12 @@ function App() {
   const [shopperStep, setShopperStep] = useState<ShopperStep>(ShopperStep.AA_SELECTION);
   const [isInitialized, setIsInitialized] = useState(false);
   const [isSelfService, setIsSelfService] = useState(false);
+  
+  // Mobile Popup State
+  const [showMobileInstructions, setShowMobileInstructions] = useState(false);
+
+  // Scroll Ref for Mobile UX
+  const flowScrollContainerRef = useRef<HTMLDivElement>(null);
   
   // Data State
   const [adminAvailability, setAdminAvailability] = useState<AdminAvailabilityMap>({});
@@ -79,27 +90,22 @@ function App() {
   // Configuration Fetching (GET) - From Supabase
   // --------------------------------------------------------------------------
 
-  // Helper to save config to Supabase
   const saveConfigToSupabase = async (config: AdminAvailabilityMap) => {
       try {
           const { error } = await supabase
               .from('app_settings')
               .upsert({ id: 'admin_availability', value: config });
-          
           if (error) console.error("Failed to save config to Supabase:", error);
       } catch (e) {
           console.error("Error saving config to Supabase:", e);
       }
   };
 
-  // Helper to save Weekly Template to Supabase
   const saveTemplateToSupabase = async (template: WeeklyTemplate) => {
       try {
-          // This creates a new row with id='weekly_template' or updates it if exists
           const { error } = await supabase
               .from('app_settings')
               .upsert({ id: 'weekly_template', value: template });
-          
           if (error) console.error("Failed to save template to Supabase:", error);
           else setSavedCloudTemplate(template);
       } catch (e) {
@@ -112,121 +118,88 @@ function App() {
         const { error } = await supabase
             .from('app_settings')
             .upsert({ id: 'shopper_auth', value: { pin, enabled } });
-        
-        if (error) {
-            alert("Error saving Auth Settings");
-        } else {
+        if (error) alert("Error saving Auth Settings");
+        else {
             setShopperPinConfig(pin);
             setIsShopperAuthEnabled(enabled);
             alert("Security settings updated successfully!");
         }
-    } catch (e) {
-        console.error(e);
-    }
+    } catch (e) { console.error(e); }
   };
 
-  // --------------------------------------------------------------------------
-  // Persistence & Initialization
-  // --------------------------------------------------------------------------
-
-  // Extracted function to be reusable for refreshing
   const loadRemoteConfig = useCallback(async () => {
     try {
-        // Fetch Availability (Specific Dates)
-        const { data: availData } = await supabase
-            .from('app_settings')
-            .select('value')
-            .eq('id', 'admin_availability')
-            .single();
-        
+        const { data: availData } = await supabase.from('app_settings').select('value').eq('id', 'admin_availability').single();
         if (availData?.value) {
             let parsedValue = availData.value;
-            // Robust check: sometimes Supabase returns JSON as string depending on config
-            if (typeof parsedValue === 'string') {
-                try {
-                    parsedValue = JSON.parse(parsedValue);
-                } catch (e) {
-                    console.error("Failed to parse admin_availability JSON string", e);
-                }
-            }
+            if (typeof parsedValue === 'string') { try { parsedValue = JSON.parse(parsedValue); } catch (e) {} }
             setAdminAvailability(parsedValue);
         }
 
-        // Fetch Weekly Template (Abstract Pattern)
-        const { data: templateData } = await supabase
-            .from('app_settings')
-            .select('value')
-            .eq('id', 'weekly_template')
-            .single();
-
+        const { data: templateData } = await supabase.from('app_settings').select('value').eq('id', 'weekly_template').single();
         if (templateData?.value) {
             let parsedTemplate = templateData.value;
-            if (typeof parsedTemplate === 'string') {
-                 try { parsedTemplate = JSON.parse(parsedTemplate); } catch(e) {}
-            }
+            if (typeof parsedTemplate === 'string') { try { parsedTemplate = JSON.parse(parsedTemplate); } catch(e) {} }
             setSavedCloudTemplate(parsedTemplate);
             setTempTemplate(parsedTemplate);
         } else {
-            // Only if no cloud data, try local storage
             try {
               const savedTemplate = JSON.parse(localStorage.getItem(STORAGE_KEYS.TEMPLATE) || '{}');
               if (Object.keys(savedTemplate).length > 0) setTempTemplate(savedTemplate);
             } catch (e) { console.error(e); }
         }
 
-        // Fetch Shopper PIN
-        const { data: pinData } = await supabase
-            .from('app_settings')
-            .select('value')
-            .eq('id', 'shopper_auth')
-            .single();
-        
+        const { data: pinData } = await supabase.from('app_settings').select('value').eq('id', 'shopper_auth').single();
         if (pinData?.value) {
             if (pinData.value.pin) {
                 setShopperPinConfig(pinData.value.pin);
                 setAdminShopperPinInput(pinData.value.pin);
             }
-            // Check enabled status, default to true if undefined
             setIsShopperAuthEnabled(pinData.value.enabled !== false);
         }
-    } catch (err) {
-        console.error("Error loading remote config:", err);
-    }
+    } catch (err) { console.error("Error loading remote config:", err); }
   }, []);
 
   useEffect(() => {
-    // 1. URL Params Handling
     const params = new URLSearchParams(window.location.search);
     const urlMode = params.get('mode');
-    
-    if (urlMode === 'shopper') {
-      setIsSelfService(true);
-      setMode(AppMode.SHOPPER_SETUP);
-    } else if (urlMode === 'admin') {
-      setMode(AppMode.ADMIN);
-    }
-    
-    if (urlMode) {
-      window.history.replaceState({}, '', window.location.pathname);
-    }
-
-    // 2. Load Config
+    if (urlMode === 'shopper') { setIsSelfService(true); setMode(AppMode.SHOPPER_SETUP); } 
+    else if (urlMode === 'admin') { setMode(AppMode.ADMIN); }
+    if (urlMode) window.history.replaceState({}, '', window.location.pathname);
     loadRemoteConfig();
-
     setIsInitialized(true);
   }, [loadRemoteConfig]);
 
-  // Refresh config when switching to shopper setup to ensure fresh data if admin just updated it
   useEffect(() => {
-     if (mode === AppMode.SHOPPER_SETUP) {
-         loadRemoteConfig();
-     }
+     if (mode === AppMode.SHOPPER_SETUP) loadRemoteConfig();
   }, [mode, loadRemoteConfig]);
 
   useEffect(() => {
     if (!isInitialized) return;
     localStorage.setItem(STORAGE_KEYS.TEMPLATE, JSON.stringify(tempTemplate));
   }, [tempTemplate, isInitialized]);
+
+  // Scroll to top when step changes (For Mobile UX)
+  // Also TRIGGER MOBILE POPUP
+  useEffect(() => {
+      if (mode === AppMode.SHOPPER_FLOW) {
+          // Use setTimeout to ensure the DOM update has happened
+          setTimeout(() => {
+              if (flowScrollContainerRef.current) {
+                  flowScrollContainerRef.current.scrollTop = 0;
+              }
+              // Also force window scroll just in case
+              window.scrollTo(0, 0);
+          }, 50);
+          
+          // Trigger Popup logic
+          if (shopperStep === ShopperStep.FWD_SELECTION || shopperStep === ShopperStep.STANDARD_SELECTION) {
+              setShowMobileInstructions(true);
+          } else {
+              setShowMobileInstructions(false);
+          }
+      }
+  }, [shopperStep, mode]);
 
   // --------------------------------------------------------------------------
   // Core Logic
@@ -237,19 +210,14 @@ function App() {
       setAdminShopperPinInput(pin);
   };
 
-  // Logic to actually start the flow (after pin check if needed)
   const startShopperSession = () => {
-      // Calculate STRICT First Working Day (Today + 3 days)
       const minDate = getShopperMinDate();
-      const calculatedFWD = formatDateKey(minDate);
-      
-      // Initialize Shopper Data immediately with auto-calculated First Working Day
+      // Initially, we do NOT set First Working Day. It will be set explicitly in step 2.
       const newShopper: ShopperData = {
           name: tempNameInput.trim(),
           shifts: [],
-          details: { ...tempDetails, firstWorkingDay: calculatedFWD }
+          details: { ...tempDetails, firstWorkingDay: undefined } 
       };
-      
       setSelections([newShopper]);
       setShopperNames([tempNameInput.trim()]);
       setMode(AppMode.SHOPPER_FLOW);
@@ -269,9 +237,6 @@ function App() {
 
   const handleStartShopperClick = () => {
       if (!tempNameInput.trim()) return;
-
-      // Logic: If PIN exists AND is Enabled AND not verified -> Show PIN
-      // Otherwise -> Go Straight In
       if (shopperPinConfig && isShopperAuthEnabled && !isShopperVerified) {
           setShowShopperAuth(true);
       } else {
@@ -282,66 +247,55 @@ function App() {
   const handleSubmitData = async () => {
     setIsSyncing(true);
     setSyncStatus('idle');
-
     try {
-        // Supabase Sync
         for (const shopper of selections) {
             const { data: shopperData, error: shopperError } = await supabase
                 .from('shoppers')
-                .insert([{ 
-                    name: shopper.name, 
-                    details: shopper.details || {}
-                }])
-                .select()
-                .single();
-            
+                .insert([{ name: shopper.name, details: shopper.details || {} }])
+                .select().single();
             if (shopperError) throw new Error(`DB Error: ${shopperError.message}`);
             
             const shopperId = shopperData.id;
-            const shiftsPayload = shopper.shifts.map(s => ({
-                shopper_id: shopperId,
-                date: s.date,
-                time: s.time,
-                type: s.type
+
+            // FILTER SHIFTS: Only save shifts from FWD up to Sunday of the following week
+            let finalShifts = shopper.shifts;
+            if (shopper.details?.firstWorkingDay) {
+                const fwd = shopper.details.firstWorkingDay;
+                const fwdDate = getSafeDateFromKey(fwd);
+                // Limit: Sunday of the week following the FWD week
+                const limitDate = endOfWeek(addWeeks(fwdDate, 1), { weekStartsOn: 1 });
+                const limitKey = formatDateKey(limitDate);
+        
+                finalShifts = finalShifts.filter(s => s.date >= fwd && s.date <= limitKey);
+            }
+
+            const shiftsPayload = finalShifts.map(s => ({
+                shopper_id: shopperId, date: s.date, time: s.time, type: s.type
             }));
             
             if (shiftsPayload.length > 0) {
-                const { error: shiftsError } = await supabase
-                    .from('shifts')
-                    .insert(shiftsPayload);
+                const { error: shiftsError } = await supabase.from('shifts').insert(shiftsPayload);
                 if (shiftsError) throw new Error(`DB Error: ${shiftsError.message}`);
             }
         }
-
         setSyncStatus('success');
     } catch (error: any) {
         console.error("Sync error", error);
         setSyncStatus('error');
         alert(`Failed to save: ${error.message || 'Unknown error'}`);
-    } finally {
-        setIsSyncing(false);
-    }
+    } finally { setIsSyncing(false); }
   };
 
   const handleClearSession = () => {
-    // Reset local state only, no localStorage reliance for restoration
     setShopperNames([]);
     setSelections([]);
     setCurrentShopperIndex(0);
     setShopperStep(ShopperStep.AA_SELECTION);
-    
-    // Reset AA Wizard State
-    setAaSelection({
-        weekday: { dayIndex: null, time: null },
-        weekend: { dayIndex: null, time: null }
-    });
-
+    setAaSelection({ weekday: { dayIndex: null, time: null }, weekend: { dayIndex: null, time: null } });
     setIsShopperVerified(false);
     setShowShopperAuth(false);
     setSyncStatus('idle');
     setTempNameInput('');
-    
-    // Always go back to Shopper Setup (Home)
     setMode(AppMode.SHOPPER_SETUP);
   };
 
@@ -349,27 +303,15 @@ function App() {
   // Admin Logic
   // --------------------------------------------------------------------------
 
-  // Keeping handleAdminToggle for potential future use or if needed by CalendarView internal types, 
-  // though we removed the manual edit mode.
   const handleAdminToggle = (date: string, shift: ShiftTime, type: ShiftType) => {
     setAdminAvailability(prev => {
       const dayConfig = prev[date] || {};
       const currentTypesForShift = dayConfig[shift] || [ShiftType.AA, ShiftType.STANDARD];
       let newTypes: ShiftType[];
-      if (currentTypesForShift.includes(type)) {
-        newTypes = currentTypesForShift.filter(t => t !== type);
-      } else {
-        newTypes = [...currentTypesForShift, type];
-      }
-      
-      const newState = {
-        ...prev,
-        [date]: { ...dayConfig, [shift]: newTypes }
-      };
-      
-      // Save changes to Supabase immediately
+      if (currentTypesForShift.includes(type)) newTypes = currentTypesForShift.filter(t => t !== type);
+      else newTypes = [...currentTypesForShift, type];
+      const newState = { ...prev, [date]: { ...dayConfig, [shift]: newTypes } };
       saveConfigToSupabase(newState);
-      
       return newState;
     });
   };
@@ -377,96 +319,54 @@ function App() {
   const toggleWizardTemplate = (shift: ShiftTime, type: ShiftType) => {
       setTempTemplate(prev => {
           const dayConfig = prev[wizardDayIndex] || {};
-          const currentTypes = dayConfig[shift] || []; // If empty, means disabled
-          
+          const currentTypes = dayConfig[shift] || [];
           let newTypes;
-          if (currentTypes.includes(type)) {
-              newTypes = currentTypes.filter(t => t !== type);
-          } else {
-              newTypes = [...currentTypes, type];
-          }
-          
-          return {
-              ...prev,
-              [wizardDayIndex]: {
-                  ...dayConfig,
-                  [shift]: newTypes
-              }
-          };
+          if (currentTypes.includes(type)) newTypes = currentTypes.filter(t => t !== type);
+          else newTypes = [...currentTypes, type];
+          return { ...prev, [wizardDayIndex]: { ...dayConfig, [shift]: newTypes } };
       });
   };
 
   const resetWizardTemplate = () => {
-    // 7709 PIN PROTECTION for RESET
     const code = window.prompt("⚠️ DANGER ZONE ⚠️\n\nThis will clear the entire weekly pattern configuration.\n\nEnter Admin PIN to confirm reset:");
-    
     if (code === '7709') {
         const initial: WeeklyTemplate = {};
         [1,2,3,4,5,6,0].forEach(d => {
-            initial[d] = {
-                [ShiftTime.OPENING]: [],
-                [ShiftTime.MORNING]: [],
-                [ShiftTime.NOON]: [],
-                [ShiftTime.AFTERNOON]: []
-            };
+            initial[d] = { [ShiftTime.OPENING]: [], [ShiftTime.MORNING]: [], [ShiftTime.NOON]: [], [ShiftTime.AFTERNOON]: [] };
         });
         setTempTemplate(initial);
-        // We also clear it from cloud to reflect the reset immediately
         saveTemplateToSupabase(initial);
         alert("Pattern reset successfully.");
-    } else if (code !== null) {
-        alert("Incorrect PIN. Reset cancelled.");
-    }
+    } else if (code !== null) alert("Incorrect PIN. Reset cancelled.");
   };
 
   const copyPreviousDay = () => {
-      if (wizardDayIndex === 1) return; // Can't copy on Monday
-      const prevDayIndex = wizardDayIndex === 0 ? 6 : wizardDayIndex - 1; // Logic for Sun (0) coming after Sat (6)
+      if (wizardDayIndex === 1) return;
+      const prevDayIndex = wizardDayIndex === 0 ? 6 : wizardDayIndex - 1;
       const prevConfig = tempTemplate[prevDayIndex];
-      
-      if (prevConfig) {
-          setTempTemplate(prev => ({
-              ...prev,
-              [wizardDayIndex]: JSON.parse(JSON.stringify(prevConfig))
-          }));
-      }
+      if (prevConfig) setTempTemplate(prev => ({ ...prev, [wizardDayIndex]: JSON.parse(JSON.stringify(prevConfig)) }));
   };
 
   const applyTemplate = () => {
-      // Apply starting from NEXT Monday
       const startDate = nextMonday(new Date());
       const newAvailability = { ...adminAvailability };
-      
-      // CRITICAL FIX: Deep clone the template to ensure no reference sharing between dates
       const safeTemplate = JSON.parse(JSON.stringify(tempTemplate));
-
       for (let i = 0; i < applyWeeks * 7; i++) {
          const currentLoopDate = addDays(startDate, i);
          const dateKey = formatDateKey(currentLoopDate);
          const dayOfWeek = getDay(currentLoopDate); 
-         
-         // Use the cloned template to assign configuration
          const templateDayConfig = safeTemplate[dayOfWeek];
-         if (templateDayConfig) {
-            newAvailability[dateKey] = templateDayConfig;
-         }
+         if (templateDayConfig) newAvailability[dateKey] = templateDayConfig;
       }
-      
-      // 1. Save specific date availability to Supabase
       setAdminAvailability(newAvailability);
       saveConfigToSupabase(newAvailability);
-      
-      // 2. Save the abstract template to Supabase so it can be reloaded later
       saveTemplateToSupabase(safeTemplate);
-      
       alert(`Schedule generated successfully for ${applyWeeks} weeks! Saved to Cloud.`);
       setAdminWizardStep(AdminWizardStep.DASHBOARD);
   };
 
   const handleCopyMagicLink = () => {
-      // Simple link generation
       const link = `${window.location.origin}/?mode=shopper`;
-      
       navigator.clipboard.writeText(link).then(() => {
           alert("Shopper Link Copied!\n\n" + link + "\n\nUse this link on the iPad/Kiosk. It will require the PIN to enter.");
       });
@@ -481,6 +381,14 @@ function App() {
     return new Date(y, m - 1, d);
   };
 
+  const formatDateDisplay = (dateStr: string) => {
+      if(!dateStr) return 'N/A';
+      try {
+          // dateStr is typically YYYY-MM-DD
+          return format(new Date(dateStr), 'EEE, MMM do, yyyy');
+      } catch (e) { return dateStr; }
+  };
+
   const calculateGloveSize = (clothingSize: string): string => {
     const map: Record<string, string> = {
       'XS': '6 (XS)', 'S': '7 (S)', 'M': '8 (M)', 'L': '9 (L)',
@@ -490,10 +398,8 @@ function App() {
   };
 
   const handleLogin = () => {
-    if (password === '7709') {
-      setIsAuthenticated(true);
-      setAuthError(false);
-    } else setAuthError(true);
+    if (password === '7709') { setIsAuthenticated(true); setAuthError(false); } 
+    else setAuthError(true);
   };
 
   const isRestViolation = (dateStr: string, newTime: ShiftTime, currentShifts: ShopperShift[]): boolean => {
@@ -511,245 +417,209 @@ function App() {
     return false;
   };
 
-  // Check if adding this date would create a streak of more than 5 consecutive days
   const isConsecutiveDaysViolation = (dateStr: string, currentShifts: ShopperShift[]): boolean => {
       const targetDate = getSafeDateFromKey(dateStr);
       const shiftDates = new Set(currentShifts.map(s => s.date));
-
-      // Calculate consecutive days BEFORE target date
       let consecutiveBefore = 0;
       let checkDate = subDays(targetDate, 1);
-      while (shiftDates.has(formatDateKey(checkDate))) {
-          consecutiveBefore++;
-          checkDate = subDays(checkDate, 1);
-      }
-
-      // Calculate consecutive days AFTER target date
+      while (shiftDates.has(formatDateKey(checkDate))) { consecutiveBefore++; checkDate = subDays(checkDate, 1); }
       let consecutiveAfter = 0;
       checkDate = addDays(targetDate, 1);
-      while (shiftDates.has(formatDateKey(checkDate))) {
-          consecutiveAfter++;
-          checkDate = addDays(checkDate, 1);
-      }
-
-      // Total including the potential new day
-      const totalConsecutive = consecutiveBefore + 1 + consecutiveAfter;
-      return totalConsecutive > 5;
+      while (shiftDates.has(formatDateKey(checkDate))) { consecutiveAfter++; checkDate = addDays(checkDate, 1); }
+      return (consecutiveBefore + 1 + consecutiveAfter) > 5;
   };
 
-  // --- NEW RULE: First Working Day must be Morning or Afternoon ---
-  const validateFirstWorkingDayRule = (proposedShifts: ShopperShift[]): { valid: boolean, message?: string } => {
-     if (proposedShifts.length === 0) return { valid: true };
+  // --- NEW RULE: Range Validation (Max 2 Weeks from SPECIFIC First Day) ---
+  const validateShopperRange = (proposedShifts: ShopperShift[], firstWorkingDay: string | undefined): { valid: boolean, message?: string } => {
+     // If no First Working Day set, we cannot validly check range yet (but this shouldn't happen in Standard step)
+     if (!firstWorkingDay) return { valid: true };
 
-     // Sort to find the very first shift
-     const sorted = [...proposedShifts].sort((a, b) => a.date.localeCompare(b.date));
-     const firstShift = sorted[0];
+     const fwdDate = getSafeDateFromKey(firstWorkingDay);
+     // Allowed End Date: Sunday of the week FOLLOWING the FWD's week
+     const allowedEndDate = endOfWeek(addWeeks(fwdDate, 1), { weekStartsOn: 1 });
 
-     // Valid shifts for First Working Day: Morning or Afternoon
-     // Invalid: Opening or Noon
-     const validFirstShifts = [ShiftTime.MORNING, ShiftTime.AFTERNOON];
+     const standardShifts = proposedShifts.filter(s => s.type === ShiftType.STANDARD);
+     const lateShifts = standardShifts.filter(s => isAfter(getSafeDateFromKey(s.date), allowedEndDate));
 
-     if (!validFirstShifts.includes(firstShift.time)) {
-        const dateFormatted = format(getSafeDateFromKey(firstShift.date), 'MMM do');
-        return { 
-          valid: false, 
-          message: `Startup Rule Violation: Your first working day (${dateFormatted}) cannot be a ${firstShift.time.split(' ')[0]} shift.\n\nThe first day must be a 'Morning' or 'Afternoon' shift.` 
-        };
+     if (lateShifts.length > 0) {
+         return {
+             valid: false,
+             message: `Range Limit Exceeded.\n\nBased on your Start Date (${format(fwdDate, 'MMM do')}), you can only select shifts up to ${format(allowedEndDate, 'MMM do')}.`
+         };
      }
-
      return { valid: true };
   };
 
-  const handleShopperToggle = (dateStr: string, shift: ShiftTime, type: ShiftType) => {
+  // Handle Logic for the specific "First Working Day Selection" Step
+  const handleFWDSelection = (dateStr: string, shift: ShiftTime) => {
+      // 1. Validate Time (Morning/Afternoon Only) - Although UI also blocks this
+      if (shift === ShiftTime.OPENING || shift === ShiftTime.NOON) {
+          alert("Invalid First Day Shift. Must be Morning or Afternoon.");
+          return;
+      }
+
+      const currentName = shopperNames[currentShopperIndex];
+      const newSelections = [...selections];
+      const idx = newSelections.findIndex(s => s.name === currentName);
+      
+      const existing = idx >= 0 ? newSelections[idx] : { name: currentName, shifts: [], details: {} };
+      
+      // 2. Set FWD in details
+      const updatedDetails = { ...existing.details, firstWorkingDay: dateStr } as ShopperDetails;
+      
+      // 3. Add this as a Standard Shift (OVERRIDING any existing AA on this day if present)
+      let currentShifts = [...existing.shifts];
+      
+      // Remove any existing AA on this date to avoid conflict
+      currentShifts = currentShifts.filter(s => s.date !== dateStr);
+      
+      // Add the chosen start shift
+      currentShifts.push({ date: dateStr, time: shift, type: ShiftType.STANDARD });
+
+      // Update State
+      if (idx >= 0) newSelections[idx] = { ...existing, shifts: currentShifts, details: updatedDetails };
+      else newSelections.push({ name: currentName, shifts: currentShifts, details: updatedDetails });
+      
+      setSelections(newSelections);
+      
+      // 4. Move to next step
+      setShopperStep(ShopperStep.STANDARD_SELECTION);
+  };
+
+  const handleStandardShiftToggle = (dateStr: string, shift: ShiftTime, type: ShiftType) => {
     const currentName = shopperNames[currentShopperIndex];
     const prevData = selections.find(s => s.name === currentName) || { name: currentName, shifts: [] };
     let newShifts = [...prevData.shifts];
+    const fwd = prevData.details?.firstWorkingDay;
     
+    // Safety check: Shopper should not be here without FWD
+    if (!fwd) {
+        alert("Error: First Working Day not set. Please go back.");
+        setShopperStep(ShopperStep.FWD_SELECTION);
+        return;
+    }
+
     if (type === ShiftType.STANDARD) {
       const existingIndex = newShifts.findIndex(s => s.date === dateStr && s.time === shift && s.type === ShiftType.STANDARD);
       
-      // If adding a new shift (not removing)
+      // ADDING
       if (existingIndex === -1) {
-          // 1. Check Rest Violation
+          // 1. Check if trying to add BEFORE FWD (Strict Rule)
+          if (isBefore(getSafeDateFromKey(dateStr), getSafeDateFromKey(fwd))) {
+              alert(`Cannot select a shift before your First Working Day (${format(getSafeDateFromKey(fwd), 'MMM do')}).`);
+              return;
+          }
+
+          // 2. Check Rest
           if (isRestViolation(dateStr, shift, newShifts)) {
             alert("Rest Constraint Violation: Not enough rest between shifts.");
             return;
           }
           
-          // 2. Check 5-Day consecutive limit
+          // 3. Check 5-Day limit
           if (isConsecutiveDaysViolation(dateStr, newShifts)) {
               alert("Limit reached: You cannot work more than 5 consecutive days.");
               return;
           }
 
-          // 3. Check if AA already selected
-          if (newShifts.some(s => s.date === dateStr && s.type === ShiftType.AA)) {
-             alert("Already covered by AA");
-             return;
+          // 4. Check if AA exists -> Override logic
+          const existingAA = newShifts.find(s => s.date === dateStr && s.type === ShiftType.AA);
+          if (existingAA) {
+             // Simply allow override. User is explicitly clicking standard.
+             newShifts = newShifts.filter(s => s !== existingAA);
          }
 
-         // --- NEW: Simulate addition and check First Working Day Rule ---
+         // 5. Check Range (based on FWD)
          const simulatedShifts = [...newShifts, { date: dateStr, time: shift, type: ShiftType.STANDARD }];
-         const fwdCheck = validateFirstWorkingDayRule(simulatedShifts);
-         if (!fwdCheck.valid) {
-             alert(fwdCheck.message);
+         const rangeCheck = validateShopperRange(simulatedShifts, fwd);
+         if (!rangeCheck.valid) {
+             alert(rangeCheck.message);
              return;
          }
 
          newShifts.push({ date: dateStr, time: shift, type: ShiftType.STANDARD });
       } else {
-         // Removing
-         // --- NEW: Simulate removal and check if the *next* earliest shift violates the rule ---
+         // REMOVING
          const shiftToRemove = newShifts[existingIndex];
-         const simulatedShifts = newShifts.filter((_, i) => i !== existingIndex);
          
-         // If we removed the ONLY shift, it's valid (empty list is valid)
-         // If we removed a shift, and there are others left, check the new first one
-         if (simulatedShifts.length > 0) {
-             const fwdCheck = validateFirstWorkingDayRule(simulatedShifts);
-             if (!fwdCheck.valid) {
-                 alert(`Cannot remove this shift.\n\nRemoving ${shift.split(' ')[0]} on ${format(getSafeDateFromKey(dateStr), 'MMM do')} would make your new first day invalid.\n\n${fwdCheck.message}`);
+         // Prevent removing the FWD shift itself here? 
+         // Optional: Maybe allow removing but warn they need to pick a new start?
+         // For now, let's block removing the exact shift that corresponds to FWD to avoid invalid state.
+         if (shiftToRemove.date === fwd) {
+             if (!confirm("You are removing your First Working Day shift. You will need to select a new First Working Day. Continue?")) {
                  return;
              }
+             // If they continue, we might need to reset FWD? 
+             // Simpler: Allow removal, but don't reset FWD variable automatically to avoid complex state.
+             // OR: Just send them back to step 1.
+             // Best UX: Block it. "To change your first day, click 'Reset Start Date' below."
+             alert("To change your First Working Day, please click 'Change Start Date' at the bottom.");
+             return;
          }
 
          newShifts.splice(existingIndex, 1);
       }
     }
-    updateShopperSelections(newShifts);
-  };
-  
-  const updateShopperSelections = (newShifts: ShopperShift[]) => {
-      const currentName = shopperNames[currentShopperIndex];
-      const newSelections = [...selections];
-      const idx = newSelections.findIndex(s => s.name === currentName);
-      
-      // Auto-calculate First Working Day based on selection logic
-      const minDate = getShopperMinDate();
-      
-      // Default: Keep existing or use Min Date
-      const existingDetails = idx >= 0 ? newSelections[idx].details || {} : { usePicnicBus: false, civilStatus: 'Single', clothingSize: 'M', shoeSize: '40', gloveSize: '8 (M)', isRandstad: false, address: '' };
-      let finalFWD = existingDetails.firstWorkingDay || formatDateKey(minDate);
-
-      // FORCE FWD to be the earliest shift selected
-      if (newShifts.length > 0) {
-          const sorted = [...newShifts].sort((a, b) => a.date.localeCompare(b.date));
-          const earliestShiftDate = getSafeDateFromKey(sorted[0].date);
-          
-          // Ensure FWD is not before minDate
-          if (isBefore(earliestShiftDate, minDate)) {
-             finalFWD = formatDateKey(minDate);
-          } else {
-             finalFWD = sorted[0].date;
-          }
-      }
-
-      const updatedDetails = { ...existingDetails, firstWorkingDay: finalFWD } as ShopperDetails;
-
-      if (idx >= 0) newSelections[idx] = { ...newSelections[idx], shifts: newShifts, details: updatedDetails };
-      else newSelections.push({ name: currentName, shifts: newShifts, details: updatedDetails });
-      
-      setSelections(newSelections);
-  };
-  
-  const handleSetFirstWorkingDay = (dateStr: string) => {
-      const currentName = shopperNames[currentShopperIndex];
-      const shopperData = selections.find(s => s.name === currentName);
-      
-      // Find the shift on this date to validate it
-      const shiftOnDate = shopperData?.shifts.find(s => s.date === dateStr);
-      if (shiftOnDate) {
-          const validTypes = [ShiftTime.MORNING, ShiftTime.AFTERNOON];
-          if (!validTypes.includes(shiftOnDate.time)) {
-              alert(`Cannot set this date as First Working Day.\n\nThe shift on ${format(getSafeDateFromKey(dateStr), 'MMM do')} is '${shiftOnDate.time.split(' ')[0]}'.\n\nFirst working day must be Morning or Afternoon.`);
-              return;
-          }
-      }
-
-      const selectedDate = getSafeDateFromKey(dateStr);
-      const minDate = getShopperMinDate();
-      
-      if (isBefore(selectedDate, minDate)) {
-         alert(`First working day must be after ${format(subDays(minDate, 1), 'MMM do')}.`);
-         return;
-      }
-
-      const newSelections = [...selections];
-      const idx = newSelections.findIndex(s => s.name === currentName);
-      const details = idx >= 0 ? newSelections[idx].details || {} : { usePicnicBus: false, civilStatus: 'Single', clothingSize: 'M', shoeSize: '40', gloveSize: '8 (M)', isRandstad: false, address: '' };
-      const newDetails = { ...details, firstWorkingDay: dateStr } as ShopperDetails;
-      
-      if (idx >= 0) newSelections[idx] = { ...newSelections[idx], details: newDetails };
-      else newSelections.push({ name: currentName, shifts: [], details: newDetails });
-      setSelections(newSelections);
+    
+    // Update State
+    const newSelections = [...selections];
+    const idx = newSelections.findIndex(s => s.name === currentName);
+    if (idx >= 0) newSelections[idx] = { ...prevData, shifts: newShifts };
+    setSelections(newSelections);
   };
 
   const handleAAWizardSubmit = () => {
       const { weekday, weekend } = aaSelection;
+
+      // NEW: Check if selection is complete
+      if (weekday.dayIndex === null || weekday.time === null || weekend.dayIndex === null || weekend.time === null) {
+          alert("⚠️ Missing Selection!\n\nPlease select one Weekday shift AND one Weekend shift to continue.");
+          return;
+      }
+
       const range = getShopperAllowedRange();
       const newShifts: ShopperShift[] = [];
       let currentDate = range.start;
       const minDate = getShopperMinDate();
       
       while (currentDate <= range.end) {
-          // SKIP if too soon
-          if (isBefore(currentDate, minDate)) {
-             currentDate = addDays(currentDate, 1);
-             continue;
-          }
-
+          if (isBefore(currentDate, minDate)) { currentDate = addDays(currentDate, 1); continue; }
           const dayIndex = getDay(currentDate);
           const dateStr = formatDateKey(currentDate);
-          
           const checkAvailability = (t: ShiftTime) => {
               const dayConfig = adminAvailability[dateStr];
-              if (!dayConfig) return true; // Available if no config
-              if (!dayConfig[t]) return true; // Available if no restriction on time
+              if (!dayConfig) return true;
+              if (!dayConfig[t]) return true;
               return dayConfig[t]?.includes(ShiftType.AA) ?? true;
           };
-
           if (dayIndex === weekday.dayIndex && weekday.time && checkAvailability(weekday.time)) {
              newShifts.push({ date: dateStr, time: weekday.time, type: ShiftType.AA });
           }
-          
           if (dayIndex === weekend.dayIndex && weekend.time && checkAvailability(weekend.time)) {
              newShifts.push({ date: dateStr, time: weekend.time, type: ShiftType.AA });
           }
           currentDate = addDays(currentDate, 1);
       }
 
-      // --- CRITICAL FIX: Validate that shifts were ACTUALLY generated ---
-      // This prevents the case where a shopper selects a day that the Admin has completely blocked out.
+      // Basic Validation that shifts were generated
+      const hasWeekdayAA = newShifts.some(s => { const d = getDay(getSafeDateFromKey(s.date)); return d >= 1 && d <= 5; });
+      const hasWeekendAA = newShifts.some(s => { const d = getDay(getSafeDateFromKey(s.date)); return d === 0 || d === 6; });
+
+      if (!hasWeekdayAA) { alert("Selection Invalid: No available dates found for your selected Weekday."); return; }
+      if (!hasWeekendAA) { alert("Selection Invalid: No available dates found for your selected Weekend."); return; }
+
+      // Update State & Move to FWD Selection
+      const currentName = shopperNames[currentShopperIndex];
+      const newSelections = [...selections];
+      const idx = newSelections.findIndex(s => s.name === currentName);
+      const existingDetails = idx >= 0 ? newSelections[idx].details || {} : { usePicnicBus: false, civilStatus: 'Single', clothingSize: 'M', shoeSize: '40', gloveSize: '8 (M)', isRandstad: false, address: '' };
       
-      const hasWeekdayAA = newShifts.some(s => {
-          const d = getDay(getSafeDateFromKey(s.date));
-          return d >= 1 && d <= 5 && s.type === ShiftType.AA;
-      });
-
-      const hasWeekendAA = newShifts.some(s => {
-          const d = getDay(getSafeDateFromKey(s.date));
-          return (d === 0 || d === 6) && s.type === ShiftType.AA;
-      });
-
-      if (!hasWeekdayAA) {
-          alert("Selection Invalid: No available dates found for your selected Weekday in the current period. This might be due to admin restrictions. Please select a different Weekday.");
-          return;
-      }
-
-      if (!hasWeekendAA) {
-          alert("Selection Invalid: No available dates found for your selected Weekend in the current period. Please select a different Weekend day.");
-          return;
-      }
-
-      // --- NEW: Validate First Working Day on generated shifts ---
-      const fwdCheck = validateFirstWorkingDayRule(newShifts);
-      if (!fwdCheck.valid) {
-          alert(`Cannot apply this schedule.\n\nBased on your selections, your first working day would be invalid.\n\n${fwdCheck.message}\n\nPlease select a different weekday/weekend combination or time.`);
-          return;
-      }
-
-      updateShopperSelections(newShifts);
-      setShopperStep(ShopperStep.STANDARD_SELECTION);
+      const newShopperData = { name: currentName, shifts: newShifts, details: existingDetails };
+      if (idx >= 0) newSelections[idx] = newShopperData;
+      else newSelections.push(newShopperData);
+      
+      setSelections(newSelections);
+      setShopperStep(ShopperStep.FWD_SELECTION); // NEW STEP
   };
 
   const handleNextShopperClick = () => setShowDetailsModal(true);
@@ -759,19 +629,18 @@ function App() {
     const idx = newSelections.findIndex(s => s.name === currentName);
     const existing = idx >= 0 ? newSelections[idx] : { name: currentName, shifts: [], details: {} };
     const updated = { ...existing, details: { ...(existing.details || {}), ...tempDetails } };
-
     if (idx >= 0) newSelections[idx] = updated;
     else newSelections.push(updated);
-    
     setSelections(newSelections);
     setShowDetailsModal(false);
     setMode(AppMode.SUMMARY);
   };
 
   // --------------------------------------------------------------------------
-  // Admin Renderers
+  // Renderers
   // --------------------------------------------------------------------------
 
+  // ... (Admin Renderers Unchanged) ...
   const renderAdminDashboard = () => (
       <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in">
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
@@ -1059,7 +928,7 @@ function App() {
           <div className="flex gap-2">
               {adminWizardStep !== AdminWizardStep.DASHBOARD && (
                   <Button variant="secondary" onClick={() => setAdminWizardStep(AdminWizardStep.DASHBOARD)} className="text-sm">
-                      Exit
+                      Back
                   </Button>
               )}
               <Button onClick={() => setMode(AppMode.SHOPPER_SETUP)} className="bg-gray-800 text-white hover:bg-gray-900 text-sm">
@@ -1246,7 +1115,7 @@ function App() {
       };
 
       return (
-          <div className="h-full bg-gray-50 p-4 md:p-6 overflow-y-auto">
+          <div className="bg-gray-50 p-4 md:p-6">
               <div className="max-w-3xl mx-auto space-y-6">
                   {/* Instructions */}
                   <div className="bg-red-50 border border-red-100 p-4 rounded-xl flex gap-3">
@@ -1386,7 +1255,6 @@ function App() {
                   <div className="pt-6">
                       <Button 
                           fullWidth 
-                          disabled={!isComplete} 
                           onClick={handleAAWizardSubmit}
                           className="py-4 text-lg shadow-xl"
                       >
@@ -1404,15 +1272,15 @@ function App() {
   const renderShopperFlow = () => {
     const currentName = shopperNames[currentShopperIndex];
     const isStepAA = shopperStep === ShopperStep.AA_SELECTION;
+    const isStepFWD = shopperStep === ShopperStep.FWD_SELECTION;
     const isStepStd = shopperStep === ShopperStep.STANDARD_SELECTION;
     
-    // Quick Stats
     const currentShopperData = selections.find(s => s.name === currentName);
     const aaCount = currentShopperData?.shifts.filter(s => s.type === ShiftType.AA).length || 0;
     const stdCount = currentShopperData?.shifts.filter(s => s.type === ShiftType.STANDARD).length || 0;
 
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col">
+      <div className="h-[100dvh] bg-gray-50 flex flex-col overflow-hidden">
         {/* Header */}
         <div className="bg-white px-6 py-4 shadow-sm border-b sticky top-0 z-20 flex justify-between items-center shrink-0">
           <div>
@@ -1421,11 +1289,15 @@ function App() {
             </h2>
             <div className="flex items-center gap-2 text-sm text-gray-500">
                <span className={`px-2 py-0.5 rounded-full font-bold text-xs ${isStepAA ? 'bg-red-100 text-red-700' : 'bg-gray-100'}`}>
-                 1. Always Available
+                 1. AA Shifts
+               </span>
+               <ChevronRight className="w-3 h-3" />
+               <span className={`px-2 py-0.5 rounded-full font-bold text-xs ${isStepFWD ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100'}`}>
+                 2. Start Date
                </span>
                <ChevronRight className="w-3 h-3" />
                <span className={`px-2 py-0.5 rounded-full font-bold text-xs ${isStepStd ? 'bg-green-100 text-green-700' : 'bg-gray-100'}`}>
-                 2. Standard Shifts
+                 3. Standard
                </span>
             </div>
           </div>
@@ -1435,8 +1307,8 @@ function App() {
                 <span>Selected AA: <strong className="text-red-600">{aaCount}</strong></span>
                 <span>Selected Standard: <strong className="text-green-600">{stdCount}</strong></span>
              </div>
-             {/* Hide Details button in AA step to focus on Wizard */}
-             {!isStepAA && (
+             {/* Hide Details button until later steps */}
+             {isStepStd && (
                  <Button variant="outline" onClick={() => setShowDetailsModal(true)} className="text-sm">
                     Details
                  </Button>
@@ -1445,77 +1317,91 @@ function App() {
         </div>
 
         {/* Content - CONDITIONAL RENDERING */}
-        <div className="flex-1 overflow-y-auto">
-          {isStepAA ? (
-              // RENDER WIZARD FOR AA STEP
-              renderAAWizard()
-          ) : (
-              // RENDER CALENDAR FOR STANDARD STEP
+        <div ref={flowScrollContainerRef} className="flex-1 overflow-y-auto">
+          {isStepAA && renderAAWizard()}
+          
+          {isStepFWD && (
               <div className="p-4 md:p-6">
-                  {/* Instructions for Standard */}
                   <div className="max-w-5xl mx-auto mb-6">
-                     <div className="p-4 rounded-xl border flex gap-4 bg-green-50 border-green-100">
-                        <div className="p-2 rounded-lg h-fit bg-white text-green-600">
-                           <CheckCircle className="w-5 h-5" />
+                     <div className="p-4 rounded-xl border flex gap-4 bg-yellow-50 border-yellow-100">
+                        <div className="p-2 rounded-lg h-fit bg-white text-yellow-600">
+                           <PlayCircle className="w-5 h-5" />
                         </div>
                         <div>
-                           <h3 className="font-bold text-green-800">
-                              Select "Standard" Shifts
+                           <h3 className="font-bold text-yellow-800">
+                              When is your First Day?
                            </h3>
-                           <p className="text-sm mt-1 text-green-600">
-                              Tap individual dates to pick up standard shifts. Watch out for rest times!
+                           <p className="text-sm mt-1 text-yellow-700">
+                              Please select the exact day you will start working. 
+                              <strong> Must be a Morning or Afternoon shift.</strong>
                            </p>
                         </div>
+                     </div>
+                  </div>
+                  
+                  <CalendarView 
+                    mode="SHOPPER"
+                    step={1}
+                    isFWDSelection={true} // Special mode
+                    adminAvailability={adminAvailability}
+                    currentShopperShifts={currentShopperData?.shifts}
+                    firstWorkingDay={currentShopperData?.details?.firstWorkingDay}
+                    onShopperToggle={handleFWDSelection} // Specific handler
+                  />
+              </div>
+          )}
+
+          {isStepStd && (
+              <div className="p-4 md:p-6">
+                  <div className="max-w-5xl mx-auto mb-6">
+                     <div className="p-4 rounded-xl border flex gap-4 bg-green-50 border-green-100 flex-col md:flex-row items-start md:items-center justify-between">
+                        <div className="flex gap-4">
+                            <div className="p-2 rounded-lg h-fit bg-white text-green-600">
+                               <CheckCircle className="w-5 h-5" />
+                            </div>
+                            <div>
+                               <h3 className="font-bold text-green-800">
+                                  Select Standard Shifts
+                               </h3>
+                               <p className="text-sm mt-1 text-green-600">
+                                  Select shifts for your first 2 weeks based on your start date.
+                               </p>
+                            </div>
+                        </div>
+                        <button 
+                            onClick={() => setShopperStep(ShopperStep.FWD_SELECTION)}
+                            className="text-xs font-bold text-green-600 underline hover:text-green-800 mt-2 md:mt-0"
+                        >
+                            Change Start Date
+                        </button>
                      </div>
                   </div>
 
                   <CalendarView 
                     mode="SHOPPER"
-                    step={1}
+                    step={2}
                     adminAvailability={adminAvailability}
                     currentShopperShifts={currentShopperData?.shifts}
                     firstWorkingDay={currentShopperData?.details?.firstWorkingDay}
-                    onShopperToggle={handleShopperToggle}
-                    onSetFirstWorkingDay={handleSetFirstWorkingDay}
+                    onShopperToggle={handleStandardShiftToggle} // Standard handler
                   />
               </div>
           )}
         </div>
 
-        {/* Footer Actions - Only visible in STANDARD step, as Wizard has its own button */}
-        {!isStepAA && (
+        {/* Footer Actions */}
+        {isStepStd && (
             <div className="bg-white p-4 border-t sticky bottom-0 z-20 pb-8 md:pb-4">
                <div className="max-w-5xl mx-auto flex justify-between items-center">
                   <Button 
                     variant="secondary" 
-                    onClick={() => {
-                       // Resetting back to AA means resetting the wizard essentially
-                       setShopperStep(ShopperStep.AA_SELECTION);
-                    }}
+                    onClick={() => setShopperStep(ShopperStep.FWD_SELECTION)}
                   >
-                     Back to AA Wizard
+                     Back
                   </Button>
                   
                   <Button 
-                     onClick={() => {
-                        // --- CHECK: Ensure at least one Weekday AA and one Weekend AA exist before proceeding ---
-                        const aaShifts = currentShopperData?.shifts.filter(s => s.type === ShiftType.AA) || [];
-                        const hasWk = aaShifts.some(s => {
-                            const d = getDay(getSafeDateFromKey(s.date));
-                            return d >= 1 && d <= 5;
-                        });
-                        const hasWkend = aaShifts.some(s => {
-                            const d = getDay(getSafeDateFromKey(s.date));
-                            return d === 0 || d === 6;
-                        });
-
-                        if (!hasWk || !hasWkend) {
-                            alert("Incomplete Selection: You must have at least one Weekday AA and one Weekend AA selected.\n\nPlease check your selections.");
-                            return;
-                        }
-
-                        setShowDetailsModal(true);
-                     }} 
+                     onClick={() => setShowDetailsModal(true)} 
                      className="px-8"
                   >
                      Review & Finish <ArrowRight className="w-4 h-4 ml-2" />
@@ -1523,6 +1409,18 @@ function App() {
                </div>
             </div>
         )}
+
+        {/* MOBILE POPUP INSTRUCTION */}
+        <MobileInstructionModal 
+            isOpen={showMobileInstructions}
+            onClose={() => setShowMobileInstructions(false)}
+            step={shopperStep === ShopperStep.FWD_SELECTION ? 'FWD' : 'STANDARD'}
+            title={shopperStep === ShopperStep.FWD_SELECTION ? 'When do you start?' : 'Select Your Shifts'}
+            message={shopperStep === ShopperStep.FWD_SELECTION 
+                ? "Please select the exact day you will have your first shift. It must be a Morning or Afternoon shift."
+                : (<span>Please select your standard shifts for the <strong>first 2 working weeks</strong> starting from your selected First Day.</span>)
+            }
+        />
       </div>
     );
   };
@@ -1531,7 +1429,20 @@ function App() {
     const shopper = selections[currentShopperIndex];
     if (!shopper) return null;
 
-    const shifts = [...shopper.shifts].sort((a, b) => a.date.localeCompare(b.date));
+    let shifts = [...shopper.shifts];
+
+    // Filter shifts to show only relevant range (FWD -> End of next week)
+    // This prevents generating a huge list of AA shifts for future weeks in the recap
+    if (shopper.details?.firstWorkingDay) {
+        const fwdDate = getSafeDateFromKey(shopper.details.firstWorkingDay);
+        // Limit: Sunday of the week following the FWD week
+        const limitDate = endOfWeek(addWeeks(fwdDate, 1), { weekStartsOn: 1 });
+        const limitKey = formatDateKey(limitDate);
+        
+        shifts = shifts.filter(s => s.date >= shopper.details!.firstWorkingDay! && s.date <= limitKey);
+    }
+
+    shifts.sort((a, b) => a.date.localeCompare(b.date));
 
     // Helper to get short time + hours for display
     // e.g., "Afternoon (14:55 - 00:00)" -> { name: "Afternoon", hours: "14:55 - 00:00" }
@@ -1805,24 +1716,18 @@ function App() {
   };
 
   return (
-    <>
-      {/* 
-        Modified Render Logic: 
-        1. If Admin Mode + Not Authenticated -> Show Login
-        2. Otherwise -> Show the specific Mode Component
-      */}
-      {mode === AppMode.ADMIN && !isAuthenticated ? (
-          renderLogin()
-      ) : (
-          <>
-            {mode === AppMode.SHOPPER_SETUP && renderShopperSetup()}
-            {mode === AppMode.ADMIN && isAuthenticated && renderAdmin()}
-            {mode === AppMode.SHOPPER_FLOW && renderShopperFlow()}
-            {mode === AppMode.SUMMARY && renderSummary()}
-            {renderDetailsModal()}
-          </>
-      )}
-    </>
+    <div className="font-sans text-gray-900 selection:bg-purple-100 selection:text-purple-900">
+        {mode === AppMode.SHOPPER_SETUP && renderShopperSetup()}
+        
+        {mode === AppMode.SHOPPER_FLOW && renderShopperFlow()}
+        
+        {mode === AppMode.SUMMARY && renderSummary()}
+        
+        {mode === AppMode.ADMIN && (!isAuthenticated ? renderLogin() : renderAdmin())}
+
+        {/* Details Modal Overlay */}
+        {renderDetailsModal()}
+    </div>
   );
 }
 

@@ -1,5 +1,7 @@
 import { ShiftTime } from './types';
-import { format, startOfWeek, addWeeks, endOfWeek, addDays, startOfToday } from 'date-fns';
+import { format, addWeeks, endOfWeek, addDays } from 'date-fns';
+import startOfWeek from 'date-fns/startOfWeek';
+import startOfToday from 'date-fns/startOfToday';
 
 export const SHIFT_TIMES = [
   ShiftTime.OPENING,
@@ -32,13 +34,13 @@ export const getShopperMinDate = () => {
   return addDays(startOfToday(), MIN_DAYS_TO_START);
 };
 
-// Helper to get the allowed range (Current Week + Next 2 Weeks = 3 Weeks Total)
+// Helper to get the allowed range (Current Week + 8 Weeks into the future to allow future starts)
 export const getShopperAllowedRange = () => {
   const now = new Date();
   // Start Monday of current week
   const start = startOfWeek(now, { weekStartsOn: 1 });
-  // End Sunday of the week after next (Current + 2 weeks)
-  const end = endOfWeek(addWeeks(start, 2), { weekStartsOn: 1 });
+  // End Sunday of the 8th week from now (allows picking a start date ~2 months out)
+  const end = endOfWeek(addWeeks(start, 8), { weekStartsOn: 1 });
   
   return { start, end };
 };

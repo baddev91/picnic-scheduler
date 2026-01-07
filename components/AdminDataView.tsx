@@ -1,7 +1,11 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../supabaseClient';
 import { Download, Search, Trash2, User, Calendar, MapPin, Bus, RefreshCw, Activity, Pencil, X, Plus, Save, CheckCircle, AlertCircle, RotateCcw } from 'lucide-react';
-import { format, eachDayOfInterval, min, max, parseISO, isSameDay, startOfToday, addDays } from 'date-fns';
+import { format, eachDayOfInterval, isSameDay, addDays } from 'date-fns';
+import min from 'date-fns/min';
+import max from 'date-fns/max';
+import parseISO from 'date-fns/parseISO';
+import startOfToday from 'date-fns/startOfToday';
 import { ShiftType, ShiftTime } from '../types';
 import { SHIFT_TIMES } from '../constants';
 import { Button } from './Button';
@@ -369,7 +373,7 @@ export const AdminDataView: React.FC = () => {
                                       onChange={e => setEditFormDetails({...editFormDetails, clothingSize: e.target.value})}
                                       className="w-full p-2 rounded border border-gray-300 text-sm"
                                   >
-                                      {['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'].map(s => <option key={s} value={s}>{s}</option>)}
+                                      {['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL'].map(s => <option key={s} value={s}>{s}</option>)}
                                   </select>
                               </div>
                               <div className="space-y-1">
@@ -379,6 +383,35 @@ export const AdminDataView: React.FC = () => {
                                       onChange={e => setEditFormDetails({...editFormDetails, shoeSize: e.target.value})}
                                       className="w-full p-2 rounded border border-gray-300 text-sm"
                                   />
+                              </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                              <div className="space-y-1">
+                                  <label className="text-xs font-semibold text-gray-500">Gloves</label>
+                                  <input 
+                                      value={editFormDetails.gloveSize || ''}
+                                      onChange={e => setEditFormDetails({...editFormDetails, gloveSize: e.target.value})}
+                                      className="w-full p-2 rounded border border-gray-300 text-sm"
+                                  />
+                              </div>
+                              <div className="space-y-1">
+                                  <label className="text-xs font-semibold text-gray-500">Civil Status</label>
+                                  <select 
+                                      value={editFormDetails.civilStatus || 'Single'}
+                                      onChange={e => setEditFormDetails({...editFormDetails, civilStatus: e.target.value})}
+                                      className="w-full p-2 rounded border border-gray-300 text-sm"
+                                  >
+                                      <option value="Cohabit">Cohabit</option>
+                                      <option value="Divorced">Divorced</option>
+                                      <option value="Engaged">Engaged</option>
+                                      <option value="Legal separation">Legal separation</option>
+                                      <option value="Married">Married</option>
+                                      <option value="Registered partnership">Registered partnership</option>
+                                      <option value="Single">Single</option>
+                                      <option value="Unknown">Unknown</option>
+                                      <option value="Widowed">Widowed</option>
+                                  </select>
                               </div>
                           </div>
 

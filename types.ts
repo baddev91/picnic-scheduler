@@ -1,5 +1,3 @@
-
-
 export enum ShiftTime {
   OPENING = 'Opening (04:00 - 13:00)',
   MORNING = 'Morning (06:00 - 15:00)',
@@ -51,8 +49,9 @@ export enum AppMode {
 
 export enum ShopperStep {
   AA_SELECTION = 0,
-  STANDARD_SELECTION = 1,
-  DETAILS = 2
+  FWD_SELECTION = 1, // New Step: First Working Day Selection
+  STANDARD_SELECTION = 2,
+  DETAILS = 3
 }
 
 export enum AdminWizardStep {
