@@ -3,7 +3,7 @@ import { AppMode, ShiftTime, ShiftType, ShopperData, ShopperShift, AdminAvailabi
 import { SHIFT_TIMES, formatDateKey, getShopperAllowedRange, getShopperMinDate } from './constants';
 import { Button } from './components/Button';
 import { CalendarView } from './components/CalendarView';
-import { Shield, Download, ArrowRight, UserPlus, CheckCircle, AlertCircle, Save, Trash2, History, XCircle, Lock, Bus, Heart, Shirt, Footprints, Hand, MapPin, Building2, Settings2, CalendarDays, Undo2, PlayCircle, Plus, Check, User, Ban, CloudUpload, Link, Share2, LogIn, RefreshCw, FileDown, Copy, CalendarRange, ChevronRight, ChevronLeft, Star, Table, Sun, Moon, Sunrise, Sunset, Coffee, KeyRound, X, ClipboardList, Clock, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Shield, Download, ArrowRight, UserPlus, CheckCircle, AlertCircle, Save, Trash2, History, XCircle, Lock, Bus, Heart, Shirt, Footprints, Hand, MapPin, Building2, Settings2, CalendarDays, Undo2, PlayCircle, Plus, Check, User, Ban, CloudUpload, Link, Share2, LogIn, RefreshCw, FileDown, Copy, CalendarRange, ChevronRight, ChevronLeft, Star, Table, Sun, Moon, Sunrise, Sunset, Coffee, KeyRound, X, ClipboardList, Clock, ToggleLeft, ToggleRight, Camera } from 'lucide-react';
 import { isWeekend, startOfWeek, addDays, subDays, getDay, isSameDay, format, isWithinInterval, addWeeks, endOfWeek, nextMonday, startOfToday, isBefore, isAfter } from 'date-fns';
 import { supabase } from './supabaseClient';
 import { AdminDataView } from './components/AdminDataView';
@@ -1223,6 +1223,28 @@ function App() {
       const isComplete = aaSelection.weekday.dayIndex !== null && aaSelection.weekday.time !== null &&
                          aaSelection.weekend.dayIndex !== null && aaSelection.weekend.time !== null;
 
+      // 1. Check if the entire DAY is valid (has at least one AA slot)
+      const isDayValid = (dayIndex: number) => {
+          if (!savedCloudTemplate || Object.keys(savedCloudTemplate).length === 0) return true; // Default open if no config
+          const dayConfig = savedCloudTemplate[dayIndex];
+          if (!dayConfig) return false; // Should exist if template is populated
+          
+          // Check if ANY shift in this day has 'Always Available'
+          return SHIFT_TIMES.some(time => dayConfig[time]?.includes(ShiftType.AA));
+      };
+
+      // 2. Check if a specific TIME is valid for the selected day
+      const isShiftValidForDay = (dayIndex: number | null, shift: ShiftTime) => {
+          if (dayIndex === null) return false; // Can't pick time if no day selected
+          if (!savedCloudTemplate || Object.keys(savedCloudTemplate).length === 0) return true;
+          
+          const dayConfig = savedCloudTemplate[dayIndex];
+          if (!dayConfig) return false;
+
+          const allowedTypes = dayConfig[shift];
+          return allowedTypes?.includes(ShiftType.AA);
+      };
+
       return (
           <div className="h-full bg-gray-50 p-4 md:p-6 overflow-y-auto">
               <div className="max-w-3xl mx-auto space-y-6">
@@ -1247,37 +1269,55 @@ function App() {
                           </h4>
                           
                           <div className="grid grid-cols-2 gap-2">
-                              {WEEKDAYS.map(d => (
-                                  <button
-                                      key={d.index}
-                                      onClick={() => setAaSelection(prev => ({ ...prev, weekday: { ...prev.weekday, dayIndex: d.index } }))}
-                                      className={`py-2 px-3 rounded-lg text-sm font-medium border-2 transition-all ${
-                                          aaSelection.weekday.dayIndex === d.index 
-                                          ? 'border-purple-600 bg-purple-50 text-purple-700' 
-                                          : 'border-transparent bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                      }`}
-                                  >
-                                      {d.name}
-                                  </button>
-                              ))}
+                              {WEEKDAYS.map(d => {
+                                  const enabled = isDayValid(d.index);
+                                  return (
+                                    <button
+                                        key={d.index}
+                                        disabled={!enabled}
+                                        onClick={() => setAaSelection(prev => ({ 
+                                            ...prev, 
+                                            weekday: { dayIndex: d.index, time: null } // Reset time when day changes
+                                        }))}
+                                        className={`py-2 px-3 rounded-lg text-sm font-medium border-2 transition-all ${
+                                            !enabled 
+                                            ? 'bg-gray-50 border-gray-100 text-gray-300 cursor-not-allowed decoration-slice' 
+                                            : aaSelection.weekday.dayIndex === d.index 
+                                                ? 'border-purple-600 bg-purple-50 text-purple-700' 
+                                                : 'border-transparent bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                        }`}
+                                    >
+                                        {d.name} {!enabled && <Ban className="w-3 h-3 inline ml-1 opacity-50" />}
+                                    </button>
+                                  );
+                              })}
                           </div>
 
                           <div className="space-y-2 pt-2 border-t">
                                <p className="text-xs font-bold text-gray-400 uppercase">Preferred Time</p>
                                <div className="grid grid-cols-1 gap-2">
-                                  {SHIFT_TIMES.map(t => (
-                                      <button
-                                          key={t}
-                                          onClick={() => setAaSelection(prev => ({ ...prev, weekday: { ...prev.weekday, time: t } }))}
-                                          className={`py-2 px-3 rounded-lg text-sm text-left font-medium border-2 transition-all ${
-                                              aaSelection.weekday.time === t
-                                              ? 'border-purple-600 bg-purple-50 text-purple-700'
-                                              : 'border-gray-100 bg-white text-gray-600 hover:border-gray-200'
-                                          }`}
-                                      >
-                                          {t.split('(')[0]} <span className="text-xs text-gray-400 font-normal block">{t.match(/\((.*?)\)/)?.[1]}</span>
-                                      </button>
-                                  ))}
+                                  {SHIFT_TIMES.map(t => {
+                                      const isEnabled = isShiftValidForDay(aaSelection.weekday.dayIndex, t);
+                                      return (
+                                          <button
+                                              key={t}
+                                              disabled={!isEnabled}
+                                              onClick={() => setAaSelection(prev => ({ ...prev, weekday: { ...prev.weekday, time: t } }))}
+                                              className={`py-2 px-3 rounded-lg text-sm text-left font-medium border-2 transition-all ${
+                                                  !isEnabled 
+                                                  ? 'border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed opacity-60'
+                                                  : aaSelection.weekday.time === t
+                                                      ? 'border-purple-600 bg-purple-50 text-purple-700'
+                                                      : 'border-gray-100 bg-white text-gray-600 hover:border-gray-200'
+                                              }`}
+                                          >
+                                              <div className="flex justify-between w-full items-center">
+                                                  <span>{t.split('(')[0]} <span className="text-xs font-normal block">{t.match(/\((.*?)\)/)?.[1]}</span></span>
+                                                  {!isEnabled && <Ban className="w-4 h-4 text-gray-300" />}
+                                              </div>
+                                          </button>
+                                      );
+                                  })}
                                </div>
                           </div>
                       </div>
@@ -1289,37 +1329,55 @@ function App() {
                           </h4>
                           
                           <div className="grid grid-cols-2 gap-2">
-                              {WEEKENDS.map(d => (
-                                  <button
-                                      key={d.index}
-                                      onClick={() => setAaSelection(prev => ({ ...prev, weekend: { ...prev.weekend, dayIndex: d.index } }))}
-                                      className={`py-2 px-3 rounded-lg text-sm font-medium border-2 transition-all ${
-                                          aaSelection.weekend.dayIndex === d.index 
-                                          ? 'border-purple-600 bg-purple-50 text-purple-700' 
-                                          : 'border-transparent bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                      }`}
-                                  >
-                                      {d.name}
-                                  </button>
-                              ))}
+                              {WEEKENDS.map(d => {
+                                  const enabled = isDayValid(d.index);
+                                  return (
+                                    <button
+                                        key={d.index}
+                                        disabled={!enabled}
+                                        onClick={() => setAaSelection(prev => ({ 
+                                            ...prev, 
+                                            weekend: { dayIndex: d.index, time: null } // Reset time when day changes
+                                        }))}
+                                        className={`py-2 px-3 rounded-lg text-sm font-medium border-2 transition-all ${
+                                            !enabled 
+                                            ? 'bg-gray-50 border-gray-100 text-gray-300 cursor-not-allowed decoration-slice' 
+                                            : aaSelection.weekend.dayIndex === d.index 
+                                                ? 'border-purple-600 bg-purple-50 text-purple-700' 
+                                                : 'border-transparent bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                        }`}
+                                    >
+                                        {d.name} {!enabled && <Ban className="w-3 h-3 inline ml-1 opacity-50" />}
+                                    </button>
+                                  );
+                              })}
                           </div>
 
                           <div className="space-y-2 pt-2 border-t">
                                <p className="text-xs font-bold text-gray-400 uppercase">Preferred Time</p>
                                <div className="grid grid-cols-1 gap-2">
-                                  {SHIFT_TIMES.map(t => (
-                                      <button
-                                          key={t}
-                                          onClick={() => setAaSelection(prev => ({ ...prev, weekend: { ...prev.weekend, time: t } }))}
-                                          className={`py-2 px-3 rounded-lg text-sm text-left font-medium border-2 transition-all ${
-                                              aaSelection.weekend.time === t
-                                              ? 'border-purple-600 bg-purple-50 text-purple-700'
-                                              : 'border-gray-100 bg-white text-gray-600 hover:border-gray-200'
-                                          }`}
-                                      >
-                                          {t.split('(')[0]} <span className="text-xs text-gray-400 font-normal block">{t.match(/\((.*?)\)/)?.[1]}</span>
-                                      </button>
-                                  ))}
+                                  {SHIFT_TIMES.map(t => {
+                                      const isEnabled = isShiftValidForDay(aaSelection.weekend.dayIndex, t);
+                                      return (
+                                          <button
+                                              key={t}
+                                              disabled={!isEnabled}
+                                              onClick={() => setAaSelection(prev => ({ ...prev, weekend: { ...prev.weekend, time: t } }))}
+                                              className={`py-2 px-3 rounded-lg text-sm text-left font-medium border-2 transition-all ${
+                                                  !isEnabled 
+                                                  ? 'border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed opacity-60'
+                                                  : aaSelection.weekend.time === t
+                                                      ? 'border-purple-600 bg-purple-50 text-purple-700'
+                                                      : 'border-gray-100 bg-white text-gray-600 hover:border-gray-200'
+                                              }`}
+                                          >
+                                              <div className="flex justify-between w-full items-center">
+                                                  <span>{t.split('(')[0]} <span className="text-xs font-normal block">{t.match(/\((.*?)\)/)?.[1]}</span></span>
+                                                  {!isEnabled && <Ban className="w-4 h-4 text-gray-300" />}
+                                              </div>
+                                          </button>
+                                      );
+                                  })}
                                </div>
                           </div>
                       </div>
@@ -1475,21 +1533,32 @@ function App() {
 
     const shifts = [...shopper.shifts].sort((a, b) => a.date.localeCompare(b.date));
 
-    // Helper to shorten time text for mobile
-    const getShortTime = (t: string) => t.split(' ')[0].replace('(', '').replace(')', '');
+    // Helper to get short time + hours for display
+    // e.g., "Afternoon (14:55 - 00:00)" -> { name: "Afternoon", hours: "14:55 - 00:00" }
+    const getShiftDetails = (t: string) => {
+        const parts = t.match(/(.*?)\s\((.*?)\)/);
+        if (parts) {
+            return { name: parts[1], hours: parts[2] };
+        }
+        return { name: t.split(' ')[0], hours: '' };
+    };
 
     return (
         <div className="h-[100dvh] bg-gray-50 flex flex-col items-center justify-center p-2 sm:p-4 overflow-hidden">
             <div className="w-full max-w-md bg-white rounded-2xl shadow-xl flex flex-col h-full max-h-[900px] border border-gray-100 overflow-hidden">
                 
-                {/* 1. Header (Ultra Compact) */}
-                <div className="bg-gray-900 px-4 py-3 text-white flex justify-between items-center shrink-0">
-                    <h2 className="text-base font-bold flex items-center gap-2">
-                        <CheckCircle className="w-4 h-4 text-green-400" /> Confirm Selection
-                    </h2>
-                    {isSyncing ? <RefreshCw className="w-4 h-4 animate-spin text-gray-400" /> : 
-                     syncStatus === 'success' ? <span className="text-xs bg-green-900/50 text-green-400 px-2 py-0.5 rounded font-bold">SAVED</span> : 
-                     <span className="text-xs text-gray-400">{shifts.length} Shifts</span>}
+                {/* 1. Header (Updated with Screenshot Instruction) */}
+                <div className="bg-gray-900 px-4 py-4 text-white flex justify-between items-center shrink-0">
+                    <div>
+                        <h2 className="text-xl font-bold flex items-center gap-2 text-white">
+                            <Camera className="w-6 h-6 text-yellow-400" />
+                            Take a Screenshot!
+                        </h2>
+                        <p className="text-xs text-gray-400 mt-0.5">Save your schedule now.</p>
+                    </div>
+                    {isSyncing ? <RefreshCw className="w-5 h-5 animate-spin text-gray-400" /> : 
+                     syncStatus === 'success' ? <span className="text-xs bg-green-900/50 text-green-400 px-2 py-1 rounded font-bold border border-green-800">SAVED</span> : 
+                     <span className="text-xs text-gray-400 font-mono bg-gray-800 px-2 py-1 rounded">{shifts.length} SHIFTS</span>}
                 </div>
 
                 {/* 2. Identity Section (Horizontal & Dense) */}
@@ -1520,6 +1589,8 @@ function App() {
                             {shifts.map((s, i) => {
                                 const dateObj = new Date(s.date);
                                 const isAA = s.type === ShiftType.AA;
+                                const { name, hours } = getShiftDetails(s.time);
+                                
                                 return (
                                     <div key={i} className={`relative flex flex-col items-center justify-center p-2 rounded-xl border shadow-sm text-center transition-all ${
                                         isAA 
@@ -1535,10 +1606,17 @@ function App() {
                                         <div className="text-sm font-black text-gray-800 leading-none mb-1">
                                             {format(dateObj, 'd')}
                                         </div>
-                                        <div className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full truncate max-w-full ${
+                                        
+                                        {/* Shift Name */}
+                                        <div className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full truncate max-w-full mb-0.5 ${
                                             isAA ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
                                         }`}>
-                                            {getShortTime(s.time)}
+                                            {name}
+                                        </div>
+
+                                        {/* Hours Display */}
+                                        <div className="text-[8px] font-medium text-gray-500">
+                                            {hours}
                                         </div>
                                     </div>
                                 );
