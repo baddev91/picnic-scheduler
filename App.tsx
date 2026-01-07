@@ -3,7 +3,7 @@ import { AppMode, ShiftTime, ShiftType, ShopperData, ShopperShift, AdminAvailabi
 import { SHIFT_TIMES, formatDateKey, getShopperAllowedRange, getShopperMinDate } from './constants';
 import { Button } from './components/Button';
 import { CalendarView } from './components/CalendarView';
-import { Shield, Download, ArrowRight, UserPlus, CheckCircle, AlertCircle, Save, Trash2, History, XCircle, Lock, Bus, Heart, Shirt, Footprints, Hand, MapPin, Building2, Settings2, CalendarDays, Undo2, PlayCircle, Plus, Check, User, Ban, CloudUpload, Link, Share2, LogIn, RefreshCw, FileDown, Copy, CalendarRange, ChevronRight, ChevronLeft, Star, Table, Sun, Moon, Sunrise, Sunset, Coffee, KeyRound, X, ClipboardList, Clock } from 'lucide-react';
+import { Shield, Download, ArrowRight, UserPlus, CheckCircle, AlertCircle, Save, Trash2, History, XCircle, Lock, Bus, Heart, Shirt, Footprints, Hand, MapPin, Building2, Settings2, CalendarDays, Undo2, PlayCircle, Plus, Check, User, Ban, CloudUpload, Link, Share2, LogIn, RefreshCw, FileDown, Copy, CalendarRange, ChevronRight, ChevronLeft, Star, Table, Sun, Moon, Sunrise, Sunset, Coffee, KeyRound, X, ClipboardList, Clock, ToggleLeft, ToggleRight } from 'lucide-react';
 import { isWeekend, startOfWeek, addDays, subDays, getDay, isSameDay, format, isWithinInterval, addWeeks, endOfWeek, nextMonday, startOfToday, isBefore, isAfter } from 'date-fns';
 import { supabase } from './supabaseClient';
 import { AdminDataView } from './components/AdminDataView';
@@ -21,12 +21,14 @@ function App() {
 
   // Auth State (Shopper)
   const [shopperPinConfig, setShopperPinConfig] = useState<string | null>(null); // The PIN stored in DB
+  const [isShopperAuthEnabled, setIsShopperAuthEnabled] = useState(true); // Is PIN check active?
   const [enteredShopperPin, setEnteredShopperPin] = useState('');
   const [isShopperVerified, setIsShopperVerified] = useState(false);
+  const [showShopperAuth, setShowShopperAuth] = useState(false); // Controls visibility of PIN screen
   const [adminShopperPinInput, setAdminShopperPinInput] = useState(''); // For Admin input
 
-  // App State
-  const [mode, setMode] = useState<AppMode>(AppMode.HOME);
+  // App State - DEFAULT TO SHOPPER_SETUP (Auto-start)
+  const [mode, setMode] = useState<AppMode>(AppMode.SHOPPER_SETUP);
   
   // Admin Wizard State
   const [adminWizardStep, setAdminWizardStep] = useState<AdminWizardStep>(AdminWizardStep.DASHBOARD);
@@ -105,17 +107,18 @@ function App() {
       }
   };
 
-  const saveShopperPinToSupabase = async (pin: string) => {
+  const saveShopperAuthSettings = async (pin: string, enabled: boolean) => {
     try {
         const { error } = await supabase
             .from('app_settings')
-            .upsert({ id: 'shopper_auth', value: { pin } });
+            .upsert({ id: 'shopper_auth', value: { pin, enabled } });
         
         if (error) {
-            alert("Error saving PIN");
+            alert("Error saving Auth Settings");
         } else {
             setShopperPinConfig(pin);
-            alert("Shopper PIN updated successfully!");
+            setIsShopperAuthEnabled(enabled);
+            alert("Security settings updated successfully!");
         }
     } catch (e) {
         console.error(e);
@@ -126,6 +129,71 @@ function App() {
   // Persistence & Initialization
   // --------------------------------------------------------------------------
 
+  // Extracted function to be reusable for refreshing
+  const loadRemoteConfig = useCallback(async () => {
+    try {
+        // Fetch Availability (Specific Dates)
+        const { data: availData } = await supabase
+            .from('app_settings')
+            .select('value')
+            .eq('id', 'admin_availability')
+            .single();
+        
+        if (availData?.value) {
+            let parsedValue = availData.value;
+            // Robust check: sometimes Supabase returns JSON as string depending on config
+            if (typeof parsedValue === 'string') {
+                try {
+                    parsedValue = JSON.parse(parsedValue);
+                } catch (e) {
+                    console.error("Failed to parse admin_availability JSON string", e);
+                }
+            }
+            setAdminAvailability(parsedValue);
+        }
+
+        // Fetch Weekly Template (Abstract Pattern)
+        const { data: templateData } = await supabase
+            .from('app_settings')
+            .select('value')
+            .eq('id', 'weekly_template')
+            .single();
+
+        if (templateData?.value) {
+            let parsedTemplate = templateData.value;
+            if (typeof parsedTemplate === 'string') {
+                 try { parsedTemplate = JSON.parse(parsedTemplate); } catch(e) {}
+            }
+            setSavedCloudTemplate(parsedTemplate);
+            setTempTemplate(parsedTemplate);
+        } else {
+            // Only if no cloud data, try local storage
+            try {
+              const savedTemplate = JSON.parse(localStorage.getItem(STORAGE_KEYS.TEMPLATE) || '{}');
+              if (Object.keys(savedTemplate).length > 0) setTempTemplate(savedTemplate);
+            } catch (e) { console.error(e); }
+        }
+
+        // Fetch Shopper PIN
+        const { data: pinData } = await supabase
+            .from('app_settings')
+            .select('value')
+            .eq('id', 'shopper_auth')
+            .single();
+        
+        if (pinData?.value) {
+            if (pinData.value.pin) {
+                setShopperPinConfig(pinData.value.pin);
+                setAdminShopperPinInput(pinData.value.pin);
+            }
+            // Check enabled status, default to true if undefined
+            setIsShopperAuthEnabled(pinData.value.enabled !== false);
+        }
+    } catch (err) {
+        console.error("Error loading remote config:", err);
+    }
+  }, []);
+
   useEffect(() => {
     // 1. URL Params Handling
     const params = new URLSearchParams(window.location.search);
@@ -133,68 +201,27 @@ function App() {
     
     if (urlMode === 'shopper') {
       setIsSelfService(true);
-      setIsAuthenticated(true); 
       setMode(AppMode.SHOPPER_SETUP);
+    } else if (urlMode === 'admin') {
+      setMode(AppMode.ADMIN);
     }
     
     if (urlMode) {
       window.history.replaceState({}, '', window.location.pathname);
     }
 
-    // 2. Load Remote Config (Supabase)
-    const loadRemoteConfig = async () => {
-        try {
-            // Fetch Availability (Specific Dates)
-            const { data: availData } = await supabase
-                .from('app_settings')
-                .select('value')
-                .eq('id', 'admin_availability')
-                .single();
-            
-            if (availData?.value) {
-                setAdminAvailability(availData.value);
-            }
-
-            // Fetch Weekly Template (Abstract Pattern)
-            const { data: templateData } = await supabase
-                .from('app_settings')
-                .select('value')
-                .eq('id', 'weekly_template')
-                .single();
-
-            if (templateData?.value) {
-                console.log("Loaded template from Supabase");
-                setSavedCloudTemplate(templateData.value);
-                // ALWAYS prioritize Cloud data over local storage for consistency
-                setTempTemplate(templateData.value);
-            } else {
-                console.log("No cloud template found, checking local storage...");
-                // Only if no cloud data, try local storage
-                try {
-                  const savedTemplate = JSON.parse(localStorage.getItem(STORAGE_KEYS.TEMPLATE) || '{}');
-                  if (Object.keys(savedTemplate).length > 0) setTempTemplate(savedTemplate);
-                } catch (e) { console.error(e); }
-            }
-
-            // Fetch Shopper PIN
-            const { data: pinData } = await supabase
-                .from('app_settings')
-                .select('value')
-                .eq('id', 'shopper_auth')
-                .single();
-            
-            if (pinData?.value?.pin) {
-                setShopperPinConfig(pinData.value.pin);
-                setAdminShopperPinInput(pinData.value.pin);
-            }
-        } catch (err) {
-            console.error("Error loading remote config:", err);
-        }
-    };
+    // 2. Load Config
     loadRemoteConfig();
 
     setIsInitialized(true);
-  }, []);
+  }, [loadRemoteConfig]);
+
+  // Refresh config when switching to shopper setup to ensure fresh data if admin just updated it
+  useEffect(() => {
+     if (mode === AppMode.SHOPPER_SETUP) {
+         loadRemoteConfig();
+     }
+  }, [mode, loadRemoteConfig]);
 
   useEffect(() => {
     if (!isInitialized) return;
@@ -210,12 +237,45 @@ function App() {
       setAdminShopperPinInput(pin);
   };
 
+  // Logic to actually start the flow (after pin check if needed)
+  const startShopperSession = () => {
+      // Calculate STRICT First Working Day (Today + 3 days)
+      const minDate = getShopperMinDate();
+      const calculatedFWD = formatDateKey(minDate);
+      
+      // Initialize Shopper Data immediately with auto-calculated First Working Day
+      const newShopper: ShopperData = {
+          name: tempNameInput.trim(),
+          shifts: [],
+          details: { ...tempDetails, firstWorkingDay: calculatedFWD }
+      };
+      
+      setSelections([newShopper]);
+      setShopperNames([tempNameInput.trim()]);
+      setMode(AppMode.SHOPPER_FLOW);
+      setShopperStep(ShopperStep.AA_SELECTION);
+      setShowShopperAuth(false);
+  };
+
   const handleVerifyShopperPin = () => {
       if (enteredShopperPin === shopperPinConfig) {
           setIsShopperVerified(true);
+          startShopperSession();
       } else {
           alert("Incorrect PIN");
           setEnteredShopperPin('');
+      }
+  };
+
+  const handleStartShopperClick = () => {
+      if (!tempNameInput.trim()) return;
+
+      // Logic: If PIN exists AND is Enabled AND not verified -> Show PIN
+      // Otherwise -> Go Straight In
+      if (shopperPinConfig && isShopperAuthEnabled && !isShopperVerified) {
+          setShowShopperAuth(true);
+      } else {
+          startShopperSession();
       }
   };
 
@@ -277,13 +337,12 @@ function App() {
     });
 
     setIsShopperVerified(false);
+    setShowShopperAuth(false);
     setSyncStatus('idle');
+    setTempNameInput('');
     
-    if (isSelfService) {
-        setMode(AppMode.SHOPPER_SETUP);
-    } else {
-        setMode(AppMode.HOME);
-    }
+    // Always go back to Shopper Setup (Home)
+    setMode(AppMode.SHOPPER_SETUP);
   };
 
   // --------------------------------------------------------------------------
@@ -378,12 +437,16 @@ function App() {
       const startDate = nextMonday(new Date());
       const newAvailability = { ...adminAvailability };
       
+      // CRITICAL FIX: Deep clone the template to ensure no reference sharing between dates
+      const safeTemplate = JSON.parse(JSON.stringify(tempTemplate));
+
       for (let i = 0; i < applyWeeks * 7; i++) {
          const currentLoopDate = addDays(startDate, i);
          const dateKey = formatDateKey(currentLoopDate);
          const dayOfWeek = getDay(currentLoopDate); 
          
-         const templateDayConfig = tempTemplate[dayOfWeek];
+         // Use the cloned template to assign configuration
+         const templateDayConfig = safeTemplate[dayOfWeek];
          if (templateDayConfig) {
             newAvailability[dateKey] = templateDayConfig;
          }
@@ -394,7 +457,7 @@ function App() {
       saveConfigToSupabase(newAvailability);
       
       // 2. Save the abstract template to Supabase so it can be reloaded later
-      saveTemplateToSupabase(tempTemplate);
+      saveTemplateToSupabase(safeTemplate);
       
       alert(`Schedule generated successfully for ${applyWeeks} weeks! Saved to Cloud.`);
       setAdminWizardStep(AdminWizardStep.DASHBOARD);
@@ -724,36 +787,57 @@ function App() {
              
              {/* Shopper Access Control */}
              <div className="mt-6 pt-6 border-t">
-                <h3 className="text-sm font-bold text-gray-700 uppercase mb-3 flex items-center gap-2">
-                    <KeyRound className="w-4 h-4" /> Shopper Access Control
-                </h3>
-                <div className="flex flex-col md:flex-row gap-4 items-end">
+                <div className="flex justify-between items-center mb-4">
+                     <h3 className="text-sm font-bold text-gray-700 uppercase flex items-center gap-2">
+                        <KeyRound className="w-4 h-4" /> Shopper Access Control
+                    </h3>
+                    <div className="flex items-center gap-3">
+                         <span className={`text-xs font-bold ${isShopperAuthEnabled ? 'text-green-600' : 'text-gray-400'}`}>
+                             {isShopperAuthEnabled ? 'PIN REQUIRED' : 'PIN DISABLED'}
+                         </span>
+                         <button 
+                             onClick={() => setIsShopperAuthEnabled(!isShopperAuthEnabled)}
+                             className={`p-1 rounded-full w-12 flex transition-all duration-300 ${isShopperAuthEnabled ? 'bg-green-500 justify-end' : 'bg-gray-300 justify-start'}`}
+                         >
+                             <div className="w-5 h-5 bg-white rounded-full shadow-md"></div>
+                         </button>
+                    </div>
+                </div>
+
+                <div className="flex flex-col md:flex-row gap-4 items-end bg-gray-50 p-4 rounded-xl border">
                     <div className="flex-1 space-y-2 w-full">
                         <label className="text-xs text-gray-500 font-medium">6-Digit Access PIN</label>
                         <div className="flex gap-2">
                             <input 
                                 value={adminShopperPinInput} 
                                 onChange={e => setAdminShopperPinInput(e.target.value.replace(/[^0-9]/g, '').slice(0,6))}
-                                className="w-full border rounded-lg p-2 text-sm font-mono tracking-widest text-center focus:ring-2 focus:ring-purple-500 outline-none"
+                                className={`w-full border rounded-lg p-2 text-sm font-mono tracking-widest text-center outline-none transition-all ${isShopperAuthEnabled ? 'focus:ring-2 focus:ring-purple-500 bg-white' : 'bg-gray-100 text-gray-400'}`}
                                 placeholder="000000"
+                                disabled={!isShopperAuthEnabled}
                             />
                             <button 
                                 onClick={generateRandomPin}
-                                className="p-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-600"
+                                className="p-2 bg-white border hover:bg-gray-50 rounded-lg text-gray-600 disabled:opacity-50"
                                 title="Generate Random PIN"
+                                disabled={!isShopperAuthEnabled}
                             >
                                 <RefreshCw className="w-4 h-4" />
                             </button>
                             <Button 
-                                onClick={() => saveShopperPinToSupabase(adminShopperPinInput)} 
-                                disabled={adminShopperPinInput.length !== 6}
+                                onClick={() => saveShopperAuthSettings(adminShopperPinInput, isShopperAuthEnabled)} 
+                                disabled={isShopperAuthEnabled && adminShopperPinInput.length !== 6}
                                 className="whitespace-nowrap"
                             >
-                                <Save className="w-4 h-4 mr-2" /> Save PIN
+                                <Save className="w-4 h-4 mr-2" /> Save Settings
                             </Button>
                         </div>
                     </div>
                 </div>
+                <p className="text-xs text-gray-400 mt-2">
+                    {isShopperAuthEnabled 
+                     ? "Shoppers will be asked for this PIN when starting a session." 
+                     : "Security disabled. Shoppers can start immediately without a PIN."}
+                </p>
              </div>
 
              <div className="mt-4 pt-4 border-t flex justify-end">
@@ -978,7 +1062,7 @@ function App() {
                       Exit
                   </Button>
               )}
-              <Button onClick={() => setMode(AppMode.HOME)} className="bg-gray-800 text-white hover:bg-gray-900 text-sm">
+              <Button onClick={() => setMode(AppMode.SHOPPER_SETUP)} className="bg-gray-800 text-white hover:bg-gray-900 text-sm">
                   Log Out
               </Button>
           </div>
@@ -995,8 +1079,8 @@ function App() {
   );
 
   const renderShopperSetup = () => {
-    // If PIN is configured and user not verified, show PIN Screen
-    if (shopperPinConfig && !isShopperVerified) {
+    // If PIN is configured and user tried to start (showShopperAuth is true) -> Show PIN Screen
+    if (showShopperAuth) {
         return (
             <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
                 <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm text-center space-y-6 animate-in zoom-in-95">
@@ -1019,69 +1103,66 @@ function App() {
                             placeholder="••••••"
                             autoFocus
                         />
-                        <Button onClick={handleVerifyShopperPin} fullWidth className="bg-purple-600 hover:bg-purple-700">
-                            Verify PIN
-                        </Button>
+                        <div className="flex gap-2">
+                            <Button onClick={() => setShowShopperAuth(false)} variant="secondary" className="flex-1">
+                                Back
+                            </Button>
+                            <Button onClick={handleVerifyShopperPin} className="flex-[2] bg-purple-600 hover:bg-purple-700">
+                                Verify PIN
+                            </Button>
+                        </div>
                     </div>
                 </div>
             </div>
         );
     }
 
+    // Default View: Homepage
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 flex items-center justify-center p-4 md:p-6">
-         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden flex flex-col animate-in zoom-in duration-300">
-            <div className="bg-gradient-to-r from-green-600 to-emerald-600 p-8 text-center text-white">
-               <div className="mx-auto w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center mb-4">
-                  <UserPlus className="w-8 h-8 text-white" />
-               </div>
-               <h2 className="text-2xl font-bold">Welcome!</h2>
-               <p className="text-green-50 mt-1">Picnic Shift Scheduler</p>
+      <div className="min-h-[100dvh] bg-white flex flex-col items-center justify-between p-6">
+         
+         <div className="w-full flex justify-center pt-8">
+             <h1 className="text-5xl font-extrabold text-[#E31837] tracking-tight">Picnic</h1>
+         </div>
+
+         <div className="w-full max-w-sm animate-in zoom-in duration-300 space-y-8">
+            <div className="text-center space-y-2">
+               <h1 className="text-3xl font-extrabold text-gray-900">Welcome!</h1>
+               <p className="text-gray-500">Enter your name to start selecting your shifts.</p>
             </div>
             
-            <div className="p-8 space-y-6">
-               <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-700 uppercase tracking-wide">Your Full Name</label>
-                  <input 
-                    value={tempNameInput}
-                    onChange={(e) => setTempNameInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && tempNameInput.trim()) {
-                        setShopperNames([tempNameInput.trim()]);
-                        setMode(AppMode.SHOPPER_FLOW);
-                        setShopperStep(ShopperStep.AA_SELECTION);
-                      }
-                    }}
-                    placeholder="e.g. John Doe"
-                    className="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-lg outline-none focus:border-green-500 focus:ring-4 focus:ring-green-50 transition-all"
-                  />
-               </div>
+            <div className="space-y-4">
+               <input 
+                 value={tempNameInput}
+                 onChange={(e) => setTempNameInput(e.target.value)}
+                 onKeyDown={(e) => {
+                   if (e.key === 'Enter' && tempNameInput.trim()) {
+                     handleStartShopperClick();
+                   }
+                 }}
+                 placeholder="Your Full Name"
+                 className="w-full border-b-2 border-gray-200 py-4 text-center text-2xl font-medium outline-none focus:border-[#E31837] transition-colors placeholder:text-gray-300"
+                 autoFocus
+               />
 
                <Button 
                  disabled={!tempNameInput.trim()} 
-                 onClick={() => {
-                   // Calculate STRICT First Working Day (Today + 3 days)
-                   const minDate = getShopperMinDate();
-                   const calculatedFWD = formatDateKey(minDate);
-                   
-                   // Initialize Shopper Data immediately with auto-calculated First Working Day
-                   const newShopper: ShopperData = {
-                       name: tempNameInput.trim(),
-                       shifts: [],
-                       details: { ...tempDetails, firstWorkingDay: calculatedFWD }
-                   };
-                   
-                   setSelections([newShopper]);
-                   setShopperNames([tempNameInput.trim()]);
-                   setMode(AppMode.SHOPPER_FLOW);
-                   setShopperStep(ShopperStep.AA_SELECTION);
-                 }}
+                 onClick={handleStartShopperClick}
                  fullWidth
-                 className="py-4 text-lg shadow-lg"
+                 className="py-4 text-lg bg-[#E31837] hover:bg-red-700 shadow-lg rounded-full"
                >
-                 Start Scheduling <ArrowRight className="w-5 h-5 ml-2" />
+                 Start <ArrowRight className="w-5 h-5 ml-2" />
                </Button>
             </div>
+         </div>
+
+         <div className="w-full pb-4 text-center">
+             <button 
+                onClick={() => setMode(AppMode.ADMIN)}
+                className="text-xs font-bold text-gray-300 hover:text-gray-500 transition-colors uppercase tracking-widest"
+             >
+                Staff Login
+             </button>
          </div>
       </div>
     );
@@ -1091,8 +1172,8 @@ function App() {
     <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
       <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm space-y-6">
         <div className="text-center">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Lock className="w-8 h-8 text-green-600" />
+          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Lock className="w-8 h-8 text-gray-600" />
           </div>
           <h2 className="text-2xl font-bold text-gray-900">Admin Access</h2>
           <p className="text-gray-500 mt-1">Enter password to continue</p>
@@ -1104,7 +1185,7 @@ function App() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-            className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-green-500 focus:ring-4 focus:ring-green-50 outline-none transition-all"
+            className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-gray-500 focus:ring-4 focus:ring-gray-100 outline-none transition-all"
             placeholder="Password"
             autoFocus
           />
@@ -1115,54 +1196,20 @@ function App() {
             </div>
           )}
 
-          <Button onClick={handleLogin} fullWidth className="py-3">
-            Unlock Dashboard
-          </Button>
+          <div className="flex gap-2">
+              <Button onClick={() => setMode(AppMode.SHOPPER_SETUP)} variant="secondary" className="flex-1 py-3">
+                Cancel
+              </Button>
+              <Button onClick={handleLogin} className="flex-[2] py-3 bg-gray-900 hover:bg-black">
+                Unlock
+              </Button>
+          </div>
         </div>
       </div>
     </div>
   );
 
-  const renderHome = () => (
-    <div className="min-h-screen bg-gray-50 p-6 flex flex-col items-center justify-center">
-      <div className="max-w-4xl w-full grid md:grid-cols-2 gap-8">
-        
-        {/* Admin Card */}
-        <button 
-          onClick={() => setMode(AppMode.ADMIN)}
-          className="group relative bg-white p-8 rounded-3xl shadow-lg border-2 border-transparent hover:border-purple-200 hover:shadow-2xl transition-all text-left overflow-hidden"
-        >
-          <div className="absolute top-0 right-0 w-32 h-32 bg-purple-50 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110"></div>
-          <div className="relative z-10">
-            <div className="w-14 h-14 bg-purple-100 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-purple-600 transition-colors">
-              <Shield className="w-8 h-8 text-purple-600 group-hover:text-white transition-colors" />
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Admin Dashboard</h2>
-            <p className="text-gray-500">Configure weekly availability patterns, manage access PINs, and view submitted data.</p>
-          </div>
-        </button>
-
-        {/* Kiosk Card - RENAMED to SER Shopper Mode */}
-        <button 
-          onClick={() => setMode(AppMode.SHOPPER_SETUP)}
-          className="group relative bg-gradient-to-br from-green-500 to-emerald-600 p-8 rounded-3xl shadow-lg hover:shadow-2xl hover:scale-[1.02] transition-all text-left overflow-hidden"
-        >
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-bl-full -mr-8 -mt-8"></div>
-          <div className="relative z-10">
-            <div className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mb-6">
-              <UserPlus className="w-8 h-8 text-white" />
-            </div>
-            <h2 className="text-2xl font-bold text-white mb-2">Start SER Shopper Mode</h2>
-            <p className="text-green-50">Launch the shopper signup flow. Designed for iPad/Tablet use.</p>
-          </div>
-        </button>
-      </div>
-      
-      <div className="mt-12 text-center text-gray-400 text-sm">
-        <p>Picnic Shift Scheduler v2.0</p>
-      </div>
-    </div>
-  );
+  const renderHome = () => null; // Deprecated view
 
   const renderAAWizard = () => {
       const WEEKDAYS = [
@@ -1681,16 +1728,21 @@ function App() {
 
   return (
     <>
-      {!isAuthenticated && renderLogin()}
-      {isAuthenticated && (
-        <>
-          {mode === AppMode.HOME && renderHome()}
-          {mode === AppMode.ADMIN && renderAdmin()}
-          {mode === AppMode.SHOPPER_SETUP && renderShopperSetup()}
-          {mode === AppMode.SHOPPER_FLOW && renderShopperFlow()}
-          {mode === AppMode.SUMMARY && renderSummary()}
-          {renderDetailsModal()}
-        </>
+      {/* 
+        Modified Render Logic: 
+        1. If Admin Mode + Not Authenticated -> Show Login
+        2. Otherwise -> Show the specific Mode Component
+      */}
+      {mode === AppMode.ADMIN && !isAuthenticated ? (
+          renderLogin()
+      ) : (
+          <>
+            {mode === AppMode.SHOPPER_SETUP && renderShopperSetup()}
+            {mode === AppMode.ADMIN && isAuthenticated && renderAdmin()}
+            {mode === AppMode.SHOPPER_FLOW && renderShopperFlow()}
+            {mode === AppMode.SUMMARY && renderSummary()}
+            {renderDetailsModal()}
+          </>
       )}
     </>
   );
