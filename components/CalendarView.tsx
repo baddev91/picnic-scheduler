@@ -1,9 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { format, endOfMonth, eachDayOfInterval, addMonths, isWeekend, endOfWeek, isWithinInterval, isAfter, isBefore, addDays, addWeeks } from 'date-fns';
+import { 
+  format, endOfMonth, eachDayOfInterval, addMonths, isWeekend, endOfWeek, isWithinInterval, 
+  isAfter, isBefore, addDays, addWeeks, startOfToday 
+} from 'date-fns';
 import startOfMonth from 'date-fns/startOfMonth';
 import subMonths from 'date-fns/subMonths';
 import startOfWeek from 'date-fns/startOfWeek';
-import startOfToday from 'date-fns/startOfToday';
 import parseISO from 'date-fns/parseISO';
 import { ChevronLeft, ChevronRight, Check, Ban, Lock, X, Plus, Star, Calendar as CalendarIcon, Clock, PlayCircle } from 'lucide-react';
 import { ShiftTime, ShiftType, ShopperShift, AdminAvailabilityMap } from '../types';
@@ -16,6 +18,7 @@ interface CalendarViewProps {
   adminAvailability: AdminAvailabilityMap;
   currentShopperShifts?: ShopperShift[];
   firstWorkingDay?: string; // YYYY-MM-DD
+  fwdCounts?: Record<string, number>; // New Prop: counts of existing FWD bookings per slot
   onAdminToggle?: (date: string, shift: ShiftTime, type: ShiftType) => void;
   onShopperToggle?: (date: string, shift: ShiftTime, type: ShiftType) => void;
   onSetFirstWorkingDay?: (date: string) => void;
@@ -28,6 +31,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   adminAvailability,
   currentShopperShifts = [],
   firstWorkingDay,
+  fwdCounts = {},
   onAdminToggle,
   onShopperToggle,
   onSetFirstWorkingDay,
@@ -173,12 +177,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                       </div>
                    </div>
                    
-                   {/* Star icon just for visuals in FWD mode */}
-                   {isFWDSelection && isFWD && (
-                      <div className="p-2 bg-yellow-100 rounded-full text-yellow-600">
-                         <Star className="w-5 h-5 fill-current" />
-                      </div>
-                   )}
+                   {/* Remove Star from header, moved to button */}
                 </div>
 
                 {/* Mobile Shift Grid */}
@@ -197,42 +196,66 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                       // FWD Mode Logic: Only show Morning/Afternoon buttons
                       const isFWDAllowed = shift === ShiftTime.MORNING || shift === ShiftTime.AFTERNOON;
                       if (isFWDSelection && !isFWDAllowed) return null;
+                      
+                      // HIDE unavailable shifts in FWD mode
+                      if (isFWDSelection && !stdAvailable) return null;
 
                       // Only show Standard options in Step 1 or 2
                       if (mode === 'SHOPPER' && !isFWDSelection && step >= 1 && !stdAvailable && !isSelectedStd) {
                           return null; 
                       }
+                      
+                      // MAX 5 Logic for FWD Selection
+                      const fwdKey = `${dateKey}_${shift}`;
+                      const currentFWDCount = fwdCounts[fwdKey] || 0;
+                      const isFull = isFWDSelection && currentFWDCount >= 5;
+
+                      // Identify if this specific button is the selected First Working Day shift
+                      // It is if: The Day matches FWD (isFWD) AND this specific shift time is selected as Standard
+                      const isTheFWDSelection = isFWD && isSelectedStd;
 
                       return (
                         <button
                           key={shift}
-                          // FWD Mode: Disable if not Morning/Afternoon or not available
+                          // FWD Mode: Disable if not Morning/Afternoon or not available OR FULL
                           // Standard Mode: Generally allow clicking to handle logic in App.tsx
-                          disabled={mode === 'SHOPPER' && !stdAvailable}
+                          disabled={(mode === 'SHOPPER' && !stdAvailable) || (isFull && !isTheFWDSelection)}
                           onClick={() => {
-                             if (mode === 'SHOPPER' && onShopperToggle && stdAvailable) {
+                             if (mode === 'SHOPPER' && onShopperToggle && stdAvailable && !isFull) {
                                 onShopperToggle(dateKey, shift, ShiftType.STANDARD);
                              }
                           }}
                           className={`
                             relative flex flex-col items-center justify-center p-3 rounded-lg border text-center transition-all
-                            ${isSelectedAA 
-                                ? 'bg-red-50 border-red-200 text-red-700' 
-                                : isSelectedStd 
-                                    ? 'bg-green-100 border-green-500 text-green-800 ring-1 ring-green-500 shadow-md' 
-                                    : 'bg-white border-gray-100 text-gray-600 hover:border-green-300 hover:bg-green-50'}
+                            ${isTheFWDSelection 
+                                ? 'bg-yellow-50 border-yellow-400 ring-2 ring-yellow-400 text-yellow-800 shadow-md transform scale-[1.02] z-10'
+                                : isSelectedAA 
+                                    ? 'bg-red-50 border-red-200 text-red-700' 
+                                    : isSelectedStd 
+                                        ? 'bg-green-100 border-green-500 text-green-800 ring-1 ring-green-500 shadow-md' 
+                                        : 'bg-white border-gray-100 text-gray-600 hover:border-green-300 hover:bg-green-50'}
                             ${(mode === 'SHOPPER' && !stdAvailable) ? 'opacity-50 cursor-not-allowed' : ''}
+                            ${isFull && !isTheFWDSelection ? 'opacity-50 cursor-not-allowed bg-gray-50' : ''}
                           `}
                         >
                             <span className="text-sm font-bold">{label}</span>
-                            <span className="text-[10px] text-gray-400">{time}</span>
+                            <span className="text-[10px] opacity-70">{time}</span>
                             
-                            {isFWDSelection && (
-                                <span className="absolute top-1 right-1">
-                                    <PlayCircle className="w-3 h-3 text-purple-500" />
+                            {/* Star Icon for FWD */}
+                            {isFWDSelection && isTheFWDSelection && (
+                                <span className="absolute -top-2 -right-2 bg-white rounded-full p-1 shadow-sm border border-yellow-200">
+                                    <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
                                 </span>
                             )}
                             
+                            {/* FULL Indicator */}
+                            {isFull && !isTheFWDSelection && (
+                                <span className="absolute inset-0 flex items-center justify-center bg-gray-100/80 font-bold text-gray-500 text-xs rounded-lg uppercase">
+                                    Full
+                                </span>
+                            )}
+                            
+                            {/* Generic Selection Indicators (Non-FWD) */}
                             {isSelectedAA && !isFWDSelection && <span className="absolute top-1 right-1 text-[9px] font-bold bg-white/50 px-1 rounded text-red-600">AA</span>}
                             {isSelectedStd && !isFWDSelection && <CheckCircleIcon className="absolute top-1 right-1 w-3 h-3 text-green-600" />}
                         </button>
@@ -410,12 +433,21 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
 
               // Hide completely if not allowed in Standard step (unless it's the AA override scenario)
               if (mode === 'SHOPPER' && !isFWDSelection && step >= 1 && !stdAvailable && !isSelectedStd) return null;
+              
+              // HIDE unavailable shifts in FWD mode (Desktop Panel)
+              if (isFWDSelection && !stdAvailable) return null;
+
+              // MAX 5 Logic for FWD Selection
+              const fwdKey = `${dateKey}_${shift}`;
+              const currentFWDCount = fwdCounts[fwdKey] || 0;
+              const isFull = isFWDSelection && currentFWDCount >= 5;
 
               return (
                 <div key={shift} className={`w-full flex flex-col gap-2 md:gap-3 p-3 md:p-4 border rounded-xl bg-white shadow-sm transition-all ${isSelectedAA || isSelectedStd ? 'ring-2 ring-purple-500 border-transparent' : 'border-gray-200'} ${isFWDButtonDisabled ? 'opacity-50' : ''}`}>
                   <div className="text-sm md:text-base font-bold text-gray-800 flex justify-between">
                       {shift}
                       {isFWDButtonDisabled && <span className="text-xs text-red-500 font-normal">Not allowed for 1st day</span>}
+                      {isFull && isFWDSelection && !isFWDButtonDisabled && <span className="text-xs text-red-600 font-bold bg-red-100 px-2 rounded">FULL (5/5)</span>}
                   </div>
                   
                   <div className="grid grid-cols-1 gap-2 md:gap-3">
@@ -448,13 +480,13 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                       <button
                         onClick={() => {
                           if (mode === 'ADMIN' && onAdminToggle) onAdminToggle(dateKey, shift, ShiftType.STANDARD);
-                          if (mode === 'SHOPPER' && onShopperToggle && stdAvailable) onShopperToggle(dateKey, shift, ShiftType.STANDARD);
+                          if (mode === 'SHOPPER' && onShopperToggle && stdAvailable && !isFull) onShopperToggle(dateKey, shift, ShiftType.STANDARD);
                         }}
-                        disabled={mode === 'SHOPPER' && (isFWDButtonDisabled || !stdAvailable)}
+                        disabled={mode === 'SHOPPER' && (isFWDButtonDisabled || !stdAvailable || (isFull && isFWDSelection))}
                         className={`flex items-center justify-between px-4 py-3 rounded-lg text-sm font-semibold border transition-all ${
                           isSelectedStd
                             ? 'bg-green-600 text-white border-green-600 shadow-md transform scale-[1.02]' 
-                            : stdAvailable && (!isSelectedAA || isFWD)
+                            : stdAvailable && (!isSelectedAA || isFWD) && !isFull
                               ? 'bg-white border-green-200 text-green-700 hover:bg-green-50'
                               : 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
                         }`}

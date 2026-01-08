@@ -23,7 +23,7 @@ export interface ShopperShift {
 }
 
 export interface ShopperDetails {
-  usePicnicBus: boolean;
+  usePicnicBus: boolean | null; // Changed to allow null for explicit selection requirement
   civilStatus: string;
   clothingSize: string;
   shoeSize: string;

@@ -1,11 +1,10 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { supabase } from '../supabaseClient';
-import { Download, Search, Trash2, User, Calendar, MapPin, Bus, RefreshCw, Activity, Pencil, X, Plus, Save, CheckCircle, AlertCircle, RotateCcw } from 'lucide-react';
-import { format, eachDayOfInterval, isSameDay, addDays } from 'date-fns';
+import { Download, Search, Trash2, User, Calendar, MapPin, Bus, RefreshCw, Activity, Pencil, X, Plus, Save, AlertCircle, Sun, Star, GripVertical, Clock, SaveAll } from 'lucide-react';
+import { format, eachDayOfInterval, addDays, startOfToday } from 'date-fns';
 import min from 'date-fns/min';
 import max from 'date-fns/max';
 import parseISO from 'date-fns/parseISO';
-import startOfToday from 'date-fns/startOfToday';
 import { ShiftType, ShiftTime } from '../types';
 import { SHIFT_TIMES } from '../constants';
 import { Button } from './Button';
@@ -16,6 +15,7 @@ interface ShopperRecord {
   name: string;
   details: any;
   shifts: any[];
+  rank?: number;
 }
 
 export const AdminDataView: React.FC = () => {
@@ -24,24 +24,33 @@ export const AdminDataView: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   
+  // Drag and Drop State & Refs
+  const dragItem = useRef<{ index: number; group: string } | null>(null);
+  const dragOverItem = useRef<{ index: number; group: string } | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [isSavingOrder, setIsSavingOrder] = useState(false);
+  
   // Edit Mode State
   const [editingShopper, setEditingShopper] = useState<ShopperRecord | null>(null);
   const [editFormDetails, setEditFormDetails] = useState<any>({});
+  const [editFormShifts, setEditFormShifts] = useState<any[]>([]); 
+  const [hasUnsavedShiftChanges, setHasUnsavedShiftChanges] = useState(false);
   
   // Shift Management State
   const [newShiftDate, setNewShiftDate] = useState('');
   const [newShiftTime, setNewShiftTime] = useState<ShiftTime>(SHIFT_TIMES[0]);
   const [newShiftType, setNewShiftType] = useState<ShiftType>(ShiftType.STANDARD);
-  const [editingShiftId, setEditingShiftId] = useState<string | null>(null); // Track if we are editing a specific shift
   
-  // Track which row is in "Confirm Delete" state
+  // Track delete confirm
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
+    // Fetch order by Rank (primary) then created_at (secondary fallback)
     const { data: shoppers, error } = await supabase
       .from('shoppers')
       .select('*, shifts(*)')
+      .order('rank', { ascending: true }) 
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -56,9 +65,91 @@ export const AdminDataView: React.FC = () => {
     fetchData();
   }, []);
 
+  // --- DRAG AND DROP HANDLERS ---
+  const onDragStart = (e: React.DragEvent, index: number, group: string, id: string) => {
+      dragItem.current = { index, group };
+      setDraggingId(id);
+      e.dataTransfer.effectAllowed = "move";
+  };
+
+  const onDragEnter = (e: React.DragEvent, index: number, group: string) => {
+      if (!dragItem.current || dragItem.current.group !== group) return;
+      
+      dragOverItem.current = { index, group };
+      
+      const draggedIdx = dragItem.current.index;
+      const overIdx = index;
+
+      if (draggedIdx === overIdx) return;
+
+      const groupKey = group;
+      const groupItems = groupedData[groupKey]; 
+      
+      if (!groupItems) return;
+
+      const newGroupItems = [...groupItems];
+      const draggedItemContent = newGroupItems[draggedIdx];
+      
+      newGroupItems.splice(draggedIdx, 1);
+      newGroupItems.splice(overIdx, 0, draggedItemContent);
+      
+      // Update local state immediately for visual feedback
+      const itemsNotInGroup = data.filter(d => {
+         const itemKey = format(new Date(d.created_at), 'yyyy-MM-dd');
+         return itemKey !== groupKey;
+      });
+      
+      const newData = [...itemsNotInGroup, ...newGroupItems];
+      setData(newData);
+      
+      dragItem.current.index = overIdx;
+  };
+
+  const onDragEnd = async () => {
+      const groupKey = dragItem.current?.group;
+      
+      dragItem.current = null;
+      dragOverItem.current = null;
+      setDraggingId(null);
+
+      if (groupKey) {
+          await saveNewOrder(groupKey);
+      }
+  };
+
+  // Smart Save: Only update ID and Rank. 
+  // Simplified to avoid sending extra fields (like 'updated_at' if not in schema) or join data.
+  const saveNewOrder = async (groupKey: string) => {
+      setIsSavingOrder(true);
+      try {
+          // groupedData is derived from 'data', which has been updated by onDragEnter
+          const itemsInGroup = groupedData[groupKey];
+          if (!itemsInGroup) return;
+
+          const updates = itemsInGroup.map((item, index) => ({
+              id: item.id,
+              rank: index
+          }));
+
+          const { error } = await supabase
+              .from('shoppers')
+              .upsert(updates, { onConflict: 'id' });
+
+          if (error) {
+              console.error('Supabase Upsert Error:', JSON.stringify(error));
+              throw error;
+          }
+      } catch (e: any) {
+          console.error("Error saving order:", e);
+          alert(`Failed to save new order: ${e.message || JSON.stringify(e)}`);
+          fetchData(); // Revert to server state on error
+      } finally {
+          setIsSavingOrder(false);
+      }
+  };
+
   // --- HEATMAP LOGIC ---
   const heatmapData = useMemo(() => {
-      // Map structure: "YYYY-MM-DD_ShiftTime" -> { aa: number, std: number, total: number }
       const map: Record<string, { aa: number; std: number; total: number }> = {};
       let maxCount = 0;
       const allDates: Date[] = [];
@@ -66,33 +157,24 @@ export const AdminDataView: React.FC = () => {
       data.forEach(shopper => {
           shopper.shifts.forEach(shift => {
               const key = `${shift.date}_${shift.time}`;
-              
               if (!map[key]) map[key] = { aa: 0, std: 0, total: 0 };
-              
-              if (shift.type === ShiftType.AA) {
-                  map[key].aa += 1;
-              } else {
-                  map[key].std += 1;
-              }
+              if (shift.type === ShiftType.AA) map[key].aa += 1;
+              else map[key].std += 1;
               map[key].total += 1;
-
               if (map[key].total > maxCount) maxCount = map[key].total;
               allDates.push(parseISO(shift.date));
           });
       });
 
-      // Define date range for the graph
       let startDate = startOfToday();
-      let endDate = addDays(startOfToday(), 14); // Default 2 weeks view if empty
+      let endDate = addDays(startOfToday(), 14);
 
       if (allDates.length > 0) {
           startDate = min(allDates);
           endDate = max(allDates);
       }
 
-      // Generate continuous days
       const days = eachDayOfInterval({ start: startDate, end: endDate });
-
       return { map, maxCount, days };
   }, [data]);
 
@@ -119,7 +201,7 @@ export const AdminDataView: React.FC = () => {
       if (shopperError) throw new Error(shopperError.message);
 
       if (count === 0) {
-          alert("Error: Database reported success but 0 records were deleted. Check RLS policies.");
+          alert("Error: Database reported success but 0 records were deleted.");
           setDeleteConfirmId(null);
           return;
       }
@@ -135,6 +217,8 @@ export const AdminDataView: React.FC = () => {
       e.stopPropagation();
       setEditingShopper(shopper);
       setEditFormDetails({ ...shopper.details, name: shopper.name }); 
+      setEditFormShifts(JSON.parse(JSON.stringify(shopper.shifts)));
+      setHasUnsavedShiftChanges(false);
       resetShiftForm();
   };
 
@@ -142,7 +226,6 @@ export const AdminDataView: React.FC = () => {
       setNewShiftDate('');
       setNewShiftTime(SHIFT_TIMES[0]);
       setNewShiftType(ShiftType.STANDARD);
-      setEditingShiftId(null);
   };
 
   const handleSaveDetails = async () => {
@@ -165,102 +248,92 @@ export const AdminDataView: React.FC = () => {
       }
   };
 
-  // --- SHIFT MANAGEMENT LOGIC ---
+  // Updates Date, Time, or Type locally
+  const handleLocalShiftUpdate = (shiftId: string, field: 'date' | 'time' | 'type', value: any) => {
+      setEditFormShifts(prev => prev.map(s => 
+          s.id === shiftId ? { ...s, [field]: value } : s
+      ));
+      setHasUnsavedShiftChanges(true);
+  };
+
+  const handleSaveShiftConfiguration = async () => {
+      if (!editingShopper) return;
+      try {
+          const updates = editFormShifts.map(s => ({
+              id: s.id,
+              date: s.date,
+              time: s.time,
+              type: s.type,
+              shopper_id: editingShopper.id
+          }));
+          const { error } = await supabase.from('shifts').upsert(updates);
+          if (error) throw error;
+
+          setData(prev => prev.map(item => item.id === editingShopper.id ? { ...item, shifts: editFormShifts } : item));
+          setHasUnsavedShiftChanges(false);
+          alert("Shift configuration saved successfully!");
+      } catch (e: any) {
+          alert("Error saving shifts: " + e.message);
+      }
+  };
+
   const handleRemoveShift = async (shiftId: string) => {
       if (!editingShopper) return;
-      
-      // If we are currently editing this shift, cancel edit mode
-      if (editingShiftId === shiftId) {
-          resetShiftForm();
-      }
-
+      if (!window.confirm("Are you sure you want to remove this shift? This action is immediate.")) return;
       try {
           const { error } = await supabase.from('shifts').delete().eq('id', shiftId);
           if (error) throw error;
-
-          const updatedShifts = editingShopper.shifts.filter(s => s.id !== shiftId);
-          setEditingShopper({ ...editingShopper, shifts: updatedShifts });
-          setData(prev => prev.map(item => 
-            item.id === editingShopper.id ? { ...item, shifts: updatedShifts } : item
-          ));
+          const updatedShifts = editFormShifts.filter(s => s.id !== shiftId);
+          setEditFormShifts(updatedShifts);
+          const newMainShifts = editingShopper.shifts.filter(s => s.id !== shiftId);
+          setEditingShopper({...editingShopper, shifts: newMainShifts});
+          setData(prev => prev.map(item => item.id === editingShopper.id ? { ...item, shifts: newMainShifts } : item));
       } catch (e: any) {
           alert("Error removing shift: " + e.message);
       }
   };
 
-  const handleEditShiftClick = (shift: any) => {
-      setEditingShiftId(shift.id);
-      setNewShiftDate(shift.date);
-      setNewShiftTime(shift.time);
-      setNewShiftType(shift.type);
-  };
-
-  const handleAddOrUpdateShift = async () => {
+  const handleAddShift = async () => {
       if (!editingShopper || !newShiftDate) return;
-
       try {
           const payload = {
               date: newShiftDate,
               time: newShiftTime,
-              type: newShiftType
+              type: newShiftType,
+              shopper_id: editingShopper.id
           };
-
-          if (editingShiftId) {
-              // UPDATE EXISTING SHIFT
-              const { data: updatedShift, error } = await supabase
-                  .from('shifts')
-                  .update(payload)
-                  .eq('id', editingShiftId)
-                  .select()
-                  .single();
-
-              if (error) throw error;
-
-              // Update State
-              const updatedShifts = editingShopper.shifts.map(s => s.id === editingShiftId ? updatedShift : s);
-              setEditingShopper({ ...editingShopper, shifts: updatedShifts });
-              setData(prev => prev.map(item => 
-                  item.id === editingShopper.id ? { ...item, shifts: updatedShifts } : item
-              ));
-              
-              // Reset
-              resetShiftForm();
-
-          } else {
-              // CREATE NEW SHIFT
-              const insertPayload = { ...payload, shopper_id: editingShopper.id };
-              const { data: newShift, error } = await supabase
-                  .from('shifts')
-                  .insert([insertPayload])
-                  .select()
-                  .single();
-
-              if (error) throw error;
-
-              // Update State
-              const updatedShifts = [...editingShopper.shifts, newShift];
-              setEditingShopper({ ...editingShopper, shifts: updatedShifts });
-              setData(prev => prev.map(item => 
-                  item.id === editingShopper.id ? { ...item, shifts: updatedShifts } : item
-              ));
-              
-              // Reset
-              setNewShiftDate('');
-          }
-
+          const { data: newShift, error } = await supabase.from('shifts').insert([payload]).select().single();
+          if (error) throw error;
+          const updatedShifts = [...editFormShifts, newShift];
+          setEditFormShifts(updatedShifts);
+          setEditingShopper({ ...editingShopper, shifts: updatedShifts });
+          setData(prev => prev.map(item => item.id === editingShopper.id ? { ...item, shifts: updatedShifts } : item));
+          resetShiftForm();
       } catch (e: any) {
-          alert(`Error ${editingShiftId ? 'updating' : 'adding'} shift: ` + e.message);
+          alert("Error adding shift: " + e.message);
       }
   };
 
+  // --- FILTER & GROUPING ---
   const filteredData = data.filter(item => 
     item.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Group by Registration Date (created_at)
+  const groupedData = useMemo(() => {
+    const groups: Record<string, ShopperRecord[]> = {};
+    filteredData.forEach(item => {
+        const dateObj = new Date(item.created_at);
+        const key = format(dateObj, 'yyyy-MM-dd'); // Grouping Key
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(item);
+    });
+    return groups;
+  }, [filteredData]);
+
   const getAAPatternString = (shifts: any[]) => {
       const aaShifts = shifts.filter(s => s.type === ShiftType.AA);
       if (aaShifts.length === 0) return 'None';
-
       const uniquePatterns = new Set<string>();
       aaShifts.forEach((s: any) => {
           try {
@@ -270,6 +343,24 @@ export const AdminDataView: React.FC = () => {
           } catch(e) {}
       });
       return Array.from(uniquePatterns).join(' & ');
+  };
+
+  const getDistinctAAPatterns = (shifts: any[]) => {
+      const aaShifts = shifts.filter(s => s.type === ShiftType.AA);
+      const weekdays = new Set<string>();
+      const weekends = new Set<string>();
+
+      aaShifts.forEach(s => {
+          const date = new Date(s.date);
+          const dayIndex = date.getDay(); // 0 Sun, 6 Sat
+          const timeLabel = s.time.split('(')[0].trim();
+          const dayName = format(date, 'EEEE');
+          const entry = `${dayName} ${timeLabel}`;
+          if (dayIndex === 0 || dayIndex === 6) weekends.add(entry);
+          else weekdays.add(entry);
+      });
+
+      return { weekdays: Array.from(weekdays), weekends: Array.from(weekends) };
   };
 
   const downloadCSV = () => {
@@ -307,15 +398,12 @@ export const AdminDataView: React.FC = () => {
 
   const formatDateDisplay = (dateStr: string) => {
       if(!dateStr) return 'N/A';
-      try {
-          return format(new Date(dateStr), 'EEE, MMM do, yyyy');
-      } catch (e) { return dateStr; }
+      try { return format(new Date(dateStr), 'EEE, MMM do, yyyy'); } catch (e) { return dateStr; }
   };
 
   const renderAAPatternCell = (shifts: any[]) => {
       const patternString = getAAPatternString(shifts);
       if (patternString === 'None') return <span className="text-gray-300">-</span>;
-      
       const parts = patternString.split(' & ');
       return (
           <div className="flex flex-col gap-1 items-start">
@@ -328,19 +416,15 @@ export const AdminDataView: React.FC = () => {
       );
   };
 
-  // --- RENDER EDIT MODAL ---
   const renderEditModal = () => {
       if (!editingShopper) return null;
-
       return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
-                  
-                  {/* Modal Header */}
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden">
                   <div className="px-6 py-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
                       <div>
                           <h3 className="font-bold text-xl text-gray-800 flex items-center gap-2">
-                              <Pencil className="w-5 h-5 text-purple-600" /> Edit Shopper
+                              <Pencil className="w-5 h-5 text-purple-600" /> Edit Shopper Record
                           </h3>
                           <p className="text-sm text-gray-500">{editingShopper.name}</p>
                       </div>
@@ -348,224 +432,165 @@ export const AdminDataView: React.FC = () => {
                           <X className="w-5 h-5 text-gray-500" />
                       </button>
                   </div>
-
-                  {/* Modal Body */}
                   <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
-                      
-                      {/* Left: Details Form */}
                       <div className="w-full md:w-1/3 border-r bg-gray-50 p-6 overflow-y-auto space-y-4">
-                          <h4 className="font-bold text-gray-700 uppercase text-xs tracking-wider mb-2">Personal Details</h4>
-                          
-                          <div className="space-y-1">
-                              <label className="text-xs font-semibold text-gray-500">Full Name</label>
-                              <input 
-                                  value={editFormDetails.name || ''}
-                                  onChange={e => setEditFormDetails({...editFormDetails, name: e.target.value})}
-                                  className="w-full p-2 rounded border border-gray-300 focus:ring-2 focus:ring-purple-500 outline-none text-sm"
-                              />
+                          <div className="flex items-center gap-2 mb-2">
+                             <User className="w-4 h-4 text-gray-500" />
+                             <h4 className="font-bold text-gray-700 uppercase text-xs tracking-wider">Personal Details</h4>
                           </div>
-
-                          <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-3 p-4 bg-white rounded-xl border shadow-sm">
                               <div className="space-y-1">
-                                  <label className="text-xs font-semibold text-gray-500">Clothing</label>
-                                  <select 
-                                      value={editFormDetails.clothingSize || 'M'}
-                                      onChange={e => setEditFormDetails({...editFormDetails, clothingSize: e.target.value})}
-                                      className="w-full p-2 rounded border border-gray-300 text-sm"
-                                  >
-                                      {['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL'].map(s => <option key={s} value={s}>{s}</option>)}
-                                  </select>
-                              </div>
-                              <div className="space-y-1">
-                                  <label className="text-xs font-semibold text-gray-500">Shoes</label>
+                                  <label className="text-xs font-semibold text-gray-500">Full Name</label>
                                   <input 
-                                      value={editFormDetails.shoeSize || ''}
-                                      onChange={e => setEditFormDetails({...editFormDetails, shoeSize: e.target.value})}
-                                      className="w-full p-2 rounded border border-gray-300 text-sm"
+                                      value={editFormDetails.name || ''}
+                                      onChange={e => setEditFormDetails({...editFormDetails, name: e.target.value})}
+                                      className="w-full p-2 rounded border border-gray-300 focus:ring-2 focus:ring-purple-500 outline-none text-sm"
                                   />
                               </div>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-3">
-                              <div className="space-y-1">
-                                  <label className="text-xs font-semibold text-gray-500">Gloves</label>
-                                  <input 
-                                      value={editFormDetails.gloveSize || ''}
-                                      onChange={e => setEditFormDetails({...editFormDetails, gloveSize: e.target.value})}
-                                      className="w-full p-2 rounded border border-gray-300 text-sm"
-                                  />
+                              <div className="grid grid-cols-2 gap-3">
+                                  <div className="space-y-1">
+                                      <label className="text-xs font-semibold text-gray-500">Clothing</label>
+                                      <select 
+                                          value={editFormDetails.clothingSize || 'M'}
+                                          onChange={e => setEditFormDetails({...editFormDetails, clothingSize: e.target.value})}
+                                          className="w-full p-2 rounded border border-gray-300 text-sm"
+                                      >
+                                          {['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL'].map(s => <option key={s} value={s}>{s}</option>)}
+                                      </select>
+                                  </div>
+                                  <div className="space-y-1">
+                                      <label className="text-xs font-semibold text-gray-500">Shoes</label>
+                                      <input 
+                                          value={editFormDetails.shoeSize || ''}
+                                          onChange={e => setEditFormDetails({...editFormDetails, shoeSize: e.target.value})}
+                                          className="w-full p-2 rounded border border-gray-300 text-sm"
+                                      />
+                                  </div>
                               </div>
-                              <div className="space-y-1">
-                                  <label className="text-xs font-semibold text-gray-500">Civil Status</label>
-                                  <select 
-                                      value={editFormDetails.civilStatus || 'Single'}
-                                      onChange={e => setEditFormDetails({...editFormDetails, civilStatus: e.target.value})}
-                                      className="w-full p-2 rounded border border-gray-300 text-sm"
-                                  >
-                                      <option value="Cohabit">Cohabit</option>
-                                      <option value="Divorced">Divorced</option>
-                                      <option value="Engaged">Engaged</option>
-                                      <option value="Legal separation">Legal separation</option>
-                                      <option value="Married">Married</option>
-                                      <option value="Registered partnership">Registered partnership</option>
-                                      <option value="Single">Single</option>
-                                      <option value="Unknown">Unknown</option>
-                                      <option value="Widowed">Widowed</option>
-                                  </select>
+                              <div className="grid grid-cols-2 gap-3">
+                                  <div className="space-y-1">
+                                      <label className="text-xs font-semibold text-gray-500">Civil Status</label>
+                                      <select 
+                                          value={editFormDetails.civilStatus || 'Single'}
+                                          onChange={e => setEditFormDetails({...editFormDetails, civilStatus: e.target.value})}
+                                          className="w-full p-2 rounded border border-gray-300 text-sm"
+                                      >
+                                          <option value="Single">Single</option>
+                                          <option value="Married">Married</option>
+                                          <option value="Cohabit">Cohabit</option>
+                                          <option value="Student">Student</option>
+                                          <option value="Other">Other</option>
+                                      </select>
+                                  </div>
+                                  <div className="space-y-1">
+                                      <label className="text-xs font-semibold text-gray-500">First Work Day</label>
+                                      <input 
+                                          type="date"
+                                          value={editFormDetails.firstWorkingDay || ''}
+                                          onChange={e => setEditFormDetails({...editFormDetails, firstWorkingDay: e.target.value})}
+                                          className="w-full p-2 rounded border border-gray-300 text-sm"
+                                      />
+                                  </div>
                               </div>
+                              <div className="space-y-2 pt-2 border-t mt-2">
+                                  <label className="flex items-center gap-2 cursor-pointer">
+                                      <input 
+                                          type="checkbox"
+                                          checked={editFormDetails.usePicnicBus || false}
+                                          onChange={e => setEditFormDetails({...editFormDetails, usePicnicBus: e.target.checked})}
+                                          className="rounded text-purple-600 focus:ring-purple-500"
+                                      />
+                                      <span className="text-sm font-medium text-gray-700">Uses Picnic Bus</span>
+                                  </label>
+                              </div>
+                              <Button onClick={handleSaveDetails} variant="secondary" fullWidth className="mt-2 text-xs h-8">
+                                  <Save className="w-3 h-3 mr-2" /> Save Info
+                              </Button>
                           </div>
-
-                          <div className="space-y-1">
-                              <label className="text-xs font-semibold text-gray-500">First Work Day</label>
-                              <input 
-                                  type="date"
-                                  value={editFormDetails.firstWorkingDay || ''}
-                                  onChange={e => setEditFormDetails({...editFormDetails, firstWorkingDay: e.target.value})}
-                                  className="w-full p-2 rounded border border-gray-300 text-sm"
-                              />
-                          </div>
-
-                          <div className="space-y-2 pt-2 border-t">
-                              <label className="flex items-center gap-2 cursor-pointer">
-                                  <input 
-                                      type="checkbox"
-                                      checked={editFormDetails.usePicnicBus || false}
-                                      onChange={e => setEditFormDetails({...editFormDetails, usePicnicBus: e.target.checked})}
-                                      className="rounded text-purple-600 focus:ring-purple-500"
-                                  />
-                                  <span className="text-sm font-medium text-gray-700">Uses Picnic Bus</span>
-                              </label>
-
-                              <label className="flex items-center gap-2 cursor-pointer">
-                                  <input 
-                                      type="checkbox"
-                                      checked={editFormDetails.isRandstad || false}
-                                      onChange={e => setEditFormDetails({...editFormDetails, isRandstad: e.target.checked})}
-                                      className="rounded text-purple-600 focus:ring-purple-500"
-                                  />
-                                  <span className="text-sm font-medium text-gray-700">Via Randstad</span>
-                              </label>
-                          </div>
-                          
-                          {editFormDetails.isRandstad && (
-                             <div className="space-y-1">
-                                  <label className="text-xs font-semibold text-gray-500">Address</label>
-                                  <textarea 
-                                      value={editFormDetails.address || ''}
-                                      onChange={e => setEditFormDetails({...editFormDetails, address: e.target.value})}
-                                      rows={2}
-                                      className="w-full p-2 rounded border border-gray-300 text-sm"
-                                  />
-                             </div>
-                          )}
-
-                          <Button onClick={handleSaveDetails} variant="secondary" fullWidth className="mt-4 text-xs h-9">
-                              <Save className="w-3 h-3 mr-2" /> Save Details
-                          </Button>
                       </div>
-
-                      {/* Right: Shifts Manager */}
                       <div className="flex-1 p-6 overflow-hidden flex flex-col bg-white">
-                          <h4 className="font-bold text-gray-700 uppercase text-xs tracking-wider mb-4 flex justify-between">
-                              <span>Manage Shifts ({editingShopper.shifts.length})</span>
-                          </h4>
-
+                          <div className="flex justify-between items-center mb-4">
+                              <h4 className="font-bold text-gray-700 uppercase text-xs tracking-wider flex items-center gap-2">
+                                  <Calendar className="w-4 h-4" /> Shift Configuration
+                              </h4>
+                              {hasUnsavedShiftChanges && (
+                                <span className="text-xs font-bold text-orange-600 bg-orange-100 px-2 py-1 rounded-full animate-pulse flex items-center gap-1">
+                                  <AlertCircle className="w-3 h-3" /> Unsaved Changes
+                                </span>
+                              )}
+                          </div>
+                          <div className="grid grid-cols-12 gap-2 text-[10px] uppercase font-bold text-gray-400 mb-2 px-3">
+                              <div className="col-span-3">Date</div>
+                              <div className="col-span-3">Time</div>
+                              <div className="col-span-4 text-center">Type Assignment</div>
+                              <div className="col-span-2 text-right">Actions</div>
+                          </div>
                           <div className="flex-1 overflow-y-auto space-y-2 pr-2 mb-4">
-                              {editingShopper.shifts.length === 0 ? (
-                                  <div className="text-center py-8 text-gray-400 text-sm italic border-2 border-dashed rounded-xl">
+                              {editFormShifts.length === 0 ? (
+                                  <div className="text-center py-12 text-gray-400 text-sm italic border-2 border-dashed rounded-xl bg-gray-50">
                                       No shifts assigned. Add one below.
                                   </div>
                               ) : (
-                                  editingShopper.shifts
+                                editFormShifts
                                     .sort((a, b) => a.date.localeCompare(b.date))
                                     .map((shift, idx) => {
-                                        const isEditing = editingShiftId === shift.id;
                                         return (
-                                          <div 
-                                              key={idx} 
-                                              className={`flex items-center justify-between p-3 rounded-lg border transition-all group ${
-                                                  isEditing ? 'bg-orange-50 border-orange-300 ring-1 ring-orange-200' : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'
-                                              }`}
-                                          >
-                                              <div className="flex items-center gap-3">
-                                                  <div className={`w-2 h-8 rounded-full ${shift.type === ShiftType.AA ? 'bg-red-500' : 'bg-green-500'}`} />
-                                                  <div>
-                                                      <div className="font-bold text-sm text-gray-800">{formatDateDisplay(shift.date)}</div>
-                                                      <div className="text-xs text-gray-500 flex gap-2">
-                                                          <span>{shift.time}</span>
-                                                          <span className={`font-bold px-1.5 rounded-full ${shift.type === ShiftType.AA ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                                                              {shift.type === ShiftType.AA ? 'AA' : 'Std'}
-                                                          </span>
-                                                      </div>
+                                          <div key={shift.id || idx} className={`grid grid-cols-12 gap-2 items-center p-3 rounded-lg border transition-all ${shift.type === ShiftType.AA ? 'bg-red-50/30 border-red-100' : 'bg-white border-gray-100 hover:border-gray-300'}`}>
+                                              {/* Date Input */}
+                                              <div className="col-span-3">
+                                                  <input 
+                                                      type="date"
+                                                      value={shift.date}
+                                                      onChange={(e) => handleLocalShiftUpdate(shift.id, 'date', e.target.value)}
+                                                      className="w-full text-xs font-bold text-gray-800 bg-transparent border-b border-dashed border-gray-300 focus:border-purple-500 outline-none p-1"
+                                                  />
+                                              </div>
+                                              
+                                              {/* Time Select */}
+                                              <div className="col-span-3">
+                                                  <select
+                                                      value={shift.time}
+                                                      onChange={(e) => handleLocalShiftUpdate(shift.id, 'time', e.target.value)}
+                                                      className="w-full text-xs text-gray-500 bg-transparent border-b border-dashed border-gray-300 focus:border-purple-500 outline-none p-1"
+                                                  >
+                                                      {SHIFT_TIMES.map(t => (
+                                                          <option key={t} value={t}>{t.split('(')[0]}</option>
+                                                      ))}
+                                                  </select>
+                                              </div>
+                                              
+                                              {/* Type Toggles */}
+                                              <div className="col-span-4 flex justify-center">
+                                                  <div className="flex bg-white rounded-lg border shadow-sm p-1">
+                                                      <button onClick={() => handleLocalShiftUpdate(shift.id, 'type', ShiftType.STANDARD)} className={`px-3 py-1 rounded text-[10px] font-bold transition-all ${shift.type === ShiftType.STANDARD ? 'bg-green-100 text-green-700 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>Std</button>
+                                                      <button onClick={() => handleLocalShiftUpdate(shift.id, 'type', ShiftType.AA)} className={`px-3 py-1 rounded text-[10px] font-bold transition-all ${shift.type === ShiftType.AA ? 'bg-red-100 text-red-700 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>AA</button>
                                                   </div>
                                               </div>
-                                              <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                  <button 
-                                                      onClick={() => handleEditShiftClick(shift)}
-                                                      className={`p-2 rounded-lg transition-all ${isEditing ? 'text-orange-600 bg-orange-100' : 'text-gray-400 hover:text-orange-600 hover:bg-orange-50'}`}
-                                                      title="Edit Shift"
-                                                  >
-                                                      <Pencil className="w-4 h-4" />
-                                                  </button>
-                                                  <button 
-                                                      onClick={() => handleRemoveShift(shift.id)}
-                                                      className="p-2 text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                                                      title="Remove Shift"
-                                                  >
-                                                      <Trash2 className="w-4 h-4" />
-                                                  </button>
+                                              
+                                              {/* Delete */}
+                                              <div className="col-span-2 text-right">
+                                                  <button onClick={() => handleRemoveShift(shift.id)} className="p-1.5 text-gray-300 hover:text-red-600 hover:bg-red-50 rounded transition-all" title="Remove Shift"><Trash2 className="w-4 h-4" /></button>
                                               </div>
                                           </div>
                                         );
                                     })
                               )}
                           </div>
-
-                          {/* Quick Add / Edit Form */}
-                          <div className={`pt-4 border-t -mx-6 -mb-6 p-6 transition-colors ${editingShiftId ? 'bg-orange-50 border-orange-200' : 'bg-gray-50'}`}>
-                              <div className="flex justify-between items-center mb-2">
-                                  <h5 className={`text-xs font-bold uppercase flex items-center gap-2 ${editingShiftId ? 'text-orange-600' : 'text-gray-500'}`}>
-                                      {editingShiftId ? <><Pencil className="w-3 h-3" /> Edit Shift Mode</> : 'Quick Add Shift'}
-                                  </h5>
-                                  {editingShiftId && (
-                                      <button onClick={resetShiftForm} className="text-xs font-bold text-gray-500 hover:text-gray-800 flex items-center gap-1">
-                                          <RotateCcw className="w-3 h-3" /> Cancel
-                                      </button>
-                                  )}
-                              </div>
-                              
-                              <div className="flex flex-col md:flex-row gap-2">
-                                  <input 
-                                      type="date" 
-                                      value={newShiftDate}
-                                      onChange={(e) => setNewShiftDate(e.target.value)}
-                                      className="flex-1 p-2 rounded-lg border text-sm outline-none focus:ring-2 focus:ring-green-500"
-                                  />
-                                  <select
-                                      value={newShiftTime}
-                                      onChange={(e) => setNewShiftTime(e.target.value as ShiftTime)}
-                                      className="flex-1 p-2 rounded-lg border text-sm outline-none focus:ring-2 focus:ring-green-500"
-                                  >
-                                      {SHIFT_TIMES.map(t => (
-                                          <option key={t} value={t}>{t.split('(')[0]}</option>
-                                      ))}
-                                  </select>
-                                  <select
-                                      value={newShiftType}
-                                      onChange={(e) => setNewShiftType(e.target.value as ShiftType)}
-                                      className="w-24 p-2 rounded-lg border text-sm outline-none focus:ring-2 focus:ring-green-500"
-                                  >
-                                      <option value={ShiftType.STANDARD}>Std</option>
-                                      <option value={ShiftType.AA}>AA</option>
-                                  </select>
-                                  <Button 
-                                      onClick={handleAddOrUpdateShift} 
-                                      disabled={!newShiftDate}
-                                      className={`px-4 py-2 text-sm flex items-center gap-2 ${editingShiftId ? 'bg-orange-500 hover:bg-orange-600' : 'bg-green-600 hover:bg-green-700'}`}
-                                  >
-                                      {editingShiftId ? <Save className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                                      {editingShiftId ? 'Update' : 'Add'}
+                          <div className="space-y-4">
+                              <div className={`transition-all duration-300 ${hasUnsavedShiftChanges ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none absolute bottom-0'}`}>
+                                  <Button onClick={handleSaveShiftConfiguration} fullWidth className="py-3 bg-orange-600 hover:bg-orange-700 shadow-lg text-white">
+                                      <Save className="w-4 h-4 mr-2" /> Save Shift Configuration
                                   </Button>
+                              </div>
+                              <div className="pt-4 border-t bg-gray-50/50 p-4 rounded-xl border border-dashed border-gray-200">
+                                  <h5 className="text-xs font-bold uppercase text-gray-400 mb-2 flex items-center gap-2"><Plus className="w-3 h-3" /> Add New Shift</h5>
+                                  <div className="flex flex-col md:flex-row gap-2">
+                                      <input type="date" value={newShiftDate} onChange={(e) => setNewShiftDate(e.target.value)} className="flex-1 p-2 rounded-lg border text-sm outline-none focus:ring-2 focus:ring-green-500 bg-white" />
+                                      <select value={newShiftTime} onChange={(e) => setNewShiftTime(e.target.value as ShiftTime)} className="flex-1 p-2 rounded-lg border text-sm outline-none focus:ring-2 focus:ring-green-500 bg-white">
+                                          {SHIFT_TIMES.map(t => (<option key={t} value={t}>{t.split('(')[0]}</option>))}
+                                      </select>
+                                      <Button onClick={handleAddShift} disabled={!newShiftDate} variant="secondary" className="px-4 py-2 text-xs">Add</Button>
+                                  </div>
                               </div>
                           </div>
                       </div>
@@ -586,58 +611,36 @@ export const AdminDataView: React.FC = () => {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in">
-      
       {/* Toolbar */}
       <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl border shadow-sm">
         <div className="relative w-full md:w-96">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input 
-            type="text" 
-            placeholder="Search by name..." 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 rounded-lg border bg-gray-50 focus:bg-white focus:ring-2 focus:ring-purple-500 outline-none transition-all"
-          />
+          <input type="text" placeholder="Search by name..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 rounded-lg border bg-gray-50 focus:bg-white focus:ring-2 focus:ring-purple-500 outline-none transition-all" />
         </div>
-        
         <div className="flex gap-2">
-            <button onClick={fetchData} className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 transition-colors" title="Refresh">
-                <RefreshCw className="w-5 h-5" />
-            </button>
-            <button 
-                onClick={downloadCSV}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium shadow-sm"
-            >
-                <Download className="w-4 h-4" /> Export CSV
-            </button>
+            {isSavingOrder && (
+                <div className="flex items-center gap-2 text-xs font-bold text-green-600 bg-green-50 px-3 py-2 rounded-lg animate-pulse">
+                    <SaveAll className="w-4 h-4" /> Saving Order...
+                </div>
+            )}
+            <button onClick={fetchData} className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 transition-colors" title="Refresh"><RefreshCw className="w-5 h-5" /></button>
+            <button onClick={downloadCSV} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium shadow-sm"><Download className="w-4 h-4" /> Export CSV</button>
         </div>
       </div>
 
-      {/* HEATMAP GRAPH */}
+      {/* HEATMAP */}
       <div className="bg-white rounded-xl shadow-sm border p-4 md:p-6 overflow-hidden">
           <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-bold text-gray-700 uppercase flex items-center gap-2">
-                  <Activity className="w-4 h-4 text-green-600" /> Density Map
-              </h3>
+              <h3 className="text-sm font-bold text-gray-700 uppercase flex items-center gap-2"><Activity className="w-4 h-4 text-green-600" /> Density Map</h3>
               <div className="flex items-center gap-3 text-xs text-gray-400">
-                  <div className="flex items-center gap-1">
-                      <div className="w-3 h-3 bg-red-500 rounded-sm"></div>
-                      <span>AA Shift</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                      <div className="w-3 h-3 bg-green-500 rounded-sm"></div>
-                      <span>Standard Shift</span>
-                  </div>
+                  <div className="flex items-center gap-1"><div className="w-3 h-3 bg-red-500 rounded-sm"></div><span>AA Shift</span></div>
+                  <div className="flex items-center gap-1"><div className="w-3 h-3 bg-green-500 rounded-sm"></div><span>Standard Shift</span></div>
                   <span className="ml-2 text-[10px] text-gray-300">Darker = More People</span>
               </div>
           </div>
-          
           <div className="overflow-x-auto pb-2">
               <div className="min-w-max">
-                  {/* Grid Container */}
                   <div className="grid grid-rows-[auto_repeat(4,1fr)] gap-1">
-                      
-                      {/* 1. Header Row (Dates) */}
                       <div className="flex gap-1 ml-20 md:ml-24">
                           {heatmapData.days.map((day, i) => (
                               <div key={i} className="w-8 text-center">
@@ -646,46 +649,21 @@ export const AdminDataView: React.FC = () => {
                               </div>
                           ))}
                       </div>
-
-                      {/* 2. Rows for each Shift Time */}
                       {SHIFT_TIMES.map(shift => (
                           <div key={shift} className="flex gap-1 items-center">
-                              {/* Row Header */}
-                              <div className="w-20 md:w-24 text-right pr-3 text-[10px] md:text-xs font-bold text-gray-500 truncate" title={shift}>
-                                  {shift.split('(')[0]}
-                              </div>
-                              
-                              {/* Cells */}
+                              <div className="w-20 md:w-24 text-right pr-3 text-[10px] md:text-xs font-bold text-gray-500 truncate" title={shift}>{shift.split('(')[0]}</div>
                               {heatmapData.days.map((day, i) => {
                                   const dateKey = format(day, 'yyyy-MM-dd');
                                   const key = `${dateKey}_${shift}`;
                                   const data = heatmapData.map[key] || { aa: 0, std: 0, total: 0 };
-                                  
                                   return (
-                                      <div 
-                                          key={i} 
-                                          className="w-8 h-8 rounded border border-gray-100 bg-gray-50 flex flex-col overflow-hidden group relative"
-                                      >
-                                          {/* Top Half: AA (Red) */}
-                                          <div 
-                                              className="flex-1 w-full bg-red-500 transition-all"
-                                              style={{ opacity: getOpacity(data.aa, heatmapData.maxCount) }}
-                                          ></div>
-                                          
-                                          {/* Bottom Half: Standard (Green) */}
-                                          <div 
-                                              className="flex-1 w-full bg-green-500 transition-all"
-                                              style={{ opacity: getOpacity(data.std, heatmapData.maxCount) }}
-                                          ></div>
-
-                                          {/* Tooltip */}
+                                      <div key={i} className="w-8 h-8 rounded border border-gray-100 bg-gray-50 flex flex-col overflow-hidden group relative">
+                                          <div className="flex-1 w-full bg-red-500 transition-all" style={{ opacity: getOpacity(data.aa, heatmapData.maxCount) }}></div>
+                                          <div className="flex-1 w-full bg-green-500 transition-all" style={{ opacity: getOpacity(data.std, heatmapData.maxCount) }}></div>
                                           {(data.total > 0) && (
                                               <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-10 bg-gray-900 text-white text-[10px] py-1.5 px-3 rounded shadow-lg whitespace-nowrap border border-gray-700">
                                                   <div className="font-bold text-center mb-1">{dateKey}</div>
-                                                  <div className="flex gap-3">
-                                                      <span className="text-red-300 font-bold">{data.aa} AA</span>
-                                                      <span className="text-green-300 font-bold">{data.std} Std</span>
-                                                  </div>
+                                                  <div className="flex gap-3"><span className="text-red-300 font-bold">{data.aa} AA</span><span className="text-green-300 font-bold">{data.std} Std</span></div>
                                               </div>
                                           )}
                                       </div>
@@ -698,175 +676,144 @@ export const AdminDataView: React.FC = () => {
           </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white p-4 rounded-xl border shadow-sm flex items-center gap-4">
-              <div className="p-3 bg-blue-100 text-blue-600 rounded-lg"><User className="w-6 h-6" /></div>
-              <div>
-                  <p className="text-xs text-gray-500 uppercase font-bold">Total Shoppers</p>
-                  <p className="text-2xl font-bold text-gray-900">{data.length}</p>
-              </div>
-          </div>
-          <div className="bg-white p-4 rounded-xl border shadow-sm flex items-center gap-4">
-              <div className="p-3 bg-purple-100 text-purple-600 rounded-lg"><Calendar className="w-6 h-6" /></div>
-              <div>
-                  <p className="text-xs text-gray-500 uppercase font-bold">Total Shifts</p>
-                  <p className="text-2xl font-bold text-gray-900">{data.reduce((acc, curr) => acc + curr.shifts.length, 0)}</p>
-              </div>
-          </div>
-          <div className="bg-white p-4 rounded-xl border shadow-sm flex items-center gap-4">
-              <div className="p-3 bg-orange-100 text-orange-600 rounded-lg"><Bus className="w-6 h-6" /></div>
-              <div>
-                  <p className="text-xs text-gray-500 uppercase font-bold">Bus Users</p>
-                  <p className="text-2xl font-bold text-gray-900">{data.filter(d => d.details?.usePicnicBus).length}</p>
-              </div>
-          </div>
-      </div>
-
-      {/* Data Table */}
-      <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="bg-gray-50 border-b text-gray-500">
-                <th className="px-6 py-4 font-semibold">Name</th>
-                <th className="px-6 py-4 font-semibold">Registration Date</th>
-                <th className="px-6 py-4 font-semibold">First Work Day</th>
-                <th className="px-6 py-4 font-semibold text-center">Info</th>
-                <th className="px-6 py-4 font-semibold">AA Pattern</th>
-                <th className="px-6 py-4 font-semibold text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {filteredData.length === 0 ? (
-                  <tr>
-                      <td colSpan={6} className="px-6 py-8 text-center text-gray-400">
-                          No records found.
-                      </td>
-                  </tr>
-              ) : (
-                  filteredData.map((item) => (
-                    <React.Fragment key={item.id}>
-                      <tr 
-                        className={`hover:bg-purple-50 transition-colors cursor-pointer ${expandedRow === item.id ? 'bg-purple-50/50' : ''}`}
-                        onClick={() => setExpandedRow(expandedRow === item.id ? null : item.id)}
-                      >
-                        <td className="px-6 py-4 font-medium text-gray-900 flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center text-gray-600 font-bold text-xs">
-                                {item.name.substring(0,2).toUpperCase()}
-                            </div>
-                            {item.name}
-                        </td>
-                        <td className="px-6 py-4 text-gray-500">
-                            {format(new Date(item.created_at), 'MMM d, HH:mm')}
-                        </td>
-                        <td className="px-6 py-4 text-gray-500">
-                            {formatDateDisplay(item.details?.firstWorkingDay)}
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                            <div className="flex justify-center gap-2">
-                                {item.details?.usePicnicBus && (
-                                    <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-[10px] font-bold border border-green-200" title="Uses Bus">BUS</span>
-                                )}
-                                {item.details?.isRandstad && (
-                                    <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-[10px] font-bold border border-blue-200" title="Randstad Agency">RND</span>
-                                )}
-                            </div>
-                        </td>
-                        <td className="px-6 py-4">
-                            {renderAAPatternCell(item.shifts)}
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                            <div className="flex justify-end gap-2">
-                                <button 
-                                    onClick={(e) => openEditModal(e, item)}
-                                    className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-all"
-                                    title="Edit Shopper"
-                                >
-                                    <Pencil className="w-4 h-4" />
-                                </button>
-                                <button 
-                                    onClick={(e) => handleDelete(e, item.id)}
-                                    className={`p-2 rounded-lg transition-all border ${
-                                        deleteConfirmId === item.id 
-                                        ? 'bg-red-600 text-white border-red-700 hover:bg-red-700 w-24 text-center' 
-                                        : 'text-gray-400 hover:text-red-600 hover:bg-red-50 border-transparent'
-                                    }`}
-                                    title="Delete Record"
-                                >
-                                    {deleteConfirmId === item.id ? (
-                                        <span className="text-xs font-bold">Confirm?</span>
-                                    ) : (
-                                        <Trash2 className="w-4 h-4" />
+      {/* GROUPED TABLES */}
+      <div className="space-y-6">
+        {Object.entries(groupedData).sort((a,b) => b[0].localeCompare(a[0])).map(([dateKey, items]) => (
+            <div key={dateKey} className="bg-white rounded-xl shadow-sm border overflow-hidden">
+                <div className="bg-gray-50 border-b px-6 py-3 flex items-center justify-between">
+                    <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                        <Clock className="w-5 h-5 text-purple-600" />
+                        Registered on: {formatDateDisplay(dateKey)}
+                    </h3>
+                    <span className="text-xs font-bold bg-gray-200 text-gray-600 px-2 py-1 rounded-full">
+                        {items.length} Shoppers
+                    </span>
+                </div>
+                
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                        <thead>
+                            <tr className="bg-white border-b text-gray-500 text-xs uppercase tracking-wider">
+                                <th className="w-10"></th>
+                                <th className="px-6 py-3 font-semibold">Name</th>
+                                <th className="px-6 py-3 font-semibold">Registered</th>
+                                <th className="px-6 py-3 font-semibold text-center">Info</th>
+                                <th className="px-6 py-3 font-semibold">AA Pattern</th>
+                                <th className="px-6 py-3 font-semibold text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {items.map((item, index) => (
+                                <React.Fragment key={item.id}>
+                                    <tr 
+                                        className={`transition-all duration-200 cursor-grab active:cursor-grabbing ${
+                                            expandedRow === item.id ? 'bg-purple-50/50' : ''
+                                        } ${
+                                            draggingId === item.id 
+                                            ? 'opacity-50 bg-blue-50 border-2 border-dashed border-blue-300 scale-[0.98]' 
+                                            : 'hover:bg-purple-50'
+                                        }`}
+                                        onClick={() => setExpandedRow(expandedRow === item.id ? null : item.id)}
+                                        draggable={!searchTerm} // Disable drag when filtering
+                                        onDragStart={(e) => onDragStart(e, index, dateKey, item.id)}
+                                        onDragEnter={(e) => onDragEnter(e, index, dateKey)}
+                                        onDragEnd={onDragEnd}
+                                        onDragOver={(e) => e.preventDefault()}
+                                    >
+                                        <td className="px-2 text-center text-gray-300" onClick={(e) => e.stopPropagation()}>
+                                            <GripVertical className={`w-4 h-4 mx-auto ${draggingId === item.id ? 'text-blue-500' : ''}`} />
+                                        </td>
+                                        <td className="px-6 py-4 font-medium text-gray-900 flex items-center gap-3">
+                                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center text-gray-600 font-bold text-xs">
+                                                {item.name.substring(0,2).toUpperCase()}
+                                            </div>
+                                            {item.name}
+                                        </td>
+                                        <td className="px-6 py-4 text-gray-500">
+                                            {format(new Date(item.created_at), 'MMM d, HH:mm')}
+                                        </td>
+                                        <td className="px-6 py-4 text-center">
+                                            <div className="flex justify-center gap-2">
+                                                {item.details?.usePicnicBus && (
+                                                    <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-[10px] font-bold border border-green-200" title="Uses Bus">BUS</span>
+                                                )}
+                                                {item.details?.isRandstad && (
+                                                    <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-[10px] font-bold border border-blue-200" title="Randstad Agency">RND</span>
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            {renderAAPatternCell(item.shifts)}
+                                        </td>
+                                        <td className="px-6 py-4 text-right">
+                                            <div className="flex justify-end gap-2">
+                                                <button onClick={(e) => openEditModal(e, item)} className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-all" title="Edit Shopper"><Pencil className="w-4 h-4" /></button>
+                                                <button onClick={(e) => handleDelete(e, item.id)} className={`p-2 rounded-lg transition-all border ${deleteConfirmId === item.id ? 'bg-red-600 text-white border-red-700 hover:bg-red-700 w-24 text-center' : 'text-gray-400 hover:text-red-600 hover:bg-red-50 border-transparent'}`} title="Delete Record">{deleteConfirmId === item.id ? <span className="text-xs font-bold">Confirm?</span> : <Trash2 className="w-4 h-4" />}</button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {expandedRow === item.id && (
+                                        <tr className="bg-gray-50/50">
+                                            <td colSpan={6} className="px-6 py-4">
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in slide-in-from-top-2">
+                                                    <div className="space-y-3 text-sm text-gray-600 border-r pr-6">
+                                                        <h4 className="font-bold text-gray-900 flex items-center gap-2"><User className="w-4 h-4" /> Personal Details</h4>
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                            <span>Clothing: <strong>{item.details?.clothingSize}</strong></span>
+                                                            <span>Shoes: <strong>{item.details?.shoeSize}</strong></span>
+                                                            <span>Gloves: <strong>{item.details?.gloveSize}</strong></span>
+                                                            <span>Status: <strong>{item.details?.civilStatus}</strong></span>
+                                                        </div>
+                                                        {item.details?.isRandstad && (
+                                                            <div className="mt-2 pt-2 border-t">
+                                                                <div className="flex items-start gap-2 text-xs"><MapPin className="w-3 h-3 mt-0.5 shrink-0" />{item.details?.address || 'No address provided'}</div>
+                                                            </div>
+                                                        )}
+                                                        <div className="mt-4 pt-4 border-t">
+                                                            <h5 className="font-bold text-gray-900 text-xs uppercase mb-2"><span className="text-red-600">AA</span> Recurring Pattern</h5>
+                                                            {(() => {
+                                                                const patterns = getDistinctAAPatterns(item.shifts);
+                                                                return (
+                                                                    <div className="space-y-2">
+                                                                        <div><span className="text-[10px] font-bold text-gray-400 uppercase block">Weekday</span><span className="text-sm font-medium text-gray-900">{patterns.weekdays.length > 0 ? patterns.weekdays.join(', ') : <span className="text-gray-300 italic">None</span>}</span></div>
+                                                                        <div><span className="text-[10px] font-bold text-gray-400 uppercase block">Weekend</span><span className="text-sm font-medium text-gray-900">{patterns.weekends.length > 0 ? patterns.weekends.join(', ') : <span className="text-gray-300 italic">None</span>}</span></div>
+                                                                    </div>
+                                                                );
+                                                            })()}
+                                                        </div>
+                                                    </div>
+                                                    <div className="col-span-2">
+                                                        <h4 className="font-bold text-gray-900 mb-3 flex items-center gap-2"><Calendar className="w-4 h-4" /> All Selected Shifts ({(item.shifts || []).length})</h4>
+                                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                                            {(item.shifts || []).length > 0 ? (
+                                                                [...(item.shifts || [])].sort((a: any, b: any) => a.date.localeCompare(b.date)).map((shift: any, idx: number) => (
+                                                                    <div key={idx} className={`p-2 rounded border text-xs ${shift.type === 'Always Available' ? 'bg-red-50 border-red-100 text-red-700' : 'bg-green-50 border-green-100 text-green-700'}`}>
+                                                                        <div className="font-bold">{formatDateDisplay(shift.date)}</div>
+                                                                        <div className="truncate" title={shift.time}>{shift.time.split('(')[0]}</div>
+                                                                    </div>
+                                                                ))
+                                                            ) : <span className="text-gray-400 italic text-sm">No shifts selected</span>}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
                                     )}
-                                </button>
-                            </div>
-                        </td>
-                      </tr>
-                      {expandedRow === item.id && (
-                          <tr className="bg-gray-50/50">
-                              <td colSpan={6} className="px-6 py-4">
-                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in slide-in-from-top-2">
-                                      {/* Details Column */}
-                                      <div className="space-y-3 text-sm text-gray-600 border-r pr-6">
-                                          <h4 className="font-bold text-gray-900 flex items-center gap-2">
-                                              <User className="w-4 h-4" /> Personal Details
-                                          </h4>
-                                          <div className="grid grid-cols-2 gap-2">
-                                              <span>Clothing: <strong>{item.details?.clothingSize}</strong></span>
-                                              <span>Shoes: <strong>{item.details?.shoeSize}</strong></span>
-                                              <span>Gloves: <strong>{item.details?.gloveSize}</strong></span>
-                                              <span>Status: <strong>{item.details?.civilStatus}</strong></span>
-                                          </div>
-                                          {item.details?.isRandstad && (
-                                              <div className="mt-2 pt-2 border-t">
-                                                  <div className="flex items-start gap-2 text-xs">
-                                                      <MapPin className="w-3 h-3 mt-0.5 shrink-0" />
-                                                      {item.details?.address || 'No address provided'}
-                                                  </div>
-                                              </div>
-                                          )}
-                                      </div>
-
-                                      {/* Shifts Column */}
-                                      <div className="col-span-2">
-                                          <h4 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
-                                              <Calendar className="w-4 h-4" /> All Selected Shifts ({item.shifts.length})
-                                          </h4>
-                                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                                              {item.shifts.length > 0 ? (
-                                                  item.shifts
-                                                  .sort((a, b) => a.date.localeCompare(b.date))
-                                                  .map((shift, idx) => (
-                                                      <div key={idx} className={`p-2 rounded border text-xs ${
-                                                          shift.type === 'Always Available' 
-                                                          ? 'bg-red-50 border-red-100 text-red-700' 
-                                                          : 'bg-green-50 border-green-100 text-green-700'
-                                                      }`}>
-                                                          <div className="font-bold">{formatDateDisplay(shift.date)}</div>
-                                                          <div className="truncate" title={shift.time}>{shift.time.split('(')[0]}</div>
-                                                      </div>
-                                                  ))
-                                              ) : (
-                                                  <span className="text-gray-400 italic text-sm">No shifts selected</span>
-                                              )}
-                                          </div>
-                                      </div>
-                                  </div>
-                              </td>
-                          </tr>
-                      )}
-                    </React.Fragment>
-                  ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                                </React.Fragment>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        ))}
+        {Object.keys(groupedData).length === 0 && (
+            <div className="text-center py-12 text-gray-400 bg-white rounded-xl border border-dashed">
+                No submissions found matching your search.
+            </div>
+        )}
       </div>
 
-      {/* Edit Modal */}
       {renderEditModal()}
-
     </div>
   );
 };

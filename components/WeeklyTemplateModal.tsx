@@ -53,7 +53,15 @@ export const WeeklyTemplateModal: React.FC<WeeklyTemplateModalProps> = ({
 
   const toggleAvailability = (dayIndex: number, shift: ShiftTime, type: ShiftType) => {
     setCurrentTemplate(prev => {
-      const dayConfig = prev[dayIndex] || {};
+      // Create a default complete object to satisfy Record<ShiftTime, ShiftType[]> type
+      const defaultDayConfig = {
+          [ShiftTime.OPENING]: [],
+          [ShiftTime.MORNING]: [],
+          [ShiftTime.NOON]: [],
+          [ShiftTime.AFTERNOON]: [],
+      } as Record<ShiftTime, ShiftType[]>;
+
+      const dayConfig = prev[dayIndex] || defaultDayConfig;
       const currentTypes = dayConfig[shift] || [];
       
       let newTypes;
@@ -85,7 +93,7 @@ export const WeeklyTemplateModal: React.FC<WeeklyTemplateModalProps> = ({
       const next = { ...prev };
       [1, 2, 3, 4, 5].forEach(d => {
         if (d !== selectedDayIndex) {
-            next[d] = JSON.parse(JSON.stringify(sourceConfig));
+            next[d] = JSON.parse(JSON.stringify(sourceConfig)) as Record<ShiftTime, ShiftType[]>;
         }
       });
       return next;
@@ -264,70 +272,63 @@ export const WeeklyTemplateModal: React.FC<WeeklyTemplateModalProps> = ({
                         <div className="text-xs text-gray-500">Immediate update (3 weeks)</div>
                       </div>
                     </div>
-                    <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-purple-600 group-hover:translate-x-1 transition-all" />
+                    <ArrowRight className="w-4 h-4 text-purple-300 group-hover:text-purple-600 transform group-hover:translate-x-1 transition-all" />
                   </button>
 
-                  {/* Preset 2: Long Term */}
+                  {/* Preset 2: Medium Term */}
                   <button 
                     onClick={handleApplyNextMonth}
-                    className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-gray-900 to-gray-800 hover:from-purple-900 hover:to-purple-800 text-white rounded-xl shadow-lg transition-all group text-left transform hover:-translate-y-0.5"
+                    className="flex items-center justify-between px-4 py-3 bg-white border-2 border-gray-200 hover:border-blue-400 hover:bg-blue-50 rounded-xl transition-all group text-left"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="p-2 bg-white/10 rounded-lg text-white">
+                      <div className="p-2 bg-blue-100 text-blue-600 rounded-lg group-hover:bg-blue-200">
                         <CalendarRange className="w-5 h-5" />
                       </div>
                       <div>
-                        <div className="font-bold text-sm">Apply: Next 4 Weeks</div>
-                        <div className="text-xs text-white/60">Starts {format(nextMonday(new Date()), 'MMM do')}</div>
+                        <div className="font-bold text-gray-800 text-sm">Apply: 4 Weeks (Next Mon)</div>
+                        <div className="text-xs text-gray-500">Standard monthly plan</div>
                       </div>
                     </div>
-                    <ArrowRight className="w-4 h-4 text-white/60 group-hover:text-white group-hover:translate-x-1 transition-all" />
+                    <ArrowRight className="w-4 h-4 text-blue-300 group-hover:text-blue-600 transform group-hover:translate-x-1 transition-all" />
                   </button>
                </div>
              </div>
            ) : (
-             <div className="animate-in slide-in-from-bottom-2 duration-300">
-               <div className="flex items-center justify-between mb-4">
-                  <h4 className="text-sm font-bold text-gray-800 flex items-center gap-2">
-                    <Settings2 className="w-4 h-4 text-gray-500" /> Custom Range Application
-                  </h4>
-                  <button onClick={() => setShowCustomSettings(false)} className="text-xs text-gray-500 hover:text-gray-800">
-                    Back to Presets
-                  </button>
-               </div>
+             <div className="space-y-4 animate-in slide-in-from-bottom-2">
+                <div className="flex justify-between items-center">
+                    <h4 className="font-bold text-gray-700">Custom Range Application</h4>
+                    <button onClick={() => setShowCustomSettings(false)} className="text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+                </div>
+                
+                <div className="flex gap-4">
+                    <div className="flex-1">
+                        <label className="text-xs font-semibold text-gray-500 block mb-1">Start Date</label>
+                        <input 
+                            type="date" 
+                            value={customDate}
+                            onChange={(e) => setCustomDate(e.target.value)}
+                            className="w-full p-2 border rounded-lg text-sm"
+                        />
+                    </div>
+                    <div className="flex-1">
+                        <label className="text-xs font-semibold text-gray-500 block mb-1">Duration (Weeks)</label>
+                        <input 
+                            type="number" 
+                            min="1" 
+                            max="12" 
+                            value={customWeeks}
+                            onChange={(e) => setCustomWeeks(Number(e.target.value))}
+                            className="w-full p-2 border rounded-lg text-sm"
+                        />
+                    </div>
+                </div>
 
-               <div className="flex flex-col md:flex-row items-end gap-4">
-                  <div className="flex-1 w-full grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <label className="text-xs font-semibold text-gray-500 uppercase">Start From</label>
-                      <input 
-                        type="date" 
-                        value={customDate}
-                        onChange={(e) => setCustomDate(e.target.value)}
-                        className="w-full border rounded-lg px-3 py-2 text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-purple-500 outline-none transition-all"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                       <label className="text-xs font-semibold text-gray-500 uppercase">Duration</label>
-                       <select 
-                          value={customWeeks} 
-                          onChange={(e) => setCustomWeeks(Number(e.target.value))}
-                          className="w-full border rounded-lg px-3 py-2 text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-purple-500 outline-none transition-all"
-                       >
-                          {[1,2,3,4,5,6,7,8,12].map(num => (
-                             <option key={num} value={num}>{num} Weeks</option>
-                          ))}
-                       </select>
-                    </div>
-                  </div>
-                  <Button onClick={handleCustomApply} className="w-full md:w-auto flex items-center justify-center gap-2 h-[42px]">
-                    <Save className="w-4 h-4" /> Apply Custom
-                  </Button>
-               </div>
+                <Button fullWidth onClick={handleCustomApply}>
+                    Apply Custom Pattern
+                </Button>
              </div>
            )}
         </div>
-
       </div>
     </div>
   );
