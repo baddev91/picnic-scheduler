@@ -1,5 +1,5 @@
 import React from 'react';
-import { Camera, RefreshCw, CalendarDays, Shirt, Hand, Bus, Building2, Settings2 } from 'lucide-react';
+import { Camera, RefreshCw, CalendarDays, Shirt, Hand, Bus, Building2, Settings2, AlertTriangle, CheckCircle2, ArrowUp } from 'lucide-react';
 import { format, endOfWeek, addWeeks } from 'date-fns';
 import { Button } from './Button';
 import { AppMode, ShiftType, ShopperData } from '../types';
@@ -135,34 +135,57 @@ export const ShopperSummary: React.FC<ShopperSummaryProps> = ({
                   )}
               </div>
 
-              {/* 4. Footer Actions (Fixed) */}
-              <div className="p-3 bg-white border-t shrink-0">
+              {/* 4. Footer Actions (Redesigned) */}
+              <div className="p-4 bg-white border-t shrink-0 relative z-20">
                   {syncStatus === 'success' ? (
-                      <div className="space-y-2">
-                          <div className="bg-green-50 text-green-800 p-2 rounded-lg text-center text-xs font-bold border border-green-100">
-                              Selection Confirmed!
+                      <div className="bg-green-600 rounded-xl p-6 text-center text-white shadow-2xl animate-in zoom-in-95 duration-300">
+                          <div className="bg-white/20 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-sm">
+                              <CheckCircle2 className="w-10 h-10 text-white" />
                           </div>
-                          <Button onClick={handleClearSession} fullWidth className="py-3 text-sm">
-                              Start New Session
-                          </Button>
+                          <h3 className="text-2xl font-black mb-2">All Done!</h3>
+                          <p className="text-green-50 mb-6 font-medium text-lg">
+                              You can now close this page.
+                          </p>
+                          <div className="bg-white/10 rounded-lg p-4 border border-white/20">
+                              <p className="text-xs font-bold uppercase tracking-widest text-green-200 mb-2">What's Next?</p>
+                              <p className="font-bold text-white text-lg leading-tight">
+                                  Please proceed with the next step on your paper sheet.
+                              </p>
+                          </div>
                       </div>
                   ) : (
-                      <div className="flex gap-2">
-                           <Button 
-                              onClick={() => setMode(AppMode.SHOPPER_FLOW)} 
-                              variant="secondary"
-                              className="flex-1 py-3 text-sm"
-                              disabled={isSyncing}
-                           >
-                              Back
-                           </Button>
-                           <Button 
-                              onClick={handleSubmitData} 
-                              disabled={isSyncing}
-                              className="flex-[2] py-3 text-sm bg-gray-900 hover:bg-black shadow-lg"
-                           >
-                              {isSyncing ? 'Saving...' : 'Confirm'}
-                           </Button>
+                      <div className="space-y-3">
+                           {/* Warning Box */}
+                           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 flex items-start gap-3 animate-pulse">
+                                <AlertTriangle className="w-5 h-5 text-yellow-600 shrink-0 mt-0.5" />
+                                <div>
+                                    <h4 className="font-bold text-yellow-800 text-sm">Action Required</h4>
+                                    <p className="text-xs text-yellow-700 leading-tight">
+                                        You <u>must</u> press the button below to send your schedule.
+                                    </p>
+                                </div>
+                           </div>
+
+                           <div className="flex gap-3">
+                               <Button 
+                                  onClick={() => setMode(AppMode.SHOPPER_FLOW)} 
+                                  variant="secondary"
+                                  className="px-4 py-3 text-sm font-bold border-gray-300"
+                                  disabled={isSyncing}
+                               >
+                                  Edit
+                               </Button>
+                               <Button 
+                                  onClick={handleSubmitData} 
+                                  disabled={isSyncing}
+                                  className={`flex-1 py-4 text-base font-black uppercase tracking-wide shadow-xl transition-all ${
+                                      isSyncing ? 'bg-gray-400' : 'bg-gradient-to-r from-green-600 to-green-500 hover:to-green-400 hover:scale-[1.02]'
+                                  }`}
+                               >
+                                  {isSyncing ? 'Sending...' : 'Submit Schedule'}
+                                  {!isSyncing && <ArrowUp className="w-5 h-5 ml-2" />}
+                               </Button>
+                           </div>
                       </div>
                   )}
               </div>

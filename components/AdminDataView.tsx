@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { Download, Search, Trash2, User, Calendar, MapPin, Bus, RefreshCw, Activity, Pencil, X, Plus, Save, AlertCircle, Sun, Star, GripVertical, Clock, SaveAll } from 'lucide-react';
-import { format, eachDayOfInterval, addDays, startOfToday } from 'date-fns';
+import { format, eachDayOfInterval, addDays } from 'date-fns';
 import min from 'date-fns/min';
 import max from 'date-fns/max';
 import parseISO from 'date-fns/parseISO';
+import startOfDay from 'date-fns/startOfDay';
 import { ShiftType, ShiftTime } from '../types';
-import { SHIFT_TIMES } from '../constants';
+import { SHIFT_TIMES, getShopperAllowedRange } from '../constants';
 import { Button } from './Button';
 
 interface ShopperRecord {
@@ -35,6 +36,15 @@ export const AdminDataView: React.FC = () => {
   const [editFormDetails, setEditFormDetails] = useState<any>({});
   const [editFormShifts, setEditFormShifts] = useState<any[]>([]); 
   const [hasUnsavedShiftChanges, setHasUnsavedShiftChanges] = useState(false);
+  
+  // AA Quick Config State
+  const [aaConfig, setAaConfig] = useState<{
+    weekday: { day: string, time: ShiftTime | '' },
+    weekend: { day: string, time: ShiftTime | '' }
+  }>({
+    weekday: { day: '', time: '' },
+    weekend: { day: '', time: '' }
+  });
   
   // Shift Management State
   const [newShiftDate, setNewShiftDate] = useState('');
@@ -117,8 +127,7 @@ export const AdminDataView: React.FC = () => {
       }
   };
 
-  // Smart Save: Only update ID and Rank. 
-  // Simplified to avoid sending extra fields (like 'updated_at' if not in schema) or join data.
+  // Smart Save: Update ID and Rank, and include Name/Details to satisfy constraints
   const saveNewOrder = async (groupKey: string) => {
       setIsSavingOrder(true);
       try {
@@ -128,7 +137,9 @@ export const AdminDataView: React.FC = () => {
 
           const updates = itemsInGroup.map((item, index) => ({
               id: item.id,
-              rank: index
+              rank: index,
+              name: item.name,
+              details: item.details
           }));
 
           const { error } = await supabase
@@ -166,8 +177,8 @@ export const AdminDataView: React.FC = () => {
           });
       });
 
-      let startDate = startOfToday();
-      let endDate = addDays(startOfToday(), 14);
+      let startDate = startOfDay(new Date());
+      let endDate = addDays(startOfDay(new Date()), 14);
 
       if (allDates.length > 0) {
           startDate = min(allDates);
@@ -213,11 +224,36 @@ export const AdminDataView: React.FC = () => {
   };
 
   // --- EDIT MODAL LOGIC ---
+  const analyzeAAPattern = (shifts: any[]) => {
+      const aaShifts = shifts.filter((s: any) => s.type === ShiftType.AA);
+      
+      let wdDay = '', wdTime: ShiftTime | '' = '';
+      let weDay = '', weTime: ShiftTime | '' = '';
+
+      // Simple heuristic: Take the first occurrence
+      for (const s of aaShifts) {
+          const date = new Date(s.date);
+          const day = date.getDay(); // 0-6
+          const dayName = format(date, 'EEEE');
+          
+          if (day === 0 || day === 6) {
+               if (!weDay) { weDay = dayName; weTime = s.time; }
+          } else {
+               if (!wdDay) { wdDay = dayName; wdTime = s.time; }
+          }
+      }
+      setAaConfig({
+          weekday: { day: wdDay, time: wdTime },
+          weekend: { day: weDay, time: weTime }
+      });
+  };
+
   const openEditModal = (e: React.MouseEvent, shopper: ShopperRecord) => {
       e.stopPropagation();
       setEditingShopper(shopper);
       setEditFormDetails({ ...shopper.details, name: shopper.name }); 
       setEditFormShifts(JSON.parse(JSON.stringify(shopper.shifts)));
+      analyzeAAPattern(shopper.shifts);
       setHasUnsavedShiftChanges(false);
       resetShiftForm();
   };
@@ -226,6 +262,47 @@ export const AdminDataView: React.FC = () => {
       setNewShiftDate('');
       setNewShiftTime(SHIFT_TIMES[0]);
       setNewShiftType(ShiftType.STANDARD);
+  };
+
+  const handleApplyAAPattern = () => {
+    if ((!aaConfig.weekday.day || !aaConfig.weekday.time) && (!aaConfig.weekend.day || !aaConfig.weekend.time)) {
+        alert("Please select at least one pattern (Weekday or Weekend).");
+        return;
+    }
+    
+    if (!confirm("This will overwrite existing future AA shifts with this pattern. Continue?")) return;
+
+    // Use allowed range logic
+    const { start, end } = getShopperAllowedRange();
+    const startDateStr = format(start, 'yyyy-MM-dd');
+    
+    // Filter out existing AA shifts that are in the future range (we replace them)
+    let updatedShifts = editFormShifts.filter(s => {
+        if (s.type !== ShiftType.AA) return true;
+        // Keep AA shifts in the past
+        if (s.date < startDateStr) return true;
+        return false;
+    });
+
+    // Generate new shifts
+    const newShifts = [];
+    let curr = start;
+    while (curr <= end) {
+        const dayName = format(curr, 'EEEE');
+        const dateStr = format(curr, 'yyyy-MM-dd');
+        
+        if (dayName === aaConfig.weekday.day && aaConfig.weekday.time) {
+            newShifts.push({ id: undefined, date: dateStr, time: aaConfig.weekday.time, type: ShiftType.AA, shopper_id: editingShopper?.id });
+        }
+        else if (dayName === aaConfig.weekend.day && aaConfig.weekend.time) {
+            newShifts.push({ id: undefined, date: dateStr, time: aaConfig.weekend.time, type: ShiftType.AA, shopper_id: editingShopper?.id });
+        }
+        curr = addDays(curr, 1);
+    }
+    
+    updatedShifts = [...updatedShifts, ...newShifts];
+    setEditFormShifts(updatedShifts);
+    setHasUnsavedShiftChanges(true);
   };
 
   const handleSaveDetails = async () => {
@@ -506,6 +583,67 @@ export const AdminDataView: React.FC = () => {
                               <Button onClick={handleSaveDetails} variant="secondary" fullWidth className="mt-2 text-xs h-8">
                                   <Save className="w-3 h-3 mr-2" /> Save Info
                               </Button>
+                          </div>
+                          
+                          {/* AA Config Section */}
+                          <div className="mt-6 pt-6 border-t space-y-4">
+                              <div className="flex items-center gap-2 mb-2">
+                                  <Sun className="w-4 h-4 text-orange-500" />
+                                  <h4 className="font-bold text-gray-700 uppercase text-xs tracking-wider">AA Pattern (Quick Set)</h4>
+                              </div>
+                              
+                              {/* Weekday Config */}
+                              <div className="space-y-2">
+                                  <label className="text-xs font-bold text-gray-400">Weekday (Mon-Fri)</label>
+                                  <div className="flex gap-2">
+                                      <select 
+                                          value={aaConfig.weekday.day}
+                                          onChange={e => setAaConfig({...aaConfig, weekday: { ...aaConfig.weekday, day: e.target.value }})}
+                                          className="flex-1 p-2 bg-white border rounded-lg text-xs"
+                                      >
+                                          <option value="">Day...</option>
+                                          {['Monday','Tuesday','Wednesday','Thursday','Friday'].map(d => <option key={d} value={d}>{d}</option>)}
+                                      </select>
+                                      <select 
+                                          value={aaConfig.weekday.time}
+                                          onChange={e => setAaConfig({...aaConfig, weekday: { ...aaConfig.weekday, time: e.target.value as ShiftTime }})}
+                                          className="flex-1 p-2 bg-white border rounded-lg text-xs"
+                                      >
+                                          <option value="">Time...</option>
+                                          {SHIFT_TIMES.map(t => <option key={t} value={t}>{t.split('(')[0]}</option>)}
+                                      </select>
+                                  </div>
+                              </div>
+
+                              {/* Weekend Config */}
+                              <div className="space-y-2">
+                                  <label className="text-xs font-bold text-gray-400">Weekend (Sat-Sun)</label>
+                                  <div className="flex gap-2">
+                                      <select 
+                                          value={aaConfig.weekend.day}
+                                          onChange={e => setAaConfig({...aaConfig, weekend: { ...aaConfig.weekend, day: e.target.value }})}
+                                          className="flex-1 p-2 bg-white border rounded-lg text-xs"
+                                      >
+                                          <option value="">Day...</option>
+                                          {['Saturday','Sunday'].map(d => <option key={d} value={d}>{d}</option>)}
+                                      </select>
+                                      <select 
+                                          value={aaConfig.weekend.time}
+                                          onChange={e => setAaConfig({...aaConfig, weekend: { ...aaConfig.weekend, time: e.target.value as ShiftTime }})}
+                                          className="flex-1 p-2 bg-white border rounded-lg text-xs"
+                                      >
+                                          <option value="">Time...</option>
+                                          {SHIFT_TIMES.map(t => <option key={t} value={t}>{t.split('(')[0]}</option>)}
+                                      </select>
+                                  </div>
+                              </div>
+
+                              <Button onClick={handleApplyAAPattern} variant="outline" fullWidth className="text-xs h-8 border-dashed border-gray-300 hover:border-purple-500 hover:text-purple-600">
+                                  Apply Pattern
+                              </Button>
+                              <p className="text-[10px] text-gray-400 text-center leading-tight">
+                                  Adds AA shifts for next 8 weeks. Existing future AA shifts will be replaced.
+                              </p>
                           </div>
                       </div>
                       <div className="flex-1 p-6 overflow-hidden flex flex-col bg-white">

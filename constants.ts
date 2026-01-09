@@ -1,6 +1,7 @@
 import { ShiftTime } from './types';
-import { format, addWeeks, endOfWeek, addDays, startOfToday } from 'date-fns';
+import { format, addWeeks, endOfWeek, addDays } from 'date-fns';
 import startOfWeek from 'date-fns/startOfWeek';
+import startOfDay from 'date-fns/startOfDay';
 
 export const SHIFT_TIMES = [
   ShiftTime.OPENING,
@@ -30,7 +31,7 @@ export const MIN_DAYS_TO_START = 3;
 
 // Helper to get the strict minimum start date (Today + 3 days)
 export const getShopperMinDate = () => {
-  return addDays(startOfToday(), MIN_DAYS_TO_START);
+  return addDays(startOfDay(new Date()), MIN_DAYS_TO_START);
 };
 
 // Helper to get the allowed range (Current Week + 8 Weeks into the future to allow future starts)

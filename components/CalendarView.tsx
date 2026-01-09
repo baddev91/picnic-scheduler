@@ -1,12 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { 
   format, endOfMonth, eachDayOfInterval, addMonths, isWeekend, endOfWeek, isWithinInterval, 
-  isAfter, isBefore, addDays, addWeeks, startOfToday 
+  isAfter, isBefore, addDays, addWeeks 
 } from 'date-fns';
 import startOfMonth from 'date-fns/startOfMonth';
 import subMonths from 'date-fns/subMonths';
 import startOfWeek from 'date-fns/startOfWeek';
 import parseISO from 'date-fns/parseISO';
+import startOfDay from 'date-fns/startOfDay';
 import { ChevronLeft, ChevronRight, Check, Ban, Lock, X, Plus, Star, Calendar as CalendarIcon, Clock, PlayCircle } from 'lucide-react';
 import { ShiftTime, ShiftType, ShopperShift, AdminAvailabilityMap } from '../types';
 import { SHIFT_TIMES, formatDateKey, getShopperAllowedRange, getShopperMinDate } from '../constants';
@@ -42,7 +43,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   // Get allowed range for Shoppers
   const allowedRange = useMemo(() => getShopperAllowedRange(), []);
   const minShopperDate = useMemo(() => getShopperMinDate(), []);
-  const today = startOfToday();
+  const today = startOfDay(new Date());
 
   const daysInMonth = useMemo(() => {
     const start = startOfWeek(startOfMonth(currentDate), { weekStartsOn: 1 }); // Start on Monday
