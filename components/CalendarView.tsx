@@ -164,6 +164,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
            const status = getShopperDayStatus(day);
            const isFWD = status.isFirstWorkingDay;
 
+           // FWD LOCK: If we are in Step 2 (Standard Selection) and this day IS the First Working Day, 
+           // we should prevent interaction or visually indicate it is locked.
+           const isLockedFWD = mode === 'SHOPPER' && !isFWDSelection && step === 2 && isFWD;
+
            return (
              <div key={dateKey} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 {/* Mobile Card Header */}
@@ -212,17 +216,21 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                       const isFull = isFWDSelection && currentFWDCount >= 5;
 
                       // Identify if this specific button is the selected First Working Day shift
-                      // It is if: The Day matches FWD (isFWD) AND this specific shift time is selected as Standard
-                      const isTheFWDSelection = isFWD && isSelectedStd;
+                      const isTheFWDSelection = isFWD && shiftEntries.length > 0;
 
                       return (
                         <button
                           key={shift}
                           // FWD Mode: Disable if not Morning/Afternoon or not available OR FULL
-                          // Standard Mode: Generally allow clicking to handle logic in App.tsx
-                          disabled={(mode === 'SHOPPER' && !stdAvailable) || (isFull && !isTheFWDSelection)}
+                          // Standard Mode: Disable if FWD Locked, OR not available. 
+                          // App.tsx handles strict logic, this is visual feedback.
+                          disabled={
+                              (mode === 'SHOPPER' && !stdAvailable) || 
+                              (isFull && !isTheFWDSelection) ||
+                              (isLockedFWD)
+                          }
                           onClick={() => {
-                             if (mode === 'SHOPPER' && onShopperToggle && stdAvailable && !isFull) {
+                             if (mode === 'SHOPPER' && onShopperToggle && stdAvailable && !isFull && !isLockedFWD) {
                                 onShopperToggle(dateKey, shift, ShiftType.STANDARD);
                              }
                           }}
@@ -237,15 +245,23 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                                         : 'bg-white border-gray-100 text-gray-600 hover:border-green-300 hover:bg-green-50'}
                             ${(mode === 'SHOPPER' && !stdAvailable) ? 'opacity-50 cursor-not-allowed' : ''}
                             ${isFull && !isTheFWDSelection ? 'opacity-50 cursor-not-allowed bg-gray-50' : ''}
+                            ${isLockedFWD ? 'cursor-not-allowed opacity-90' : ''}
                           `}
                         >
                             <span className="text-sm font-bold">{label}</span>
                             <span className="text-[10px] opacity-70">{time}</span>
                             
                             {/* Star Icon for FWD */}
-                            {isFWDSelection && isTheFWDSelection && (
-                                <span className="absolute -top-2 -right-2 bg-white rounded-full p-1 shadow-sm border border-yellow-200">
+                            {(isFWDSelection && isTheFWDSelection) || (isTheFWDSelection && isLockedFWD) ? (
+                                <span className="absolute -top-2 -right-2 bg-white rounded-full p-1 shadow-sm border border-yellow-200 z-20">
                                     <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+                                </span>
+                            ) : null}
+
+                            {/* FWD Locked Indicator */}
+                            {isLockedFWD && !isTheFWDSelection && (
+                                <span className="absolute inset-0 flex items-center justify-center bg-gray-100/50">
+                                   <Lock className="w-4 h-4 text-gray-400" />
                                 </span>
                             )}
                             
@@ -258,7 +274,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                             
                             {/* Generic Selection Indicators (Non-FWD) */}
                             {isSelectedAA && !isFWDSelection && <span className="absolute top-1 right-1 text-[9px] font-bold bg-white/50 px-1 rounded text-red-600">AA</span>}
-                            {isSelectedStd && !isFWDSelection && <CheckCircleIcon className="absolute top-1 right-1 w-3 h-3 text-green-600" />}
+                            {isSelectedStd && !isFWDSelection && !isLockedFWD && <CheckCircleIcon className="absolute top-1 right-1 w-3 h-3 text-green-600" />}
                         </button>
                       );
                    })}
@@ -397,6 +413,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         return null;
     }
 
+    const isLockedFWD = mode === 'SHOPPER' && !isFWDSelection && step === 2 && isFWD;
+
     return (
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
         <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
@@ -408,9 +426,11 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                   ? 'Configure Availability' 
                   : isFWDSelection 
                     ? 'Confirm First Day' 
-                    : step === 0 
-                        ? 'Select AA Shift' 
-                        : 'Select Standard Shift'
+                    : isLockedFWD 
+                        ? 'First Day (Locked)'
+                        : step === 0 
+                            ? 'Select AA Shift' 
+                            : 'Select Standard Shift'
                 }
               </p>
             </div>
@@ -420,6 +440,12 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           </div>
 
           <div className="p-4 md:p-6 space-y-3 overflow-y-auto bg-gray-50/50">
+            {isLockedFWD && (
+               <div className="p-3 bg-yellow-50 text-yellow-800 text-sm rounded-lg border border-yellow-200 flex items-center gap-2">
+                   <Lock className="w-4 h-4" /> This is your First Working Day. Go back to Step 2 to change it.
+               </div>
+            )}
+            
             {SHIFT_TIMES.map((shift) => {
               const aaAvailable = isTypeAvailable(dateKey, shift, ShiftType.AA);
               const stdAvailable = isTypeAvailable(dateKey, shift, ShiftType.STANDARD);
@@ -444,7 +470,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               const isFull = isFWDSelection && currentFWDCount >= 5;
 
               return (
-                <div key={shift} className={`w-full flex flex-col gap-2 md:gap-3 p-3 md:p-4 border rounded-xl bg-white shadow-sm transition-all ${isSelectedAA || isSelectedStd ? 'ring-2 ring-purple-500 border-transparent' : 'border-gray-200'} ${isFWDButtonDisabled ? 'opacity-50' : ''}`}>
+                <div key={shift} className={`w-full flex flex-col gap-2 md:gap-3 p-3 md:p-4 border rounded-xl bg-white shadow-sm transition-all ${isSelectedAA || isSelectedStd ? 'ring-2 ring-purple-500 border-transparent' : 'border-gray-200'} ${isFWDButtonDisabled || isLockedFWD ? 'opacity-60' : ''}`}>
                   <div className="text-sm md:text-base font-bold text-gray-800 flex justify-between">
                       {shift}
                       {isFWDButtonDisabled && <span className="text-xs text-red-500 font-normal">Not allowed for 1st day</span>}
@@ -481,23 +507,22 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                       <button
                         onClick={() => {
                           if (mode === 'ADMIN' && onAdminToggle) onAdminToggle(dateKey, shift, ShiftType.STANDARD);
-                          if (mode === 'SHOPPER' && onShopperToggle && stdAvailable && !isFull) onShopperToggle(dateKey, shift, ShiftType.STANDARD);
+                          if (mode === 'SHOPPER' && onShopperToggle && stdAvailable && !isFull && !isLockedFWD) onShopperToggle(dateKey, shift, ShiftType.STANDARD);
                         }}
-                        disabled={mode === 'SHOPPER' && (isFWDButtonDisabled || !stdAvailable || (isFull && isFWDSelection))}
+                        disabled={mode === 'SHOPPER' && (isFWDButtonDisabled || !stdAvailable || (isFull && isFWDSelection) || isLockedFWD)}
                         className={`flex items-center justify-between px-4 py-3 rounded-lg text-sm font-semibold border transition-all ${
-                          isSelectedStd
+                          isSelectedStd || (isFWDSelection && isSelectedAA && isFWD)
                             ? 'bg-green-600 text-white border-green-600 shadow-md transform scale-[1.02]' 
-                            : stdAvailable && (!isSelectedAA || isFWD) && !isFull
+                            : stdAvailable && (!isSelectedAA || isFWD) && !isFull && !isLockedFWD
                               ? 'bg-white border-green-200 text-green-700 hover:bg-green-50'
                               : 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
                         }`}
                       >
                          <span className="flex items-center gap-2">
-                           {isSelectedStd && <Check className="w-4 h-4" />} 
+                           {(isSelectedStd || (isFWDSelection && isSelectedAA && isFWD)) && <Check className="w-4 h-4" />} 
                            {isFWDSelection ? 'Start Here' : 'Standard Shift'}
                          </span>
                          {isSelectedAA && !isFWD && mode === 'SHOPPER' && !isFWDSelection && <span className="text-xs">AA Selected</span>}
-                         {isSelectedAA && isFWD && mode === 'SHOPPER' && <span className="text-xs text-orange-500 font-bold">Override AA?</span>}
                       </button>
                     )}
                   </div>

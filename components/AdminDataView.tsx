@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { supabase } from '../supabaseClient';
-import { Download, Search, Trash2, User, Calendar, MapPin, Bus, RefreshCw, Activity, Pencil, X, Plus, Save, AlertCircle, Sun, Star, GripVertical, Clock, SaveAll } from 'lucide-react';
+import { Download, Search, Trash2, User, Calendar, MapPin, Bus, RefreshCw, Activity, Pencil, X, Plus, Save, AlertCircle, Sun, Star, GripVertical, Clock, SaveAll, Loader2 } from 'lucide-react';
 import { format, eachDayOfInterval, addDays } from 'date-fns';
 import min from 'date-fns/min';
 import max from 'date-fns/max';
@@ -45,6 +45,7 @@ export const AdminDataView: React.FC = () => {
     weekday: { day: '', time: '' },
     weekend: { day: '', time: '' }
   });
+  const [isApplyingPattern, setIsApplyingPattern] = useState(false);
   
   // Shift Management State
   const [newShiftDate, setNewShiftDate] = useState('');
@@ -264,45 +265,93 @@ export const AdminDataView: React.FC = () => {
       setNewShiftType(ShiftType.STANDARD);
   };
 
-  const handleApplyAAPattern = () => {
+  const handleApplyAAPattern = async () => {
     if ((!aaConfig.weekday.day || !aaConfig.weekday.time) && (!aaConfig.weekend.day || !aaConfig.weekend.time)) {
         alert("Please select at least one pattern (Weekday or Weekend).");
         return;
     }
     
-    if (!confirm("This will overwrite existing future AA shifts with this pattern. Continue?")) return;
+    if (!confirm("This will IMMEDIATELY update the database: deleting existing future AA shifts and adding the new pattern. Continue?")) return;
 
-    // Use allowed range logic
-    const { start, end } = getShopperAllowedRange();
-    const startDateStr = format(start, 'yyyy-MM-dd');
-    
-    // Filter out existing AA shifts that are in the future range (we replace them)
-    let updatedShifts = editFormShifts.filter(s => {
-        if (s.type !== ShiftType.AA) return true;
-        // Keep AA shifts in the past
-        if (s.date < startDateStr) return true;
-        return false;
-    });
+    setIsApplyingPattern(true);
 
-    // Generate new shifts
-    const newShifts = [];
-    let curr = start;
-    while (curr <= end) {
-        const dayName = format(curr, 'EEEE');
-        const dateStr = format(curr, 'yyyy-MM-dd');
+    try {
+        const { start, end } = getShopperAllowedRange();
+        const startDateStr = format(start, 'yyyy-MM-dd');
+        const shopperId = editingShopper!.id;
         
-        if (dayName === aaConfig.weekday.day && aaConfig.weekday.time) {
-            newShifts.push({ id: undefined, date: dateStr, time: aaConfig.weekday.time, type: ShiftType.AA, shopper_id: editingShopper?.id });
+        // 1. Delete ALL AA shifts in the future range for this shopper
+        const { error: delError } = await supabase
+            .from('shifts')
+            .delete()
+            .eq('shopper_id', shopperId)
+            .eq('type', ShiftType.AA)
+            .gte('date', startDateStr);
+        
+        if (delError) throw delError;
+
+        // 2. Generate new shifts
+        const newShiftsPayload = [];
+        let curr = start;
+        while (curr <= end) {
+            const dayName = format(curr, 'EEEE');
+            const dateStr = format(curr, 'yyyy-MM-dd');
+            
+            if (dayName === aaConfig.weekday.day && aaConfig.weekday.time) {
+                newShiftsPayload.push({ date: dateStr, time: aaConfig.weekday.time, type: ShiftType.AA, shopper_id: shopperId });
+            }
+            else if (dayName === aaConfig.weekend.day && aaConfig.weekend.time) {
+                newShiftsPayload.push({ date: dateStr, time: aaConfig.weekend.time, type: ShiftType.AA, shopper_id: shopperId });
+            }
+            curr = addDays(curr, 1);
         }
-        else if (dayName === aaConfig.weekend.day && aaConfig.weekend.time) {
-            newShifts.push({ id: undefined, date: dateStr, time: aaConfig.weekend.time, type: ShiftType.AA, shopper_id: editingShopper?.id });
+
+        // 3. Insert new shifts
+        if (newShiftsPayload.length > 0) {
+            const { data: insertedShifts, error: insError } = await supabase
+                .from('shifts')
+                .insert(newShiftsPayload)
+                .select();
+            
+            if (insError) throw insError;
+
+            // 4. Update local state to reflect DB changes
+            // Keep Standard shifts and past AA shifts
+            const keptShifts = editFormShifts.filter(s => {
+                if (s.type !== ShiftType.AA) return true;
+                if (s.date < startDateStr) return true;
+                return false;
+            });
+
+            // Merge
+            const updatedShifts = [...keptShifts, ...insertedShifts];
+            setEditFormShifts(updatedShifts);
+            
+            // Also update the main list in background
+            setData(prev => prev.map(item => 
+              item.id === shopperId ? { ...item, shifts: updatedShifts } : item
+            ));
+        } else {
+             // If we just deleted everything and added nothing
+             const keptShifts = editFormShifts.filter(s => {
+                if (s.type !== ShiftType.AA) return true;
+                if (s.date < startDateStr) return true;
+                return false;
+            });
+            setEditFormShifts(keptShifts);
+             setData(prev => prev.map(item => 
+              item.id === shopperId ? { ...item, shifts: keptShifts } : item
+            ));
         }
-        curr = addDays(curr, 1);
+
+        alert("Pattern applied and saved successfully!");
+
+    } catch (e: any) {
+        console.error(e);
+        alert("Error applying pattern: " + e.message);
+    } finally {
+        setIsApplyingPattern(false);
     }
-    
-    updatedShifts = [...updatedShifts, ...newShifts];
-    setEditFormShifts(updatedShifts);
-    setHasUnsavedShiftChanges(true);
   };
 
   const handleSaveDetails = async () => {
@@ -638,11 +687,11 @@ export const AdminDataView: React.FC = () => {
                                   </div>
                               </div>
 
-                              <Button onClick={handleApplyAAPattern} variant="outline" fullWidth className="text-xs h-8 border-dashed border-gray-300 hover:border-purple-500 hover:text-purple-600">
-                                  Apply Pattern
+                              <Button onClick={handleApplyAAPattern} disabled={isApplyingPattern} variant="outline" fullWidth className="text-xs h-8 border-dashed border-gray-300 hover:border-purple-500 hover:text-purple-600">
+                                  {isApplyingPattern ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Apply Pattern (Auto-Save)'}
                               </Button>
                               <p className="text-[10px] text-gray-400 text-center leading-tight">
-                                  Adds AA shifts for next 8 weeks. Existing future AA shifts will be replaced.
+                                  Adds AA shifts for next 8 weeks. Existing future AA shifts will be replaced immediately.
                               </p>
                           </div>
                       </div>
@@ -726,6 +775,10 @@ export const AdminDataView: React.FC = () => {
                                       <input type="date" value={newShiftDate} onChange={(e) => setNewShiftDate(e.target.value)} className="flex-1 p-2 rounded-lg border text-sm outline-none focus:ring-2 focus:ring-green-500 bg-white" />
                                       <select value={newShiftTime} onChange={(e) => setNewShiftTime(e.target.value as ShiftTime)} className="flex-1 p-2 rounded-lg border text-sm outline-none focus:ring-2 focus:ring-green-500 bg-white">
                                           {SHIFT_TIMES.map(t => (<option key={t} value={t}>{t.split('(')[0]}</option>))}
+                                      </select>
+                                      <select value={newShiftType} onChange={(e) => setNewShiftType(e.target.value as ShiftType)} className="w-24 p-2 rounded-lg border text-sm outline-none focus:ring-2 focus:ring-green-500 bg-white">
+                                          <option value={ShiftType.STANDARD}>Std</option>
+                                          <option value={ShiftType.AA}>AA</option>
                                       </select>
                                       <Button onClick={handleAddShift} disabled={!newShiftDate} variant="secondary" className="px-4 py-2 text-xs">Add</Button>
                                   </div>
@@ -821,7 +874,7 @@ export const AdminDataView: React.FC = () => {
                 <div className="bg-gray-50 border-b px-6 py-3 flex items-center justify-between">
                     <h3 className="font-bold text-gray-800 flex items-center gap-2">
                         <Clock className="w-5 h-5 text-purple-600" />
-                        Registered on: {formatDateDisplay(dateKey)}
+                        SER: {formatDateDisplay(dateKey)}
                     </h3>
                     <span className="text-xs font-bold bg-gray-200 text-gray-600 px-2 py-1 rounded-full">
                         {items.length} Shoppers
@@ -834,7 +887,7 @@ export const AdminDataView: React.FC = () => {
                             <tr className="bg-white border-b text-gray-500 text-xs uppercase tracking-wider">
                                 <th className="w-10"></th>
                                 <th className="px-6 py-3 font-semibold">Name</th>
-                                <th className="px-6 py-3 font-semibold">Registered</th>
+                                <th className="px-6 py-3 font-semibold">First Work Day</th>
                                 <th className="px-6 py-3 font-semibold text-center">Info</th>
                                 <th className="px-6 py-3 font-semibold">AA Pattern</th>
                                 <th className="px-6 py-3 font-semibold text-right">Actions</th>
@@ -868,7 +921,7 @@ export const AdminDataView: React.FC = () => {
                                             {item.name}
                                         </td>
                                         <td className="px-6 py-4 text-gray-500">
-                                            {format(new Date(item.created_at), 'MMM d, HH:mm')}
+                                            {item.details?.firstWorkingDay ? format(new Date(item.details.firstWorkingDay), 'EEE, MMM d') : '-'}
                                         </td>
                                         <td className="px-6 py-4 text-center">
                                             <div className="flex justify-center gap-2">

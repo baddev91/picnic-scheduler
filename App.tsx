@@ -315,10 +315,27 @@ export default function App() {
       
       const newSelections = [...selections];
       const existing = newSelections[currentShopperIndex];
+      const previousFWD = existing.details?.firstWorkingDay;
+
+      // Check if this slot was previously marked as AA (from Step 0)
+      const wasAA = existing.shifts.some(s => s.date === dateStr && s.time === shift && s.type === ShiftType.AA);
       
-      // Override any AA on this day, set FWD
-      const newShifts = existing.shifts.filter(s => s.date !== dateStr);
-      newShifts.push({ date: dateStr, time: shift, type: ShiftType.STANDARD });
+      // Remove any existing shifts on this day (clean start for FWD on this day)
+      // AND remove any Standard shifts that are BEFORE this new FWD (since they would be invalid)
+      // AND remove the PREVIOUS FWD shift if it was Standard (to ensure single selection)
+      const newShifts = existing.shifts.filter(s => {
+          if (s.date === dateStr) return false; // Remove current day shifts to replace with new FWD
+          if (previousFWD && s.date === previousFWD && s.type === ShiftType.STANDARD) return false; // Remove previous FWD if standard
+          if (s.type === ShiftType.STANDARD && s.date < dateStr) return false; // Remove older standard shifts
+          return true;
+      });
+      
+      // Add FWD shift. If it matched an AA shift, keep it as AA so it shows Red in summary.
+      newShifts.push({ 
+          date: dateStr, 
+          time: shift, 
+          type: wasAA ? ShiftType.AA : ShiftType.STANDARD 
+      });
       
       newSelections[currentShopperIndex] = { ...existing, shifts: newShifts, details: { ...existing.details, firstWorkingDay: dateStr } as ShopperDetails };
       setSelections(newSelections);
@@ -331,27 +348,56 @@ export default function App() {
     const fwd = prevData.details?.firstWorkingDay;
     if (!fwd) { alert("First Working Day not set."); setShopperStep(ShopperStep.FWD_SELECTION); return; }
 
+    // 1. Block FWD Modification in this step
+    if (dateStr === fwd) {
+        alert("You cannot change your First Working Day in this step. Go back if you need to change it.");
+        return;
+    }
+
     if (type === ShiftType.STANDARD) {
-      // PROTECTION: Check if this specific slot is already AA.
+      // 2. Block AA Modification
       const isAlreadyAA = newShifts.some(s => s.date === dateStr && s.time === shift && s.type === ShiftType.AA);
       if (isAlreadyAA) {
-          alert("This shift is marked as Always Available and cannot be changed to Standard.");
+          alert("This shift is marked as Always Available and cannot be changed here.");
           return;
       }
+      
+      // 3. Block adding Standard shift if day already has an AA shift
+      const dayHasAA = newShifts.some(s => s.date === dateStr && s.type === ShiftType.AA);
+      if (dayHasAA) {
+           alert("You cannot add a Standard shift on a day that already has an AA shift.");
+           return;
+      }
 
-      const existingIdx = newShifts.findIndex(s => s.date === dateStr && s.time === shift && s.type === ShiftType.STANDARD);
-      if (existingIdx === -1) {
-          if (isBefore(getSafeDateFromKey(dateStr), getSafeDateFromKey(fwd))) { alert("Cannot select before First Day."); return; }
-          if (isRestViolation(dateStr, shift, newShifts)) { alert("Rest Violation."); return; }
-          if (isConsecutiveDaysViolation(dateStr, newShifts)) { alert("Max 5 consecutive days."); return; }
+      const existingShiftIndex = newShifts.findIndex(s => s.date === dateStr && s.type === ShiftType.STANDARD);
+      const isClickingSameShift = existingShiftIndex !== -1 && newShifts[existingShiftIndex].time === shift;
+
+      if (isClickingSameShift) {
+          // Deselecting the exact same shift
+          newShifts.splice(existingShiftIndex, 1);
+      } else {
+          // Selecting a new shift (or switching)
           
-          const rangeCheck = validateShopperRange([...newShifts, { date: dateStr, time: shift, type: ShiftType.STANDARD }], fwd);
+          // Construct a temporary array to test validation with the NEW configuration
+          // First, remove any existing standard shift on this day (Single Shift Policy)
+          const testShifts = newShifts.filter(s => s.date !== dateStr);
+          
+          // Add the new proposed shift
+          const proposedShift = { date: dateStr, time: shift, type: ShiftType.STANDARD };
+          testShifts.push(proposedShift);
+
+          // Run validations on the PROPOSED state
+          if (isBefore(getSafeDateFromKey(dateStr), getSafeDateFromKey(fwd))) { alert("Cannot select before First Day."); return; }
+          if (isRestViolation(dateStr, shift, testShifts)) { alert("Rest Violation (11h rule)."); return; }
+          if (isConsecutiveDaysViolation(dateStr, testShifts)) { alert("Max 5 consecutive days."); return; }
+          const rangeCheck = validateShopperRange(testShifts, fwd);
           if (!rangeCheck.valid) { alert(rangeCheck.message); return; }
 
-          newShifts.push({ date: dateStr, time: shift, type: ShiftType.STANDARD });
-      } else {
-         if (newShifts[existingIdx].date === fwd) { alert("Change Start Date to remove this shift."); return; }
-         newShifts.splice(existingIdx, 1);
+          // If valid, apply changes to actual state
+          if (existingShiftIndex !== -1) {
+              newShifts.splice(existingShiftIndex, 1); // Remove old shift
+          }
+          newShifts.push(proposedShift); // Add new shift
       }
     }
     const newSelections = [...selections];
@@ -476,7 +522,10 @@ export default function App() {
                                <p className="text-sm mt-1 text-green-600">Select shifts for your first 2 weeks based on your start date.</p>
                             </div>
                         </div>
-                        <button onClick={() => setShopperStep(ShopperStep.FWD_SELECTION)} className="text-xs font-bold text-green-600 underline hover:text-green-800 mt-2 md:mt-0">Change Start Date</button>
+                        <div className="flex flex-col items-start md:items-end gap-1 mt-2 md:mt-0 shrink-0">
+                             <button onClick={() => setShopperStep(ShopperStep.FWD_SELECTION)} className="text-xs font-bold text-green-700 underline hover:text-green-900">Change Start Date</button>
+                             <button onClick={() => setShopperStep(ShopperStep.AA_SELECTION)} className="text-xs font-bold text-red-600 underline hover:text-red-800">Modify AA Pattern</button>
+                        </div>
                      </div>
                   </div>
                   <CalendarView mode="SHOPPER" step={2} adminAvailability={adminAvailability} currentShopperShifts={data?.shifts} firstWorkingDay={data?.details?.firstWorkingDay} onShopperToggle={handleStandardShiftToggle} />
