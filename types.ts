@@ -58,5 +58,23 @@ export enum AdminWizardStep {
   DASHBOARD = 'DASHBOARD',
   WIZARD_DAYS = 'WIZARD_DAYS', // Configuring Mon-Sun
   WIZARD_APPLY = 'WIZARD_APPLY', // Selecting duration
-  VIEW_SUBMISSIONS = 'VIEW_SUBMISSIONS' // New Data Dashboard
+  VIEW_SUBMISSIONS = 'VIEW_SUBMISSIONS', // New Data Dashboard
+  BUS_CONFIG = 'BUS_CONFIG' // New Bus Schedule Manager
 }
+
+// --- BUS CONFIGURATION TYPES ---
+export interface BusSchedule {
+  departure: string; // e.g. "05:15"
+  return: string;    // e.g. "15:15"
+}
+
+export interface BusStop {
+  id: string;
+  name: string;
+  locationName: string;
+  coordinates: string; // Display string e.g. 51°...
+  googleMapsLink: string;
+  schedules: Record<ShiftTime, BusSchedule>;
+}
+
+export type BusConfig = BusStop[];

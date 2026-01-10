@@ -1,5 +1,5 @@
 import React from 'react';
-import { Settings2, KeyRound, RefreshCw, Save, Share2, CalendarRange, Table } from 'lucide-react';
+import { Settings2, KeyRound, RefreshCw, Save, Share2, CalendarRange, Table, Bus } from 'lucide-react';
 import { Button } from './Button';
 import { AdminWizardStep, WeeklyTemplate } from '../types';
 
@@ -138,14 +138,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-8 -mt-8 blur-2xl"></div>
               </button>
 
-              <button 
-                onClick={() => setAdminWizardStep(AdminWizardStep.VIEW_SUBMISSIONS)}
-                className="group p-6 bg-white border-2 border-gray-100 rounded-2xl shadow-sm text-left hover:border-green-200 hover:bg-green-50 transition-all"
-              >
-                  <Table className="w-10 h-10 text-green-600 mb-4" />
-                  <h3 className="text-xl font-bold text-gray-800 mb-2">View Submissions</h3>
-                  <p className="text-gray-500 text-sm">View, search, and manage data submitted by shoppers.</p>
-              </button>
+              <div className="space-y-6">
+                <button 
+                    onClick={() => setAdminWizardStep(AdminWizardStep.VIEW_SUBMISSIONS)}
+                    className="w-full group p-6 bg-white border-2 border-gray-100 rounded-2xl shadow-sm text-left hover:border-green-200 hover:bg-green-50 transition-all"
+                >
+                    <Table className="w-10 h-10 text-green-600 mb-4" />
+                    <h3 className="text-xl font-bold text-gray-800 mb-2">View Submissions</h3>
+                    <p className="text-gray-500 text-sm">View, search, and manage data submitted by shoppers.</p>
+                </button>
+
+                <button 
+                    onClick={() => setAdminWizardStep(AdminWizardStep.BUS_CONFIG)}
+                    className="w-full group p-6 bg-white border-2 border-gray-100 rounded-2xl shadow-sm text-left hover:border-orange-200 hover:bg-orange-50 transition-all"
+                >
+                    <Bus className="w-10 h-10 text-orange-600 mb-4" />
+                    <h3 className="text-xl font-bold text-gray-800 mb-2">Manage Bus Schedule</h3>
+                    <p className="text-gray-500 text-sm">Update pickup locations and times.</p>
+                </button>
+              </div>
           </div>
       </div>
   );

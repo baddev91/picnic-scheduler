@@ -1,4 +1,4 @@
-import { ShiftTime } from './types';
+import { ShiftTime, BusConfig } from './types';
 import { format, addWeeks, endOfWeek, addDays } from 'date-fns';
 import startOfWeek from 'date-fns/startOfWeek';
 import startOfDay from 'date-fns/startOfDay';
@@ -44,3 +44,45 @@ export const getShopperAllowedRange = () => {
   
   return { start, end };
 };
+
+export const DEFAULT_BUS_CONFIG: BusConfig = [
+  {
+    id: 'rotterdam_cs',
+    name: 'Rotterdam Central Station',
+    locationName: 'Conradstraat (Bus Platform)',
+    coordinates: `51°55'26.2"N 4°28'04.5"E`,
+    googleMapsLink: 'https://www.google.com/maps/search/?api=1&query=51.923944,4.467917',
+    schedules: {
+      [ShiftTime.OPENING]: { departure: '03:15', return: '13:30' },
+      [ShiftTime.MORNING]: { departure: '05:15', return: '15:30' },
+      [ShiftTime.NOON]: { departure: '12:00', return: '22:30' },
+      [ShiftTime.AFTERNOON]: { departure: '14:00', return: '00:30' },
+    }
+  },
+  {
+    id: 'rotterdam_zuid',
+    name: 'Rotterdam Zuidplein',
+    locationName: 'Bus Station Zuidplein',
+    coordinates: `51°53'09.8"N 4°29'19.1"E`,
+    googleMapsLink: 'https://www.google.com/maps/search/?api=1&query=51.886056,4.488639',
+    schedules: {
+      [ShiftTime.OPENING]: { departure: '03:30', return: '13:30' },
+      [ShiftTime.MORNING]: { departure: '05:30', return: '15:30' },
+      [ShiftTime.NOON]: { departure: '12:15', return: '22:30' },
+      [ShiftTime.AFTERNOON]: { departure: '14:15', return: '00:30' },
+    }
+  },
+  {
+    id: 'dordrecht_cs',
+    name: 'Dordrecht Central Station',
+    locationName: 'Bus Station',
+    coordinates: `51°48'30.0"N 4°39'52.6"E`,
+    googleMapsLink: 'https://www.google.com/maps/search/?api=1&query=51.808333,4.664611',
+    schedules: {
+      [ShiftTime.OPENING]: { departure: '03:00', return: '13:45' },
+      [ShiftTime.MORNING]: { departure: '05:00', return: '15:45' },
+      [ShiftTime.NOON]: { departure: '11:45', return: '22:45' },
+      [ShiftTime.AFTERNOON]: { departure: '13:45', return: '00:45' },
+    }
+  }
+];

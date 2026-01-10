@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { AppMode, ShiftTime, ShiftType, ShopperData, ShopperShift, AdminAvailabilityMap, ShopperDetails, WeeklyTemplate, ShopperStep, AdminWizardStep } from './types';
-import { SHIFT_TIMES, formatDateKey, getShopperAllowedRange, getShopperMinDate } from './constants';
+import { AppMode, ShiftTime, ShiftType, ShopperData, ShopperShift, AdminAvailabilityMap, ShopperDetails, WeeklyTemplate, ShopperStep, AdminWizardStep, BusConfig } from './types';
+import { SHIFT_TIMES, formatDateKey, getShopperAllowedRange, getShopperMinDate, DEFAULT_BUS_CONFIG } from './constants';
 import { Button } from './components/Button';
 import { CalendarView } from './components/CalendarView';
 import { MobileInstructionModal } from './components/MobileInstructionModal';
@@ -18,6 +18,7 @@ import { ShopperSetup } from './components/ShopperSetup';
 import { ShopperAAWizard } from './components/ShopperAAWizard';
 import { ShopperSummary } from './components/ShopperSummary';
 import { ShopperDetailsModal } from './components/ShopperDetailsModal';
+import { AdminBusConfig } from './components/AdminBusConfig';
 import { getSafeDateFromKey, isRestViolation, isConsecutiveDaysViolation, validateShopperRange } from './utils/validation';
 
 const STORAGE_KEYS = {
@@ -47,6 +48,7 @@ export default function App() {
   const [savedCloudTemplate, setSavedCloudTemplate] = useState<WeeklyTemplate | null>(null);
   const [applyWeeks, setApplyWeeks] = useState<number>(4);
   const [adminAvailability, setAdminAvailability] = useState<AdminAvailabilityMap>({});
+  const [busConfig, setBusConfig] = useState<BusConfig>(DEFAULT_BUS_CONFIG);
 
   // Shopper State
   const [shopperStep, setShopperStep] = useState<ShopperStep>(ShopperStep.AA_SELECTION);
@@ -92,6 +94,14 @@ export default function App() {
           const { error } = await supabase.from('app_settings').upsert({ id: 'weekly_template', value: template });
           if (!error) setSavedCloudTemplate(template);
       } catch (e) { console.error(e); }
+  };
+
+  const saveBusConfigToSupabase = async () => {
+    try {
+        const { error } = await supabase.from('app_settings').upsert({ id: 'bus_config', value: busConfig });
+        if (error) alert("Error saving bus configuration");
+        else alert("Bus schedule updated successfully!");
+    } catch (e) { console.error(e); }
   };
 
   const saveShopperAuthSettings = async (pin: string, enabled: boolean, silent: boolean = false) => {
@@ -183,6 +193,14 @@ export default function App() {
             }
             setIsShopperAuthEnabled(pinData.value.enabled !== false);
         }
+
+        const { data: busData } = await supabase.from('app_settings').select('value').eq('id', 'bus_config').single();
+        if (busData?.value) {
+             let parsed = busData.value;
+             if (typeof parsed === 'string') { try { parsed = JSON.parse(parsed); } catch(e) {} }
+             setBusConfig(parsed);
+        }
+
     } catch (err) { console.error("Config load error:", err); }
   }, []);
 
@@ -207,7 +225,7 @@ export default function App() {
   useEffect(() => {
       if (mode === AppMode.SHOPPER_FLOW) {
           setTimeout(() => { if (flowScrollContainerRef.current) flowScrollContainerRef.current.scrollTop = 0; window.scrollTo(0, 0); }, 50);
-          setShowMobileInstructions(shopperStep === ShopperStep.FWD_SELECTION || shopperStep === ShopperStep.STANDARD_SELECTION);
+          setShowMobileInstructions(true);
       }
   }, [shopperStep, mode]);
 
@@ -542,7 +560,35 @@ export default function App() {
             </div>
         )}
 
-        <MobileInstructionModal isOpen={showMobileInstructions} onClose={() => setShowMobileInstructions(false)} step={shopperStep === ShopperStep.FWD_SELECTION ? 'FWD' : 'STANDARD'} title={shopperStep === ShopperStep.FWD_SELECTION ? 'When do you start?' : 'Select Your Shifts'} message={shopperStep === ShopperStep.FWD_SELECTION ? "Please select the exact day you will have your first shift. It must be a Morning or Afternoon shift." : (<span>Please select your standard shifts for the <strong>first 2 working weeks</strong> starting from your selected First Day.</span>)} />
+        {(() => {
+            let stepType: 'AA' | 'FWD' | 'STANDARD' = 'STANDARD';
+            let title = '';
+            let message: React.ReactNode = '';
+
+            if (shopperStep === ShopperStep.AA_SELECTION) {
+                stepType = 'AA';
+                title = 'Always Available (AA)';
+                message = <span>These are recurring shifts you commit to every week. Please select <strong>1 Weekday</strong> and <strong>1 Weekend</strong> shift.</span>;
+            } else if (shopperStep === ShopperStep.FWD_SELECTION) {
+                stepType = 'FWD';
+                title = 'When do you start?';
+                message = "Please select the exact day you will have your first shift. It must be a Morning or Afternoon shift.";
+            } else {
+                stepType = 'STANDARD';
+                title = 'Select Your Shifts';
+                message = <span>Please select your standard shifts for the <strong>first 2 working weeks</strong> starting from your selected First Day.</span>;
+            }
+
+            return (
+                <MobileInstructionModal 
+                    isOpen={showMobileInstructions} 
+                    onClose={() => setShowMobileInstructions(false)} 
+                    step={stepType} 
+                    title={title} 
+                    message={message} 
+                />
+            );
+        })()}
       </div>
     );
   };
@@ -567,6 +613,7 @@ export default function App() {
                 shopper={selections[currentShopperIndex]} isSyncing={isSyncing} syncStatus={syncStatus}
                 setShowDetailsModal={setShowDetailsModal} handleSubmitData={handleSubmitData}
                 handleClearSession={handleClearSession} setMode={setMode}
+                busConfig={busConfig} // Pass bus config to summary
             />
         )}
         
@@ -579,7 +626,10 @@ export default function App() {
                       <div className="p-2 bg-orange-100 rounded-lg text-orange-600"><Shield className="w-6 h-6" /></div>
                       <div>
                           <h2 className="text-lg font-bold text-gray-800 leading-none">Admin Panel</h2>
-                          <span className="text-xs text-gray-400 font-medium">{adminWizardStep === AdminWizardStep.VIEW_SUBMISSIONS ? 'Data Viewer' : 'Wizard Mode'}</span>
+                          <span className="text-xs text-gray-400 font-medium">
+                              {adminWizardStep === AdminWizardStep.VIEW_SUBMISSIONS ? 'Data Viewer' : 
+                               adminWizardStep === AdminWizardStep.BUS_CONFIG ? 'Bus Manager' : 'Wizard Mode'}
+                          </span>
                       </div>
                   </div>
                   <div className="flex gap-2">
@@ -613,6 +663,14 @@ export default function App() {
                       />
                   )}
                   {adminWizardStep === AdminWizardStep.VIEW_SUBMISSIONS && <AdminDataView />}
+                  {adminWizardStep === AdminWizardStep.BUS_CONFIG && (
+                      <AdminBusConfig 
+                          busConfig={busConfig}
+                          setBusConfig={setBusConfig}
+                          onSave={saveBusConfigToSupabase}
+                          onBack={() => setAdminWizardStep(AdminWizardStep.DASHBOARD)}
+                      />
+                  )}
               </div>
             </div>
         )}

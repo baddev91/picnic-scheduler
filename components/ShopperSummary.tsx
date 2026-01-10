@@ -1,10 +1,11 @@
-import React from 'react';
-import { Camera, RefreshCw, CalendarDays, Shirt, Hand, Bus, Building2, Settings2, AlertTriangle, CheckCircle2, ArrowUp } from 'lucide-react';
+import React, { useState } from 'react';
+import { Camera, RefreshCw, CalendarDays, Shirt, Hand, Bus, Building2, Settings2, AlertTriangle, CheckCircle2, ArrowUp, Info } from 'lucide-react';
 import { format, endOfWeek, addWeeks } from 'date-fns';
 import { Button } from './Button';
-import { AppMode, ShiftType, ShopperData } from '../types';
+import { AppMode, ShiftType, ShopperData, BusConfig } from '../types';
 import { getSafeDateFromKey } from '../utils/validation';
 import { formatDateKey } from '../constants';
+import { BusInfoModal } from './BusInfoModal';
 
 interface ShopperSummaryProps {
   shopper: ShopperData | undefined;
@@ -14,6 +15,7 @@ interface ShopperSummaryProps {
   handleSubmitData: () => void;
   handleClearSession: () => void;
   setMode: (mode: AppMode) => void;
+  busConfig: BusConfig;
 }
 
 export const ShopperSummary: React.FC<ShopperSummaryProps> = ({
@@ -23,8 +25,11 @@ export const ShopperSummary: React.FC<ShopperSummaryProps> = ({
   setShowDetailsModal,
   handleSubmitData,
   handleClearSession,
-  setMode
+  setMode,
+  busConfig
 }) => {
+  const [showBusModal, setShowBusModal] = useState(false);
+
   if (!shopper) return null;
 
   let shifts = [...shopper.shifts];
@@ -87,6 +92,18 @@ export const ShopperSummary: React.FC<ShopperSummaryProps> = ({
                   </button>
               </div>
 
+              {/* Legend Section */}
+              <div className="px-4 py-2 bg-gray-50/80 border-b flex items-center justify-center gap-6 shrink-0 backdrop-blur-sm">
+                  <div className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-sm ring-2 ring-red-100"></div>
+                      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">AA (Recurring)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-sm ring-2 ring-green-100"></div>
+                      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Standard</span>
+                  </div>
+              </div>
+
               {/* 3. Shifts Grid (The core fix for no-scroll) */}
               <div className="flex-1 overflow-y-auto p-2 bg-gray-50/50">
                   {shifts.length === 0 ? (
@@ -143,9 +160,20 @@ export const ShopperSummary: React.FC<ShopperSummaryProps> = ({
                               <CheckCircle2 className="w-10 h-10 text-white" />
                           </div>
                           <h3 className="text-2xl font-black mb-2">All Done!</h3>
-                          <p className="text-green-50 mb-6 font-medium text-lg">
+                          <p className="text-green-50 mb-4 font-medium text-lg">
                               You can now close this page.
                           </p>
+                          
+                          {/* Bus Info Button - Only if user uses bus */}
+                          {shopper.details?.usePicnicBus && (
+                              <button 
+                                  onClick={() => setShowBusModal(true)}
+                                  className="w-full bg-white text-purple-600 font-bold py-3 rounded-lg flex items-center justify-center gap-2 shadow-sm hover:bg-gray-50 transition-all mb-4"
+                              >
+                                  <Bus className="w-5 h-5" /> View Picnic Bus Stops
+                              </button>
+                          )}
+
                           <div className="bg-white/10 rounded-lg p-4 border border-white/20">
                               <p className="text-xs font-bold uppercase tracking-widest text-green-200 mb-2">What's Next?</p>
                               <p className="font-bold text-white text-lg leading-tight">
@@ -189,6 +217,12 @@ export const ShopperSummary: React.FC<ShopperSummaryProps> = ({
                       </div>
                   )}
               </div>
+
+              <BusInfoModal 
+                 isOpen={showBusModal} 
+                 onClose={() => setShowBusModal(false)} 
+                 busConfig={busConfig}
+              />
           </div>
       </div>
   );

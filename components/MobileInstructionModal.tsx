@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Info, CheckCircle, PlayCircle } from 'lucide-react';
+import { CheckCircle, PlayCircle, CalendarRange } from 'lucide-react';
 import { Button } from './Button';
 
 interface MobileInstructionModalProps {
@@ -7,7 +7,7 @@ interface MobileInstructionModalProps {
   onClose: () => void;
   title: string;
   message: React.ReactNode;
-  step: 'FWD' | 'STANDARD';
+  step: 'AA' | 'FWD' | 'STANDARD';
 }
 
 export const MobileInstructionModal: React.FC<MobileInstructionModalProps> = ({
@@ -19,12 +19,26 @@ export const MobileInstructionModal: React.FC<MobileInstructionModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
+  let Icon = CheckCircle;
+  let bgClass = 'bg-green-50';
+  let iconBgClass = 'bg-green-100 text-green-600';
+
+  if (step === 'FWD') {
+      Icon = PlayCircle;
+      bgClass = 'bg-yellow-50';
+      iconBgClass = 'bg-yellow-100 text-yellow-600';
+  } else if (step === 'AA') {
+      Icon = CalendarRange;
+      bgClass = 'bg-red-50';
+      iconBgClass = 'bg-red-100 text-red-600';
+  }
+
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 backdrop-blur-sm p-6 md:hidden animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-300">
-        <div className={`p-4 flex justify-center ${step === 'FWD' ? 'bg-yellow-50' : 'bg-green-50'}`}>
-          <div className={`p-4 rounded-full ${step === 'FWD' ? 'bg-yellow-100 text-yellow-600' : 'bg-green-100 text-green-600'}`}>
-             {step === 'FWD' ? <PlayCircle className="w-8 h-8" /> : <CheckCircle className="w-8 h-8" />}
+        <div className={`p-4 flex justify-center ${bgClass}`}>
+          <div className={`p-4 rounded-full ${iconBgClass}`}>
+             <Icon className="w-8 h-8" />
           </div>
         </div>
         

@@ -41,6 +41,8 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
       handleDetailsSubmit();
   };
 
+  const GLOVE_SIZES = ['6 (XS)', '7 (S)', '8 (M)', '9 (L)', '10 (XL)', '11 (XXL)', '12 (3XL)', '12 (4XL)'];
+
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
       <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in slide-in-from-bottom-10">
@@ -116,9 +118,17 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
                       </select>
                    </div>
                 </div>
-                <div className="bg-gray-50 p-3 rounded-lg flex justify-between items-center text-sm">
-                    <span className="text-gray-500">Calculated Glove Size:</span>
-                    <span className="font-bold text-gray-900">{tempDetails.gloveSize}</span>
+                <div>
+                    <label className="text-xs text-gray-500 mb-1 block">Glove Size</label>
+                    <select
+                        value={tempDetails.gloveSize}
+                        onChange={(e) => setTempDetails(prev => ({ ...prev, gloveSize: e.target.value }))}
+                        className="w-full p-3 bg-gray-50 border rounded-xl outline-none focus:ring-2 focus:ring-purple-500"
+                    >
+                        {GLOVE_SIZES.map(s => (
+                            <option key={s} value={s}>{s}</option>
+                        ))}
+                    </select>
                 </div>
             </div>
 

@@ -1,9 +1,7 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { Download, Search, Trash2, User, Calendar, MapPin, Bus, RefreshCw, Activity, Pencil, X, Plus, Save, AlertCircle, Sun, Star, GripVertical, Clock, SaveAll, Loader2 } from 'lucide-react';
-import { format, eachDayOfInterval, addDays } from 'date-fns';
-import min from 'date-fns/min';
-import max from 'date-fns/max';
+import { format, eachDayOfInterval, addDays, addWeeks, endOfWeek } from 'date-fns';
 import parseISO from 'date-fns/parseISO';
 import startOfDay from 'date-fns/startOfDay';
 import { ShiftType, ShiftTime } from '../types';
@@ -182,8 +180,8 @@ export const AdminDataView: React.FC = () => {
       let endDate = addDays(startOfDay(new Date()), 14);
 
       if (allDates.length > 0) {
-          startDate = min(allDates);
-          endDate = max(allDates);
+          startDate = new Date(Math.min(...allDates.map(d => d.getTime())));
+          endDate = new Date(Math.max(...allDates.map(d => d.getTime())));
       }
 
       const days = eachDayOfInterval({ start: startDate, end: endDate });
@@ -280,6 +278,14 @@ export const AdminDataView: React.FC = () => {
         const startDateStr = format(start, 'yyyy-MM-dd');
         const shopperId = editingShopper!.id;
         
+        // Calculate Target End Date (Sunday of week after First Working Day)
+        let targetEndDate = end; // Default fallback to 8 weeks
+        if (editingShopper?.details?.firstWorkingDay) {
+            const fwd = parseISO(editingShopper.details.firstWorkingDay);
+            // End of the week following the FWD week
+            targetEndDate = endOfWeek(addWeeks(fwd, 1), { weekStartsOn: 1 });
+        }
+
         // 1. Delete ALL AA shifts in the future range for this shopper
         const { error: delError } = await supabase
             .from('shifts')
@@ -290,10 +296,11 @@ export const AdminDataView: React.FC = () => {
         
         if (delError) throw delError;
 
-        // 2. Generate new shifts
+        // 2. Generate new shifts up to targetEndDate
         const newShiftsPayload = [];
         let curr = start;
-        while (curr <= end) {
+        
+        while (curr <= targetEndDate) {
             const dayName = format(curr, 'EEEE');
             const dateStr = format(curr, 'yyyy-MM-dd');
             
@@ -691,7 +698,7 @@ export const AdminDataView: React.FC = () => {
                                   {isApplyingPattern ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Apply Pattern (Auto-Save)'}
                               </Button>
                               <p className="text-[10px] text-gray-400 text-center leading-tight">
-                                  Adds AA shifts for next 8 weeks. Existing future AA shifts will be replaced immediately.
+                                  Adds AA shifts up to the Sunday of the week following the First Working Day. Existing future AA shifts will be replaced immediately.
                               </p>
                           </div>
                       </div>
@@ -869,7 +876,7 @@ export const AdminDataView: React.FC = () => {
 
       {/* GROUPED TABLES */}
       <div className="space-y-6">
-        {Object.entries(groupedData).sort((a,b) => b[0].localeCompare(a[0])).map(([dateKey, items]) => (
+        {Object.entries(groupedData).sort((a,b) => b[0].localeCompare(a[0])).map(([dateKey, items]: [string, ShopperRecord[]]) => (
             <div key={dateKey} className="bg-white rounded-xl shadow-sm border overflow-hidden">
                 <div className="bg-gray-50 border-b px-6 py-3 flex items-center justify-between">
                     <h3 className="font-bold text-gray-800 flex items-center gap-2">
