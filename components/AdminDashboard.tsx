@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Settings2, KeyRound, RefreshCw, Save, Share2, CalendarRange, Table, Bus, ArrowRight, ShieldCheck, Lock, UserCog } from 'lucide-react';
+import { Settings2, KeyRound, RefreshCw, Save, Share2, CalendarRange, Table, Bus, ArrowRight, ShieldCheck, Lock, UserCog, Info, AlertTriangle, Clock, CalendarCheck, Zap, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from './Button';
 import { AdminWizardStep, WeeklyTemplate } from '../types';
+import { MIN_DAYS_TO_START } from '../constants';
 
 interface AdminDashboardProps {
   isShopperAuthEnabled: boolean;
@@ -37,6 +38,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   updateAdminPin
 }) => {
   const [newAdminPin, setNewAdminPin] = useState(adminPin);
+  const [showRules, setShowRules] = useState(false);
 
   const handleEditPattern = () => {
     if (savedCloudTemplate) {
@@ -55,7 +57,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   return (
-      <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500">
+      <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 pb-10">
           
           {/* HEADER SECTION */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -240,6 +242,87 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </div>
                 </button>
               </div>
+          </div>
+
+          {/* ACTIVE RULES INFO SECTION (Collapsible) */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+             <button 
+                onClick={() => setShowRules(!showRules)}
+                className="w-full p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors"
+             >
+                 <div className="flex items-center gap-3">
+                     <ShieldCheck className="w-5 h-5 text-gray-500" />
+                     <h2 className="font-bold text-gray-900">Active System Constraints</h2>
+                 </div>
+                 {showRules ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+             </button>
+             
+             {showRules && (
+                 <div className="grid md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-gray-100 animate-in slide-in-from-top-2 duration-200">
+                     {/* Rule 1: First Day */}
+                     <div className="p-6 space-y-3">
+                         <div className="flex items-center gap-2 text-yellow-600 font-bold text-sm uppercase tracking-wider">
+                             <CalendarCheck className="w-4 h-4" /> First Day Rules
+                         </div>
+                         <ul className="space-y-2 text-sm text-gray-600">
+                             <li className="flex items-start gap-2">
+                                 <Info className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
+                                 <span>Earliest Start: <strong>Today + {MIN_DAYS_TO_START} days</strong></span>
+                             </li>
+                             <li className="flex items-start gap-2">
+                                 <AlertTriangle className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
+                                 <span>Must be <strong>Morning</strong> or <strong>Afternoon</strong> shift only.</span>
+                             </li>
+                             <li className="flex items-start gap-2">
+                                 <Clock className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
+                                 <span>Planning Horizon: 2 Weeks from First Day.</span>
+                             </li>
+                         </ul>
+                     </div>
+
+                     {/* Rule 2: AA Rules */}
+                     <div className="p-6 space-y-3">
+                         <div className="flex items-center gap-2 text-red-600 font-bold text-sm uppercase tracking-wider">
+                             <Zap className="w-4 h-4" /> AA Config
+                         </div>
+                         <ul className="space-y-2 text-sm text-gray-600">
+                             <li className="flex items-start gap-2">
+                                 <Info className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
+                                 <span>Requirement: <strong>1 Weekday</strong> + <strong>1 Weekend</strong>.</span>
+                             </li>
+                             <li className="flex items-start gap-2">
+                                 <Lock className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
+                                 <span>AA shifts are recurring and locked.</span>
+                             </li>
+                             <li className="flex items-start gap-2">
+                                 <AlertTriangle className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
+                                 <span>Cannot swap AA for Standard on same day.</span>
+                             </li>
+                         </ul>
+                     </div>
+
+                     {/* Rule 3: Standard Rules */}
+                     <div className="p-6 space-y-3">
+                         <div className="flex items-center gap-2 text-green-600 font-bold text-sm uppercase tracking-wider">
+                             <CalendarRange className="w-4 h-4" /> Standard Limits
+                         </div>
+                         <ul className="space-y-2 text-sm text-gray-600">
+                             <li className="flex items-start gap-2">
+                                 <Clock className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
+                                 <span><strong>11h Rest Rule</strong> enforced between shifts.</span>
+                             </li>
+                             <li className="flex items-start gap-2">
+                                 <AlertTriangle className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
+                                 <span>Max <strong>5 Consecutive</strong> working days.</span>
+                             </li>
+                             <li className="flex items-start gap-2">
+                                 <Info className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
+                                 <span>Single shift per day allowed.</span>
+                             </li>
+                         </ul>
+                     </div>
+                 </div>
+             )}
           </div>
       </div>
   );

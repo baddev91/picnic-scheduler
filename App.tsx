@@ -555,7 +555,7 @@ export default function App() {
                 <span>Selected AA: <strong className="text-red-600">{aaCount}</strong></span>
                 <span>Selected Standard: <strong className="text-green-600">{stdCount}</strong></span>
              </div>
-             {shopperStep === 2 && <Button variant="outline" onClick={() => setShowDetailsModal(true)} className="text-sm">Details</Button>}
+             {/* Removed Details button here */}
           </div>
         </div>
 
