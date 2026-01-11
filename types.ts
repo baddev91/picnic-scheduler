@@ -39,6 +39,16 @@ export interface ShopperData {
   details?: ShopperDetails;
 }
 
+// Extended interface for Admin Panel including DB fields
+export interface ShopperRecord {
+  id: string;
+  created_at: string;
+  name: string;
+  details: any; // Using any for flexibility with JSONB, or strictly ShopperDetails
+  shifts: any[]; // Using any array to match Supabase join, typically contains id, date, time, type
+  rank?: number;
+}
+
 export enum AppMode {
   HOME = 'HOME',
   ADMIN = 'ADMIN',

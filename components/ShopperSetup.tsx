@@ -68,8 +68,13 @@ export const ShopperSetup: React.FC<ShopperSetupProps> = ({
   return (
     <div className="min-h-[100dvh] bg-white flex flex-col items-center justify-between p-6">
        
-       <div className="w-full flex justify-center pt-8">
-           <h1 className="text-5xl font-extrabold text-[#E31837] tracking-tight">Picnic</h1>
+       <div className="w-full flex justify-center pt-10 pb-4">
+           {/* Used official SVG URL to ensure visibility */}
+           <img 
+             src="https://upload.wikimedia.org/wikipedia/commons/c/c3/Picnic_logo.svg" 
+             alt="Picnic" 
+             className="h-16 w-auto object-contain" 
+           />
        </div>
 
        <div className="w-full max-w-sm animate-in zoom-in duration-300 space-y-8">

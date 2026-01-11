@@ -3,8 +3,7 @@ import { ShiftTime, ShiftType, WeeklyTemplate } from '../types';
 import { SHIFT_TIMES } from '../constants';
 import { Button } from './Button';
 import { Check, Ban, CalendarDays, Copy, Save, X, CalendarClock, ArrowRight, Settings2, CalendarRange } from 'lucide-react';
-import { addWeeks, format } from 'date-fns';
-import startOfWeek from 'date-fns/startOfWeek';
+import { addWeeks, format, startOfWeek } from 'date-fns';
 import nextMonday from 'date-fns/nextMonday';
 
 interface WeeklyTemplateModalProps {

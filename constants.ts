@@ -1,6 +1,5 @@
 import { ShiftTime, BusConfig } from './types';
-import { format, addWeeks, endOfWeek, addDays } from 'date-fns';
-import startOfWeek from 'date-fns/startOfWeek';
+import { format, addWeeks, endOfWeek, addDays, startOfWeek } from 'date-fns';
 import startOfDay from 'date-fns/startOfDay';
 
 export const SHIFT_TIMES = [

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Settings2, KeyRound, RefreshCw, Save, Share2, CalendarRange, Table, Bus } from 'lucide-react';
+import { Settings2, KeyRound, RefreshCw, Save, Share2, CalendarRange, Table, Bus, ArrowRight, ShieldCheck, Lock } from 'lucide-react';
 import { Button } from './Button';
 import { AdminWizardStep, WeeklyTemplate } from '../types';
 
@@ -33,11 +33,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   tempTemplate
 }) => {
   const handleEditPattern = () => {
-    // Force load from cloud template if available, otherwise check local
     if (savedCloudTemplate) {
          setTempTemplate(savedCloudTemplate);
     } else if (Object.keys(tempTemplate).length === 0) {
-        setTempTemplate({}); // Clean init handled by component if needed
+        setTempTemplate({});
     }
     setWizardDayIndex(1); // Mon
     setAdminWizardStep(AdminWizardStep.WIZARD_DAYS);
@@ -46,115 +45,171 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const toggleAuth = () => {
       const newValue = !isShopperAuthEnabled;
       setIsShopperAuthEnabled(newValue);
-      // Auto-save silently when toggling
       saveShopperAuthSettings(adminShopperPinInput, newValue, true);
   };
 
   return (
-      <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in">
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
-             <div className="flex items-center gap-3 mb-6">
-                <div className="p-3 bg-purple-100 rounded-xl text-purple-600">
-                    <Settings2 className="w-6 h-6" />
-                </div>
-                <div>
-                    <h2 className="text-xl font-bold text-gray-900">System Configuration</h2>
-                    <p className="text-gray-500 text-sm">Manage access settings.</p>
-                </div>
-             </div>
-             
-             {/* Shopper Access Control */}
-             <div className="mt-6 pt-6 border-t">
-                <div className="flex justify-between items-center mb-4">
-                     <h3 className="text-sm font-bold text-gray-700 uppercase flex items-center gap-2">
-                        <KeyRound className="w-4 h-4" /> Shopper Access Control
-                    </h3>
-                    <div className="flex items-center gap-3">
-                         <span className={`text-xs font-bold ${isShopperAuthEnabled ? 'text-green-600' : 'text-gray-400'}`}>
-                             {isShopperAuthEnabled ? 'PIN REQUIRED' : 'PIN DISABLED'}
-                         </span>
-                         <button 
-                             onClick={toggleAuth}
-                             className={`p-1 rounded-full w-12 flex transition-all duration-300 ${isShopperAuthEnabled ? 'bg-green-500 justify-end' : 'bg-gray-300 justify-start'}`}
-                         >
-                             <div className="w-5 h-5 bg-white rounded-full shadow-md"></div>
-                         </button>
+      <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500">
+          
+          {/* HEADER SECTION */}
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div>
+                  <h1 className="text-3xl font-black text-gray-900 tracking-tight">Dashboard</h1>
+                  <p className="text-gray-500 mt-1">Manage schedules, settings and view submissions.</p>
+              </div>
+          </div>
+
+          {/* SYSTEM CONFIG CARD */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+             <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-gray-900 text-white rounded-lg">
+                        <Settings2 className="w-5 h-5" />
+                    </div>
+                    <div>
+                        <h2 className="text-lg font-bold text-gray-900">Access Control</h2>
+                        <p className="text-xs text-gray-500">Security settings for shopper login</p>
                     </div>
                 </div>
-
-                <div className="flex flex-col md:flex-row gap-4 items-end bg-gray-50 p-4 rounded-xl border">
-                    <div className="flex-1 space-y-2 w-full">
-                        <label className="text-xs text-gray-500 font-medium">6-Digit Access PIN</label>
+                {/* Custom Toggle */}
+                <button 
+                    onClick={toggleAuth}
+                    className={`relative w-14 h-7 rounded-full transition-colors duration-300 focus:outline-none ${isShopperAuthEnabled ? 'bg-green-500' : 'bg-gray-200'}`}
+                >
+                    <span 
+                        className={`absolute top-1 left-1 bg-white w-5 h-5 rounded-full shadow-sm transform transition-transform duration-300 ${isShopperAuthEnabled ? 'translate-x-7' : 'translate-x-0'}`}
+                    />
+                </button>
+             </div>
+             
+             <div className="p-6 bg-gray-50/50">
+                <div className="flex flex-col md:flex-row gap-6 items-start md:items-end">
+                    <div className="flex-1 w-full space-y-2">
+                        <div className="flex justify-between items-center">
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                                <KeyRound className="w-3 h-3" /> Access PIN
+                            </label>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${isShopperAuthEnabled ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-100 text-gray-400 border-gray-200'}`}>
+                                {isShopperAuthEnabled ? 'ACTIVE' : 'INACTIVE'}
+                            </span>
+                        </div>
+                        
                         <div className="flex gap-2">
-                            <input 
-                                value={adminShopperPinInput} 
-                                onChange={e => setAdminShopperPinInput(e.target.value.replace(/[^0-9]/g, '').slice(0,6))}
-                                className={`w-full border rounded-lg p-2 text-sm font-mono tracking-widest text-center outline-none transition-all ${isShopperAuthEnabled ? 'focus:ring-2 focus:ring-purple-500 bg-white' : 'bg-gray-100 text-gray-400'}`}
-                                placeholder="000000"
-                                disabled={!isShopperAuthEnabled}
-                            />
+                            <div className="relative w-full">
+                                <input 
+                                    value={adminShopperPinInput} 
+                                    onChange={e => setAdminShopperPinInput(e.target.value.replace(/[^0-9]/g, '').slice(0,6))}
+                                    className={`w-full border-2 rounded-xl py-3 px-4 text-lg font-mono tracking-widest text-center outline-none transition-all ${
+                                        isShopperAuthEnabled 
+                                        ? 'border-gray-300 focus:border-red-500 focus:ring-4 focus:ring-red-50 bg-white text-gray-900' 
+                                        : 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
+                                    }`}
+                                    placeholder="000000"
+                                    disabled={!isShopperAuthEnabled}
+                                />
+                                {isShopperAuthEnabled && (
+                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+                                        <Lock className="w-4 h-4" />
+                                    </div>
+                                )}
+                            </div>
+                            
                             <button 
                                 onClick={generateRandomPin}
-                                className="p-2 bg-white border hover:bg-gray-50 rounded-lg text-gray-600 disabled:opacity-50"
+                                className="px-4 bg-white border-2 border-gray-200 hover:border-gray-400 hover:text-gray-900 rounded-xl text-gray-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                 title="Generate Random PIN"
                                 disabled={!isShopperAuthEnabled}
                             >
-                                <RefreshCw className="w-4 h-4" />
+                                <RefreshCw className="w-5 h-5" />
                             </button>
-                            <Button 
-                                onClick={() => saveShopperAuthSettings(adminShopperPinInput, isShopperAuthEnabled, false)} 
-                                disabled={isShopperAuthEnabled && adminShopperPinInput.length !== 6}
-                                className="whitespace-nowrap"
-                            >
-                                <Save className="w-4 h-4 mr-2" /> Update PIN
-                            </Button>
                         </div>
+                        <p className="text-xs text-gray-400 pl-1">
+                            {isShopperAuthEnabled 
+                             ? "Shoppers must enter this PIN to start." 
+                             : "Shoppers can access the app without a PIN."}
+                        </p>
+                    </div>
+
+                    <div className="flex gap-3 w-full md:w-auto">
+                         <Button 
+                            onClick={() => saveShopperAuthSettings(adminShopperPinInput, isShopperAuthEnabled, false)} 
+                            disabled={isShopperAuthEnabled && adminShopperPinInput.length !== 6}
+                            className="bg-black hover:bg-gray-800 text-white border-none py-3 px-6 h-[52px]"
+                        >
+                            <Save className="w-4 h-4 mr-2" /> Save Settings
+                        </Button>
+                         <Button onClick={handleCopyMagicLink} variant="secondary" className="bg-white border-2 border-gray-200 text-gray-700 hover:border-black h-[52px]">
+                             <Share2 className="w-4 h-4 mr-2" /> Copy Link
+                         </Button>
                     </div>
                 </div>
-                <p className="text-xs text-gray-400 mt-2">
-                    {isShopperAuthEnabled 
-                     ? "Shoppers will be asked for this PIN when starting a session." 
-                     : "Security disabled. Shoppers can start immediately without a PIN."}
-                </p>
-             </div>
-
-             <div className="mt-4 pt-4 border-t flex justify-end">
-                 <Button onClick={handleCopyMagicLink} variant="outline" className="text-sm">
-                     <Share2 className="w-4 h-4 mr-2" /> Copy Shopper Link
-                 </Button>
              </div>
           </div>
 
+          {/* ACTIONS GRID */}
           <div className="grid md:grid-cols-2 gap-6">
+              
+              {/* Primary Action: Edit Pattern */}
               <button 
                 onClick={handleEditPattern}
-                className="group p-6 bg-gradient-to-br from-purple-600 to-indigo-700 rounded-2xl shadow-lg text-left hover:scale-[1.02] transition-all relative overflow-hidden"
+                className="group relative overflow-hidden bg-[#E31837] rounded-3xl p-8 text-left transition-all hover:shadow-xl hover:shadow-red-900/20 hover:-translate-y-1"
               >
-                  <div className="relative z-10">
-                      <CalendarRange className="w-10 h-10 text-white mb-4 opacity-90" />
-                      <h3 className="text-2xl font-bold text-white mb-2">Edit Weekly Pattern</h3>
-                      <p className="text-purple-100 text-sm">Guided wizard to set AA & Standard slots. Loads from Cloud if available.</p>
+                  <div className="relative z-10 flex flex-col h-full">
+                      <div className="bg-white/10 w-12 h-12 rounded-2xl flex items-center justify-center mb-6 backdrop-blur-sm group-hover:scale-110 transition-transform">
+                          <CalendarRange className="w-6 h-6 text-white" />
+                      </div>
+                      <h3 className="text-2xl font-black text-white mb-2">Weekly Pattern</h3>
+                      <p className="text-red-100 text-sm font-medium mb-8 max-w-[80%]">
+                          Configure AA & Standard slots. This is your starting point.
+                      </p>
+                      
+                      <div className="mt-auto flex items-center text-white font-bold text-sm gap-2 group-hover:gap-4 transition-all">
+                          Open Wizard <ArrowRight className="w-4 h-4" />
+                      </div>
                   </div>
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-8 -mt-8 blur-2xl"></div>
+                  
+                  {/* Decorative Background Elements */}
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-16 -mt-16 blur-3xl group-hover:bg-white/10 transition-colors"></div>
+                  <div className="absolute bottom-0 right-0 w-32 h-32 bg-black/10 rounded-full -mr-8 -mb-8 blur-xl"></div>
               </button>
 
-              <div className="space-y-6">
+              <div className="flex flex-col gap-6">
+                {/* View Submissions */}
                 <button 
                     onClick={() => setAdminWizardStep(AdminWizardStep.VIEW_SUBMISSIONS)}
-                    className="w-full group p-6 bg-white border-2 border-gray-100 rounded-2xl shadow-sm text-left hover:border-green-200 hover:bg-green-50 transition-all"
+                    className="group flex-1 bg-white border border-gray-200 p-6 rounded-3xl text-left hover:border-black transition-all hover:shadow-lg relative overflow-hidden"
                 >
-                    <Table className="w-10 h-10 text-green-600 mb-4" />
-                    <h3 className="text-xl font-bold text-gray-800 mb-2">View Submissions</h3>
-                    <p className="text-gray-500 text-sm">View, search, and manage data submitted by shoppers.</p>
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <div className="bg-gray-100 group-hover:bg-black group-hover:text-white transition-colors w-10 h-10 rounded-xl flex items-center justify-center mb-3">
+                                <Table className="w-5 h-5" />
+                            </div>
+                            <h3 className="text-lg font-bold text-gray-900">View Submissions</h3>
+                            <p className="text-gray-500 text-xs mt-1">Manage submitted shopper data.</p>
+                        </div>
+                        <div className="bg-gray-50 rounded-full p-2 group-hover:bg-gray-100 transition-colors">
+                            <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-black" />
+                        </div>
+                    </div>
                 </button>
 
+                {/* Manage Bus */}
                 <button 
                     onClick={() => setAdminWizardStep(AdminWizardStep.BUS_CONFIG)}
-                    className="w-full group p-6 bg-white border-2 border-gray-100 rounded-2xl shadow-sm text-left hover:border-orange-200 hover:bg-orange-50 transition-all"
+                    className="group flex-1 bg-white border border-gray-200 p-6 rounded-3xl text-left hover:border-black transition-all hover:shadow-lg relative overflow-hidden"
                 >
-                    <Bus className="w-10 h-10 text-orange-600 mb-4" />
-                    <h3 className="text-xl font-bold text-gray-800 mb-2">Manage Bus Schedule</h3>
-                    <p className="text-gray-500 text-sm">Update pickup locations and times.</p>
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <div className="bg-gray-100 group-hover:bg-black group-hover:text-white transition-colors w-10 h-10 rounded-xl flex items-center justify-center mb-3">
+                                <Bus className="w-5 h-5" />
+                            </div>
+                            <h3 className="text-lg font-bold text-gray-900">Bus Schedule</h3>
+                            <p className="text-gray-500 text-xs mt-1">Update stops and times.</p>
+                        </div>
+                        <div className="bg-gray-50 rounded-full p-2 group-hover:bg-gray-100 transition-colors">
+                            <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-black" />
+                        </div>
+                    </div>
                 </button>
               </div>
           </div>
