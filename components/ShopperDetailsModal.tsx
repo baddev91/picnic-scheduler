@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Bus, Shirt, Heart, AlertCircle } from 'lucide-react';
+import { X, Bus, Shirt, Heart, AlertCircle, User } from 'lucide-react';
 import { Button } from './Button';
 import { ShopperDetails } from '../types';
 import { calculateGloveSize } from '../utils/validation';
@@ -36,6 +36,14 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
       setError(null);
       if (tempDetails.usePicnicBus === null) {
           setError("Please select how you will travel to work.");
+          return;
+      }
+      if (!tempDetails.civilStatus) {
+          setError("Please select your Civil Status.");
+          return;
+      }
+      if (!tempDetails.gender) {
+          setError("Please select your Gender.");
           return;
       }
       handleDetailsSubmit();
@@ -132,26 +140,45 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
                 </div>
             </div>
 
-            {/* Civil Status */}
-            <div className="space-y-2">
+            {/* Civil Status & Gender */}
+            <div className="space-y-3">
                 <label className="text-sm font-bold text-gray-700 flex items-center gap-2">
-                   <Heart className="w-4 h-4" /> Civil Status
+                   <Heart className="w-4 h-4" /> Personal Info
                 </label>
-                <select 
-                    value={tempDetails.civilStatus}
-                    onChange={(e) => setTempDetails(prev => ({ ...prev, civilStatus: e.target.value }))}
-                    className="w-full p-3 bg-gray-50 border rounded-xl outline-none focus:ring-2 focus:ring-purple-500"
-                >
-                    <option value="Cohabit">Cohabit</option>
-                    <option value="Divorced">Divorced</option>
-                    <option value="Engaged">Engaged</option>
-                    <option value="Legal separation">Legal separation</option>
-                    <option value="Married">Married</option>
-                    <option value="Registered partnership">Registered partnership</option>
-                    <option value="Single">Single</option>
-                    <option value="Unknown">Unknown</option>
-                    <option value="Widowed">Widowed</option>
-                </select>
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="text-xs text-gray-500 mb-1 block">Civil Status</label>
+                        <select 
+                            value={tempDetails.civilStatus || ''}
+                            onChange={(e) => setTempDetails(prev => ({ ...prev, civilStatus: e.target.value }))}
+                            className="w-full p-3 bg-gray-50 border rounded-xl outline-none focus:ring-2 focus:ring-purple-500"
+                        >
+                            <option value="" disabled>Select...</option>
+                            <option value="Single">Single</option>
+                            <option value="Married">Married</option>
+                            <option value="Cohabit">Cohabit</option>
+                            <option value="Divorced">Divorced</option>
+                            <option value="Legal separation">Legal separation</option>
+                            <option value="Registered partnership">Registered partnership</option>
+                            <option value="widowed">widowed</option>
+                            <option value="Engaged">Engaged</option>
+                            <option value="unknown">unknown</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="text-xs text-gray-500 mb-1 block">Gender</label>
+                        <select 
+                            value={tempDetails.gender || ''}
+                            onChange={(e) => setTempDetails(prev => ({ ...prev, gender: e.target.value }))}
+                            className="w-full p-3 bg-gray-50 border rounded-xl outline-none focus:ring-2 focus:ring-purple-500"
+                        >
+                            <option value="" disabled>Select...</option>
+                            <option value="Male">Male</option>
+                            <option value="Female">Female</option>
+                            <option value="N/D">N/D</option>
+                        </select>
+                    </div>
+                </div>
             </div>
 
             {/* Randstad */}

@@ -19,6 +19,7 @@ import { ShopperAAWizard } from './components/ShopperAAWizard';
 import { ShopperSummary } from './components/ShopperSummary';
 import { ShopperDetailsModal } from './components/ShopperDetailsModal';
 import { AdminBusConfig } from './components/AdminBusConfig';
+import { FWDConfirmationModal } from './components/FWDConfirmationModal';
 import { getSafeDateFromKey, isRestViolation, isConsecutiveDaysViolation, validateShopperRange } from './utils/validation';
 
 const STORAGE_KEYS = {
@@ -29,6 +30,11 @@ export default function App() {
   // Auth State
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authError, setAuthError] = useState(false);
+  
+  // Admin Auth Config
+  const [adminPin, setAdminPin] = useState('7709'); // Fallback default
+  
+  // Shopper Auth Config
   const [shopperPinConfig, setShopperPinConfig] = useState<string | null>(null);
   const [isShopperAuthEnabled, setIsShopperAuthEnabled] = useState(true);
   const [enteredShopperPin, setEnteredShopperPin] = useState('');
@@ -62,6 +68,10 @@ export default function App() {
   // Limit State
   const [fwdCounts, setFwdCounts] = useState<Record<string, number>>({});
   
+  // FWD Confirmation State
+  const [showFWDConfirmModal, setShowFWDConfirmModal] = useState(false);
+  const [pendingFWD, setPendingFWD] = useState<{ date: string; shift: ShiftTime } | null>(null);
+
   const [aaSelection, setAaSelection] = useState<{
     weekday: { dayIndex: number | null, time: ShiftTime | null },
     weekend: { dayIndex: number | null, time: ShiftTime | null }
@@ -73,7 +83,8 @@ export default function App() {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [tempDetails, setTempDetails] = useState<ShopperDetails>({
     usePicnicBus: null, // Initialize as null to force selection
-    civilStatus: 'Single',
+    civilStatus: '', // Initialize as empty to force selection
+    gender: '', // Initialize as empty to force selection
     clothingSize: 'M',
     shoeSize: '40',
     gloveSize: '8 (M)',
@@ -115,6 +126,18 @@ export default function App() {
             if (!silent) alert("Security settings updated successfully!");
         }
     } catch (e) { console.error(e); }
+  };
+
+  const updateAdminPin = async (newPin: string) => {
+      try {
+          const { error } = await supabase.from('app_settings').upsert({ id: 'admin_auth', value: { pin: newPin } });
+          if (error) {
+              alert("Error updating Admin PIN");
+          } else {
+              setAdminPin(newPin);
+              alert("Admin PIN updated successfully!");
+          }
+      } catch (e) { console.error(e); }
   };
 
   const fetchFWDCounts = async () => {
@@ -165,6 +188,12 @@ export default function App() {
 
   const loadRemoteConfig = useCallback(async () => {
     try {
+        // Load Admin PIN
+        const { data: authData } = await supabase.from('app_settings').select('value').eq('id', 'admin_auth').single();
+        if (authData?.value?.pin) {
+            setAdminPin(authData.value.pin);
+        }
+
         const { data: availData } = await supabase.from('app_settings').select('value').eq('id', 'admin_availability').single();
         if (availData?.value) {
             let parsed = availData.value;
@@ -219,8 +248,6 @@ export default function App() {
       // Refresh FWD counts when entering flow to get latest availability
       if (mode === AppMode.SHOPPER_FLOW) fetchFWDCounts();
   }, [mode, loadRemoteConfig]);
-
-  useEffect(() => { if (isInitialized) localStorage.setItem(STORAGE_KEYS.TEMPLATE, JSON.stringify(tempTemplate)); }, [tempTemplate, isInitialized]);
 
   useEffect(() => {
       if (mode === AppMode.SHOPPER_FLOW) {
@@ -277,10 +304,11 @@ export default function App() {
     setShopperNames([]); setSelections([]); setCurrentShopperIndex(0); setShopperStep(ShopperStep.AA_SELECTION);
     setAaSelection({ weekday: { dayIndex: null, time: null }, weekend: { dayIndex: null, time: null } });
     setIsShopperVerified(false); setShowShopperAuth(false); setSyncStatus('idle'); setTempNameInput(''); setMode(AppMode.SHOPPER_SETUP);
-    // Reset temp details to ensure next user MUST select transport
+    // Reset temp details to ensure next user MUST select transport, civil status, and gender
     setTempDetails({
         usePicnicBus: null, 
-        civilStatus: 'Single',
+        civilStatus: '', 
+        gender: '',
         clothingSize: 'M',
         shoeSize: '40',
         gloveSize: '8 (M)',
@@ -298,7 +326,8 @@ export default function App() {
   };
 
   const resetWizardTemplate = () => {
-    if (window.prompt("Enter Admin PIN to confirm reset:") === '7709') {
+    // Uses the dynamic admin PIN
+    if (window.prompt("Enter Admin PIN to confirm reset:") === adminPin) {
         const initial: WeeklyTemplate = {};
         [1,2,3,4,5,6,0].forEach(d => { initial[d] = { [ShiftTime.OPENING]: [], [ShiftTime.MORNING]: [], [ShiftTime.NOON]: [], [ShiftTime.AFTERNOON]: [] }; });
         setTempTemplate(initial); saveTemplateToSupabase(initial);
@@ -325,12 +354,26 @@ export default function App() {
 
   const handleCopyMagicLink = () => navigator.clipboard.writeText(`${window.location.origin}/?mode=shopper`).then(() => alert("Link Copied!"));
   
-  const handleLogin = (pwd: string) => { if (pwd === '7709') { setIsAuthenticated(true); setAuthError(false); } else setAuthError(true); };
+  const handleLogin = (pwd: string) => { 
+      // Compare against dynamic adminPin
+      if (pwd === adminPin) { setIsAuthenticated(true); setAuthError(false); } else setAuthError(true); 
+  };
 
   // --- SHOPPER LOGIC ---
+  
+  // 1. Initial selection click: opens the confirmation modal
   const handleFWDSelection = (dateStr: string, shift: ShiftTime) => {
       if (shift === ShiftTime.OPENING || shift === ShiftTime.NOON) { alert("Invalid First Day Shift."); return; }
       
+      setPendingFWD({ date: dateStr, shift });
+      setShowFWDConfirmModal(true);
+  };
+
+  // 2. Confirmed action: performs the data update and moves to next step
+  const confirmFWDSelection = () => {
+      if (!pendingFWD) return;
+      const { date: dateStr, shift } = pendingFWD;
+
       const newSelections = [...selections];
       const existing = newSelections[currentShopperIndex];
       const previousFWD = existing.details?.firstWorkingDay;
@@ -358,6 +401,10 @@ export default function App() {
       newSelections[currentShopperIndex] = { ...existing, shifts: newShifts, details: { ...existing.details, firstWorkingDay: dateStr } as ShopperDetails };
       setSelections(newSelections);
       setShopperStep(ShopperStep.STANDARD_SELECTION);
+      
+      // Reset Modal State
+      setShowFWDConfirmModal(false);
+      setPendingFWD(null);
   };
 
   const handleStandardShiftToggle = (dateStr: string, shift: ShiftTime, type: ShiftType) => {
@@ -450,7 +497,8 @@ export default function App() {
 
       const existingDetails = selections[currentShopperIndex]?.details || { 
           usePicnicBus: null, // Ensure fresh start for new sessions if data missing
-          civilStatus: 'Single', 
+          civilStatus: '', 
+          gender: '',
           clothingSize: 'M', 
           shoeSize: '40', 
           gloveSize: '8 (M)', 
@@ -481,18 +529,25 @@ export default function App() {
     const aaCount = data?.shifts.filter(s => s.type === ShiftType.AA).length || 0;
     const stdCount = data?.shifts.filter(s => s.type === ShiftType.STANDARD).length || 0;
 
+    // Helper for Step Badge style
+    const getStepBadgeClass = (step: number) => {
+        if (shopperStep === step) return "bg-gray-900 text-white shadow-md scale-105";
+        if (shopperStep > step) return "bg-green-100 text-green-700";
+        return "bg-gray-100 text-gray-400";
+    };
+
     return (
       <div className="h-[100dvh] bg-gray-50 flex flex-col overflow-hidden">
         {/* Header */}
         <div className="bg-white px-6 py-4 shadow-sm border-b sticky top-0 z-20 flex justify-between items-center shrink-0">
           <div>
             <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2"><User className="w-5 h-5 text-gray-400" /> {currentName}</h2>
-            <div className="flex items-center gap-2 text-sm text-gray-500">
-               <span className={`px-2 py-0.5 rounded-full font-bold text-xs ${shopperStep === 0 ? 'bg-red-100 text-red-700' : 'bg-gray-100'}`}>1. AA Shifts</span>
-               <ChevronRight className="w-3 h-3" />
-               <span className={`px-2 py-0.5 rounded-full font-bold text-xs ${shopperStep === 1 ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100'}`}>2. Start Date</span>
-               <ChevronRight className="w-3 h-3" />
-               <span className={`px-2 py-0.5 rounded-full font-bold text-xs ${shopperStep === 2 ? 'bg-green-100 text-green-700' : 'bg-gray-100'}`}>3. Standard</span>
+            <div className="flex items-center gap-2 text-xs font-bold mt-1">
+               <span className={`px-3 py-1 rounded-full transition-all ${getStepBadgeClass(0)}`}>1. AA Shifts</span>
+               <div className="w-4 h-0.5 bg-gray-200"></div>
+               <span className={`px-3 py-1 rounded-full transition-all ${getStepBadgeClass(1)}`}>2. Start Date</span>
+               <div className="w-4 h-0.5 bg-gray-200"></div>
+               <span className={`px-3 py-1 rounded-full transition-all ${getStepBadgeClass(2)}`}>3. Standard</span>
             </div>
           </div>
           <div className="flex items-center gap-4">
@@ -515,7 +570,7 @@ export default function App() {
           )}
           
           {shopperStep === ShopperStep.FWD_SELECTION && (
-              <div className="p-4 md:p-6">
+              <div className="p-4 md:p-6 animate-in slide-in-from-right duration-300">
                   <div className="max-w-5xl mx-auto mb-6">
                      <div className="p-4 rounded-xl border flex gap-4 bg-yellow-50 border-yellow-100">
                         <div className="p-2 rounded-lg h-fit bg-white text-yellow-600"><PlayCircle className="w-5 h-5" /></div>
@@ -530,7 +585,7 @@ export default function App() {
           )}
 
           {shopperStep === ShopperStep.STANDARD_SELECTION && (
-              <div className="p-4 md:p-6">
+              <div className="p-4 md:p-6 animate-in slide-in-from-right duration-300">
                   <div className="max-w-5xl mx-auto mb-6">
                      <div className="p-4 rounded-xl border flex gap-4 bg-green-50 border-green-100 flex-col md:flex-row items-start md:items-center justify-between">
                         <div className="flex gap-4">
@@ -552,10 +607,10 @@ export default function App() {
         </div>
 
         {shopperStep === ShopperStep.STANDARD_SELECTION && (
-            <div className="bg-white p-4 border-t sticky bottom-0 z-20 pb-8 md:pb-4">
+            <div className="bg-white p-4 border-t sticky bottom-0 z-20 pb-8 md:pb-4 shadow-[0_-5px_10px_rgba(0,0,0,0.05)]">
                <div className="max-w-5xl mx-auto flex justify-between items-center">
                   <Button variant="secondary" onClick={() => setShopperStep(ShopperStep.FWD_SELECTION)}>Back</Button>
-                  <Button onClick={() => setShowDetailsModal(true)} className="px-8">Review & Finish <ArrowRight className="w-4 h-4 ml-2" /></Button>
+                  <Button onClick={() => setShowDetailsModal(true)} className="px-8 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all">Review & Finish <ArrowRight className="w-4 h-4 ml-2" /></Button>
                </div>
             </div>
         )}
@@ -589,6 +644,14 @@ export default function App() {
                 />
             );
         })()}
+
+        <FWDConfirmationModal 
+            isOpen={showFWDConfirmModal}
+            onClose={() => setShowFWDConfirmModal(false)}
+            onConfirm={confirmFWDSelection}
+            date={pendingFWD?.date || null}
+            shift={pendingFWD?.shift || null}
+        />
       </div>
     );
   };
@@ -646,6 +709,7 @@ export default function App() {
                           handleCopyMagicLink={handleCopyMagicLink} setAdminWizardStep={setAdminWizardStep}
                           setWizardDayIndex={setWizardDayIndex} savedCloudTemplate={savedCloudTemplate}
                           setTempTemplate={setTempTemplate} tempTemplate={tempTemplate}
+                          adminPin={adminPin} updateAdminPin={updateAdminPin}
                       />
                   )}
                   {adminWizardStep === AdminWizardStep.WIZARD_DAYS && (

@@ -1,3 +1,4 @@
+
 export enum ShiftTime {
   OPENING = 'Opening (04:00 - 13:00)',
   MORNING = 'Morning (06:00 - 15:00)',
@@ -25,12 +26,14 @@ export interface ShopperShift {
 export interface ShopperDetails {
   usePicnicBus: boolean | null; // Changed to allow null for explicit selection requirement
   civilStatus: string;
+  gender?: string; // New field for Gender (Male, Female, N/D)
   clothingSize: string;
   shoeSize: string;
   gloveSize: string; // Auto-calculated
   isRandstad: boolean;
   address?: string; // Required if isRandstad is true
   firstWorkingDay?: string; // YYYY-MM-DD
+  pnNumber?: string; // e.g. PN123456
 }
 
 export interface ShopperData {

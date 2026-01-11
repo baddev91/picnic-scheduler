@@ -1,10 +1,17 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { supabase } from '../supabaseClient';
-import { Download, Search, Trash2, User, Calendar, MapPin, RefreshCw, Pencil, GripVertical, Clock, SaveAll } from 'lucide-react';
+import { Download, Search, Trash2, User, Calendar, MapPin, RefreshCw, Pencil, GripVertical, Clock, SaveAll, Copy, Sheet, FileSpreadsheet, Check } from 'lucide-react';
 import { format } from 'date-fns';
 import { ShopperRecord, ShiftType } from '../types';
 import { AdminHeatmap } from './AdminHeatmap';
 import { EditShopperModal } from './EditShopperModal';
+import { 
+    generateSpreadsheetRow, 
+    generateHRSpreadsheetRow, 
+    generateHRSpreadsheetHTML,
+    generateBulkHRSpreadsheetHTML,
+    generateBulkHRSpreadsheetRow
+} from '../utils/clipboardExport';
 
 export const AdminDataView: React.FC = () => {
   const [data, setData] = useState<ShopperRecord[]>([]);
@@ -21,6 +28,10 @@ export const AdminDataView: React.FC = () => {
   // Edit Mode State
   const [editingShopper, setEditingShopper] = useState<ShopperRecord | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  // Copy Feedback State: tracks which button in which group is showing "Success"
+  // Key format: `${groupKey}-${type}` e.g., "2023-10-27-W1"
+  const [copyFeedback, setCopyFeedback] = useState<Record<string, boolean>>({});
 
   const fetchData = async () => {
     setLoading(true);
@@ -127,6 +138,94 @@ export const AdminDataView: React.FC = () => {
       }
   };
 
+  // --- EXPORT TO CLIPBOARD HANDLERS ---
+  
+  // Single Copy
+  const handleCopyForSheet = (shopper: ShopperRecord, weekOffset: number) => {
+      try {
+          const rowString = generateSpreadsheetRow(shopper, weekOffset);
+          navigator.clipboard.writeText(rowString);
+          const whichWeek = weekOffset === 0 ? "Week 1" : "Week 2";
+          alert(`Copied ${whichWeek} data for ${shopper.name}!\n\nPN: ${shopper.details?.pnNumber || 'Not Set'}\n\nReady to paste into spreadsheet.`);
+      } catch (e: any) {
+          alert(e.message);
+      }
+  };
+
+  const handleCopyLSInflow = async (shopper: ShopperRecord) => {
+      try {
+          const text = generateHRSpreadsheetRow(shopper);
+          const html = generateHRSpreadsheetHTML(shopper);
+
+          if (navigator.clipboard && typeof navigator.clipboard.write === 'function') {
+             try {
+                 const textBlob = new Blob([text], { type: 'text/plain' });
+                 const htmlBlob = new Blob([html], { type: 'text/html' });
+                 await navigator.clipboard.write([
+                     new ClipboardItem({ 
+                         'text/plain': textBlob, 
+                         'text/html': htmlBlob 
+                     })
+                 ]);
+             } catch (err) {
+                 await navigator.clipboard.writeText(text);
+             }
+          } else {
+             await navigator.clipboard.writeText(text);
+          }
+          alert(`Copied LS Inflow Data for ${shopper.name}!\n\nReady to paste.`);
+      } catch(e: any) {
+          alert("Clipboard error: " + e.message);
+      }
+  };
+
+  // Trigger visual feedback
+  const triggerFeedback = (groupKey: string, type: string) => {
+      const key = `${groupKey}-${type}`;
+      setCopyFeedback(prev => ({ ...prev, [key]: true }));
+      setTimeout(() => {
+          setCopyFeedback(prev => ({ ...prev, [key]: false }));
+      }, 2000);
+  };
+
+  // Bulk Copy Handlers
+  const handleBulkCopyWeek = (shoppers: ShopperRecord[], weekOffset: number, groupKey: string) => {
+      try {
+          const rows = shoppers.map(s => generateSpreadsheetRow(s, weekOffset)).join('\n');
+          navigator.clipboard.writeText(rows);
+          triggerFeedback(groupKey, weekOffset === 0 ? 'W1' : 'W2');
+      } catch (e: any) {
+          alert("Bulk copy failed: " + e.message);
+      }
+  };
+
+  const handleBulkCopyLSInflow = async (shoppers: ShopperRecord[], groupKey: string) => {
+      try {
+          const text = generateBulkHRSpreadsheetRow(shoppers);
+          const html = generateBulkHRSpreadsheetHTML(shoppers);
+
+          if (navigator.clipboard && typeof navigator.clipboard.write === 'function') {
+             try {
+                 const textBlob = new Blob([text], { type: 'text/plain' });
+                 const htmlBlob = new Blob([html], { type: 'text/html' });
+                 await navigator.clipboard.write([
+                     new ClipboardItem({ 
+                         'text/plain': textBlob, 
+                         'text/html': htmlBlob 
+                     })
+                 ]);
+             } catch (err) {
+                 await navigator.clipboard.writeText(text);
+             }
+          } else {
+             await navigator.clipboard.writeText(text);
+          }
+          triggerFeedback(groupKey, 'LS');
+      } catch (e: any) {
+          alert("Bulk copy failed: " + e.message);
+      }
+  };
+
   // --- DELETE LOGIC ---
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
@@ -171,7 +270,7 @@ export const AdminDataView: React.FC = () => {
     return groups;
   }, [filteredData]);
 
-  // --- EXPORT ---
+  // --- EXPORT CSV ---
   const getAAPatternString = (shifts: any[]) => {
       const aaShifts = shifts.filter(s => s.type === ShiftType.AA);
       if (aaShifts.length === 0) return 'None';
@@ -186,26 +285,8 @@ export const AdminDataView: React.FC = () => {
       return Array.from(uniquePatterns).join(' & ');
   };
 
-  const getDistinctAAPatterns = (shifts: any[]) => {
-      const aaShifts = shifts.filter(s => s.type === ShiftType.AA);
-      const weekdays = new Set<string>();
-      const weekends = new Set<string>();
-
-      aaShifts.forEach(s => {
-          const date = new Date(s.date);
-          const dayIndex = date.getDay(); // 0 Sun, 6 Sat
-          const timeLabel = s.time.split('(')[0].trim();
-          const dayName = format(date, 'EEEE');
-          const entry = `${dayName} ${timeLabel}`;
-          if (dayIndex === 0 || dayIndex === 6) weekends.add(entry);
-          else weekdays.add(entry);
-      });
-
-      return { weekdays: Array.from(weekdays), weekends: Array.from(weekends) };
-  };
-
   const downloadCSV = () => {
-    const headers = ['Name', 'Registered At', 'First Working Day', 'Bus', 'Randstad', 'Address', 'AA Pattern', 'Shift Details'];
+    const headers = ['Name', 'PN Number', 'Registered At', 'First Working Day', 'Bus', 'Randstad', 'Address', 'AA Pattern', 'Shift Details'];
     const rows = filteredData.map(item => {
       const shiftSummary = item.shifts
         .sort((a, b) => a.date.localeCompare(b.date))
@@ -216,6 +297,7 @@ export const AdminDataView: React.FC = () => {
 
       return [
         `"${item.name}"`,
+        `"${item.details?.pnNumber || ''}"`,
         `"${format(new Date(item.created_at), 'yyyy-MM-dd HH:mm')}"`,
         `"${item.details?.firstWorkingDay || ''}"`,
         item.details?.usePicnicBus ? 'Yes' : 'No',
@@ -291,14 +373,56 @@ export const AdminDataView: React.FC = () => {
       <div className="space-y-6">
         {Object.entries(groupedData).sort((a,b) => b[0].localeCompare(a[0])).map(([dateKey, items]: [string, ShopperRecord[]]) => (
             <div key={dateKey} className="bg-white rounded-xl shadow-sm border overflow-hidden">
-                <div className="bg-gray-50 border-b px-6 py-3 flex items-center justify-between">
-                    <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                        <Clock className="w-5 h-5 text-purple-600" />
-                        SER: {formatDateDisplay(dateKey)}
-                    </h3>
-                    <span className="text-xs font-bold bg-gray-200 text-gray-600 px-2 py-1 rounded-full">
-                        {items.length} Shoppers
-                    </span>
+                <div className="bg-gray-50 border-b px-6 py-3 flex flex-col md:flex-row items-center justify-between gap-4">
+                    <div className="flex items-center gap-3 w-full md:w-auto">
+                        <h3 className="font-bold text-gray-800 flex items-center gap-2 whitespace-nowrap">
+                            <Clock className="w-5 h-5 text-purple-600" />
+                            SER: {formatDateDisplay(dateKey)}
+                        </h3>
+                        <span className="text-xs font-bold bg-gray-200 text-gray-600 px-2 py-1 rounded-full">
+                            {items.length} Shoppers
+                        </span>
+                    </div>
+                    
+                    {/* BULK ACTIONS */}
+                    <div className="flex items-center gap-2 w-full md:w-auto justify-end">
+                        <button 
+                            onClick={() => handleBulkCopyWeek(items, 0, dateKey)}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm border ${
+                                copyFeedback[`${dateKey}-W1`] 
+                                ? 'bg-green-100 text-green-700 border-green-300' 
+                                : 'bg-white border-green-200 text-green-700 hover:bg-green-50 hover:border-green-300'
+                            }`}
+                            title="Copy Week 1 for ALL shoppers in this group"
+                        >
+                            {copyFeedback[`${dateKey}-W1`] ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />} 
+                            {copyFeedback[`${dateKey}-W1`] ? 'Copied' : 'W1'}
+                        </button>
+                        <button 
+                            onClick={() => handleBulkCopyWeek(items, 1, dateKey)}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm border ${
+                                copyFeedback[`${dateKey}-W2`] 
+                                ? 'bg-green-100 text-green-700 border-green-300' 
+                                : 'bg-white border-green-200 text-green-700 hover:bg-green-50 hover:border-green-300'
+                            }`}
+                            title="Copy Week 2 for ALL shoppers in this group"
+                        >
+                            {copyFeedback[`${dateKey}-W2`] ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />} 
+                            {copyFeedback[`${dateKey}-W2`] ? 'Copied' : 'W2'}
+                        </button>
+                        <button 
+                            onClick={() => handleBulkCopyLSInflow(items, dateKey)}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm border ${
+                                copyFeedback[`${dateKey}-LS`] 
+                                ? 'bg-blue-100 text-blue-700 border-blue-300' 
+                                : 'bg-white border-blue-200 text-blue-700 hover:bg-blue-50 hover:border-blue-300'
+                            }`}
+                            title="Copy LS Inflow for ALL shoppers in this group"
+                        >
+                            {copyFeedback[`${dateKey}-LS`] ? <Check className="w-3 h-3" /> : <FileSpreadsheet className="w-3 h-3" />} 
+                            {copyFeedback[`${dateKey}-LS`] ? 'Copied' : 'LS'}
+                        </button>
+                    </div>
                 </div>
                 
                 <div className="overflow-x-auto">
@@ -351,6 +475,9 @@ export const AdminDataView: React.FC = () => {
                                                 {item.details?.isRandstad && (
                                                     <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-[10px] font-bold border border-blue-200" title="Randstad Agency">RND</span>
                                                 )}
+                                                {item.details?.pnNumber && (
+                                                    <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-[10px] font-mono border border-gray-200" title={`PN: ${item.details.pnNumber}`}>PN</span>
+                                                )}
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">
@@ -374,23 +501,51 @@ export const AdminDataView: React.FC = () => {
                                                             <span>Shoes: <strong>{item.details?.shoeSize}</strong></span>
                                                             <span>Gloves: <strong>{item.details?.gloveSize}</strong></span>
                                                             <span>Status: <strong>{item.details?.civilStatus}</strong></span>
+                                                            <span>Gender: <strong>{item.details?.gender || 'N/D'}</strong></span>
+                                                            {item.details?.pnNumber && (
+                                                                <span className="col-span-2 font-mono text-xs bg-gray-100 px-2 py-1 rounded w-fit mt-1">
+                                                                    PN: <strong>{item.details.pnNumber}</strong>
+                                                                </span>
+                                                            )}
                                                         </div>
                                                         {item.details?.isRandstad && (
                                                             <div className="mt-2 pt-2 border-t">
                                                                 <div className="flex items-start gap-2 text-xs"><MapPin className="w-3 h-3 mt-0.5 shrink-0" />{item.details?.address || 'No address provided'}</div>
                                                             </div>
                                                         )}
-                                                        <div className="mt-4 pt-4 border-t">
-                                                            <h5 className="font-bold text-gray-900 text-xs uppercase mb-2"><span className="text-red-600">AA</span> Recurring Pattern</h5>
-                                                            {(() => {
-                                                                const patterns = getDistinctAAPatterns(item.shifts);
-                                                                return (
-                                                                    <div className="space-y-2">
-                                                                        <div><span className="text-[10px] font-bold text-gray-400 uppercase block">Weekday</span><span className="text-sm font-medium text-gray-900">{patterns.weekdays.length > 0 ? patterns.weekdays.join(', ') : <span className="text-gray-300 italic">None</span>}</span></div>
-                                                                        <div><span className="text-[10px] font-bold text-gray-400 uppercase block">Weekend</span><span className="text-sm font-medium text-gray-900">{patterns.weekends.length > 0 ? patterns.weekends.join(', ') : <span className="text-gray-300 italic">None</span>}</span></div>
+                                                        <div className="mt-4 pt-4 border-t space-y-3">
+                                                            <h5 className="font-bold text-gray-900 text-xs uppercase flex items-center gap-2"><Sheet className="w-3 h-3 text-green-600" /> Google Sheets Export</h5>
+                                                            <div className="grid grid-cols-3 gap-3">
+                                                                <button 
+                                                                    onClick={() => handleCopyForSheet(item, 0)}
+                                                                    className="flex flex-col items-center justify-center p-3 bg-white border border-gray-200 rounded-xl hover:border-green-500 hover:bg-green-50/30 hover:shadow-md transition-all group text-center"
+                                                                >
+                                                                    <div className="mb-2 p-2 rounded-full bg-gray-100 group-hover:bg-green-100 text-gray-500 group-hover:text-green-600 transition-colors">
+                                                                        <Copy className="w-4 h-4" />
                                                                     </div>
-                                                                );
-                                                            })()}
+                                                                    <span className="text-xs font-bold text-gray-700 group-hover:text-green-800">Copy Week 1</span>
+                                                                </button>
+
+                                                                <button 
+                                                                    onClick={() => handleCopyForSheet(item, 1)}
+                                                                    className="flex flex-col items-center justify-center p-3 bg-white border border-gray-200 rounded-xl hover:border-green-500 hover:bg-green-50/30 hover:shadow-md transition-all group text-center"
+                                                                >
+                                                                    <div className="mb-2 p-2 rounded-full bg-gray-100 group-hover:bg-green-100 text-gray-500 group-hover:text-green-600 transition-colors">
+                                                                        <Copy className="w-4 h-4" />
+                                                                    </div>
+                                                                    <span className="text-xs font-bold text-gray-700 group-hover:text-green-800">Copy Week 2</span>
+                                                                </button>
+
+                                                                <button 
+                                                                    onClick={() => handleCopyLSInflow(item)}
+                                                                    className="flex flex-col items-center justify-center p-3 bg-white border border-gray-200 rounded-xl hover:border-blue-500 hover:bg-blue-50/30 hover:shadow-md transition-all group text-center"
+                                                                >
+                                                                    <div className="mb-2 p-2 rounded-full bg-gray-100 group-hover:bg-blue-100 text-gray-500 group-hover:text-blue-600 transition-colors">
+                                                                        <FileSpreadsheet className="w-4 h-4" />
+                                                                    </div>
+                                                                    <span className="text-xs font-bold text-gray-700 group-hover:text-blue-800">Copy LS Inflow</span>
+                                                                </button>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                     <div className="col-span-2">

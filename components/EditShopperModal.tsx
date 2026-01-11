@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Pencil, User, MapPin, Save, Calendar, AlertCircle, Trash2, Plus } from 'lucide-react';
+import { X, Pencil, User, MapPin, Save, Calendar, AlertCircle, Trash2, Plus, Hash } from 'lucide-react';
 import { format } from 'date-fns';
 import { supabase } from '../supabaseClient';
 import { Button } from './Button';
@@ -147,6 +147,19 @@ export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onC
                                 className="w-full p-2 rounded border border-gray-300 focus:ring-2 focus:ring-purple-500 outline-none text-sm"
                             />
                         </div>
+
+                        {/* PN NUMBER INPUT */}
+                        <div className="space-y-1">
+                            <label className="text-xs font-semibold text-gray-500 flex items-center gap-1">
+                                <Hash className="w-3 h-3" /> PN Number
+                            </label>
+                            <input 
+                                value={details.pnNumber || ''}
+                                onChange={e => setDetails({...details, pnNumber: e.target.value})}
+                                placeholder="PN123456"
+                                className="w-full p-2 rounded border border-gray-300 focus:ring-2 focus:ring-purple-500 outline-none text-sm font-mono placeholder:text-gray-300 uppercase"
+                            />
+                        </div>
                         
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1">
@@ -195,6 +208,20 @@ export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onC
                                 </select>
                             </div>
                         </div>
+                        
+                        {/* Gender Input for Admin */}
+                        <div className="space-y-1">
+                            <label className="text-xs font-semibold text-gray-500">Gender</label>
+                            <select 
+                                value={details.gender || 'N/D'}
+                                onChange={e => setDetails({...details, gender: e.target.value})}
+                                className="w-full p-2 rounded border border-gray-300 text-sm"
+                            >
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                                <option value="N/D">N/D</option>
+                            </select>
+                        </div>
 
                         <div className="space-y-1">
                             <label className="text-xs font-semibold text-gray-500">First Work Day</label>
@@ -217,9 +244,16 @@ export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onC
                                 <span className="text-sm font-medium text-gray-700">Uses Picnic Bus</span>
                             </label>
                         </div>
-                        <Button onClick={handleSaveDetails} variant="secondary" fullWidth className="mt-2 text-xs h-8">
-                            <Save className="w-3 h-3 mr-2" /> Save Info
-                        </Button>
+                        
+                        <div className="pt-4 mt-2">
+                            <Button 
+                                onClick={handleSaveDetails} 
+                                fullWidth 
+                                className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white border-none shadow-md hover:shadow-lg transform transition-all duration-200 py-2.5 text-xs font-bold uppercase tracking-wide"
+                            >
+                                <Save className="w-4 h-4 mr-2" /> Save Personal Info
+                            </Button>
+                        </div>
                     </div>
                 </div>
                 <div className="flex-1 p-6 overflow-hidden flex flex-col bg-white">

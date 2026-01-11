@@ -1,6 +1,6 @@
 import React from 'react';
 import { format } from 'date-fns';
-import { X, Lock, Check } from 'lucide-react';
+import { X, Lock, Check, Star, Sun, Moon, Sunrise } from 'lucide-react';
 import { ShiftTime, ShiftType, ShopperShift } from '../../types';
 import { SHIFT_TIMES, formatDateKey } from '../../constants';
 
@@ -37,41 +37,54 @@ export const DesktopDayPanel: React.FC<DesktopDayPanelProps> = ({
   const dateKey = formatDateKey(selectedDay);
   const isFWD = firstWorkingDay === dateKey;
   
-  // Safety check: ensure panel doesn't open for disabled days in Shopper mode
-  if (mode === 'SHOPPER' && isDateDisabledForShopper(selectedDay)) {
-      return null;
-  }
+  if (mode === 'SHOPPER' && isDateDisabledForShopper(selectedDay)) return null;
 
   const isLockedFWD = mode === 'SHOPPER' && !isFWDSelection && step === 2 && isFWD;
 
+  // Header Color Logic
+  let headerBg = "bg-gray-50";
+  let headerText = "text-gray-900";
+  if (isFWDSelection) { headerBg = "bg-yellow-50 border-b-yellow-100"; headerText = "text-yellow-900"; }
+  else if (step === 0 && mode === 'SHOPPER') { headerBg = "bg-red-50 border-b-red-100"; headerText = "text-red-900"; }
+  else if (step === 2 && mode === 'SHOPPER') { headerBg = "bg-green-50 border-b-green-100"; headerText = "text-green-900"; }
+
+  const getShiftIcon = (time: string) => {
+    if (time.includes('Opening')) return <Sunrise className="w-4 h-4" />;
+    if (time.includes('Morning')) return <Sun className="w-4 h-4" />;
+    if (time.includes('Noon')) return <Sun className="w-4 h-4 rotate-45" />;
+    return <Moon className="w-4 h-4" />;
+  };
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
-        <div className="bg-gray-50 p-6 border-b flex justify-between items-center shrink-0">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-300">
+        
+        {/* Styled Header */}
+        <div className={`${headerBg} p-6 border-b flex justify-between items-center shrink-0`}>
           <div>
-            <h3 className="text-xl font-bold text-gray-900">{format(selectedDay, 'EEEE, MMM do')}</h3>
-            <p className="text-sm text-gray-500">
+            <h3 className={`text-xl font-black ${headerText}`}>{format(selectedDay, 'EEEE, MMM do')}</h3>
+            <p className="text-sm text-gray-500 font-medium opacity-80">
               {mode === 'ADMIN' 
                 ? 'Configure Availability' 
                 : isFWDSelection 
-                  ? 'Confirm First Day' 
+                  ? 'Select your Start Date' 
                   : isLockedFWD 
-                      ? 'First Day (Locked)'
+                      ? 'First Working Day (Locked)'
                       : step === 0 
-                          ? 'Select AA Shift' 
-                          : 'Select Standard Shift'
+                          ? 'Select AA Pattern' 
+                          : 'Select Standard Shifts'
               }
             </p>
           </div>
-          <button onClick={() => setSelectedDay(null)} className="bg-gray-200 hover:bg-gray-300 p-2 rounded-full transition-colors">
-            <X className="w-5 h-5 text-gray-600" />
+          <button onClick={() => setSelectedDay(null)} className="bg-white/50 hover:bg-white p-2 rounded-full transition-colors shadow-sm">
+            <X className="w-5 h-5 text-gray-500" />
           </button>
         </div>
 
-        <div className="p-4 md:p-6 space-y-3 overflow-y-auto bg-gray-50/50">
+        <div className="p-6 space-y-4 overflow-y-auto bg-white">
           {isLockedFWD && (
-             <div className="p-3 bg-yellow-50 text-yellow-800 text-sm rounded-lg border border-yellow-200 flex items-center gap-2">
-                 <Lock className="w-4 h-4" /> This is your First Working Day. Go back to Step 2 to change it.
+             <div className="p-4 bg-yellow-50 text-yellow-800 text-sm rounded-xl border border-yellow-200 flex items-center gap-3 font-medium">
+                 <Lock className="w-5 h-5" /> This is your First Working Day. <br/>Go back to Step 2 to change it.
              </div>
           )}
           
@@ -83,31 +96,29 @@ export const DesktopDayPanel: React.FC<DesktopDayPanelProps> = ({
             const isSelectedAA = shiftEntries.some(s => s.type === ShiftType.AA);
             const isSelectedStd = shiftEntries.some(s => s.type === ShiftType.STANDARD);
 
-            // In FWD Selection mode, disable Opening and Noon
             const isFWDAllowed = shift === ShiftTime.MORNING || shift === ShiftTime.AFTERNOON;
             const isFWDButtonDisabled = isFWDSelection && !isFWDAllowed;
 
-            // Hide completely if not allowed in Standard step (unless it's the AA override scenario)
             if (mode === 'SHOPPER' && !isFWDSelection && step >= 1 && !stdAvailable && !isSelectedStd) return null;
-            
-            // HIDE unavailable shifts in FWD mode (Desktop Panel)
             if (isFWDSelection && !stdAvailable) return null;
 
-            // MAX 5 Logic for FWD Selection
             const fwdKey = `${dateKey}_${shift}`;
             const currentFWDCount = fwdCounts[fwdKey] || 0;
             const isFull = isFWDSelection && currentFWDCount >= 5;
 
             return (
-              <div key={shift} className={`w-full flex flex-col gap-2 md:gap-3 p-3 md:p-4 border rounded-xl bg-white shadow-sm transition-all ${isSelectedAA || isSelectedStd ? 'ring-2 ring-purple-500 border-transparent' : 'border-gray-200'} ${isFWDButtonDisabled || isLockedFWD ? 'opacity-60' : ''}`}>
-                <div className="text-sm md:text-base font-bold text-gray-800 flex justify-between">
-                    {shift}
-                    {isFWDButtonDisabled && <span className="text-xs text-red-500 font-normal">Not allowed for 1st day</span>}
-                    {isFull && isFWDSelection && !isFWDButtonDisabled && <span className="text-xs text-red-600 font-bold bg-red-100 px-2 rounded">FULL (5/5)</span>}
+              <div key={shift} className="w-full">
+                {/* Header for the Shift Row */}
+                <div className="flex justify-between items-center mb-2 px-1">
+                    <div className="flex items-center gap-2 text-sm font-bold text-gray-700">
+                        {getShiftIcon(shift)} {shift.split('(')[0]}
+                    </div>
+                    {isFWDButtonDisabled && <span className="text-xs text-red-400 font-medium">Not allowed for Day 1</span>}
+                    {isFull && isFWDSelection && !isFWDButtonDisabled && <span className="text-xs text-red-600 font-bold bg-red-50 px-2 py-0.5 rounded">FULL</span>}
                 </div>
                 
-                <div className="grid grid-cols-1 gap-2 md:gap-3">
-                  {/* AA BUTTON - Only active in Step 0 or Admin */}
+                <div className="grid grid-cols-1 gap-3">
+                  {/* AA BUTTON (Red Theme) */}
                   {(mode === 'ADMIN' || (step === 0 && !isFWDSelection)) && (
                     <button
                       onClick={() => {
@@ -115,23 +126,20 @@ export const DesktopDayPanel: React.FC<DesktopDayPanelProps> = ({
                         if (mode === 'SHOPPER' && onShopperToggle && aaAvailable) onShopperToggle(dateKey, shift, ShiftType.AA);
                       }}
                       disabled={mode === 'SHOPPER' && !aaAvailable}
-                      className={`flex items-center justify-between px-4 py-3 rounded-lg text-sm font-semibold border transition-all ${
+                      className={`relative w-full flex items-center justify-between px-4 py-4 rounded-2xl text-sm font-bold border-2 transition-all duration-200 active:scale-[0.98] ${
                         isSelectedAA
-                          ? 'bg-red-600 text-white border-red-600 shadow-md transform scale-[1.02]' 
+                          ? 'bg-red-500 border-red-600 text-white shadow-lg shadow-red-100 ring-2 ring-red-500 ring-offset-2' 
                           : aaAvailable
-                            ? 'bg-white border-red-200 text-red-700 hover:bg-red-50'
-                            : 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
+                            ? 'bg-white border-gray-100 text-gray-600 hover:border-red-200 hover:bg-red-50 hover:text-red-600'
+                            : 'bg-gray-50 border-gray-100 text-gray-300 cursor-not-allowed'
                       }`}
                     >
-                      <span className="flex items-center gap-2">
-                         {isSelectedAA && <Check className="w-4 h-4" />} 
-                         AA (Always Available)
-                      </span>
-                      {!aaAvailable && mode === 'SHOPPER' && <span className="text-xs uppercase">Full</span>}
+                      <span className="flex items-center gap-2">Always Available</span>
+                      {isSelectedAA && <div className="bg-white/20 p-1 rounded-full"><Check className="w-4 h-4" /></div>}
                     </button>
                   )}
 
-                  {/* STANDARD BUTTON - Active in Step 2 (Std) OR FWD Selection */}
+                  {/* STANDARD BUTTON (Green Theme normally, Yellow for FWD) */}
                   {(mode === 'ADMIN' || step >= 1 || isFWDSelection) && (
                     <button
                       onClick={() => {
@@ -139,19 +147,28 @@ export const DesktopDayPanel: React.FC<DesktopDayPanelProps> = ({
                         if (mode === 'SHOPPER' && onShopperToggle && stdAvailable && !isFull && !isLockedFWD) onShopperToggle(dateKey, shift, ShiftType.STANDARD);
                       }}
                       disabled={mode === 'SHOPPER' && (isFWDButtonDisabled || !stdAvailable || (isFull && isFWDSelection) || isLockedFWD)}
-                      className={`flex items-center justify-between px-4 py-3 rounded-lg text-sm font-semibold border transition-all ${
-                        isSelectedStd || (isFWDSelection && isSelectedAA && isFWD)
-                          ? 'bg-green-600 text-white border-green-600 shadow-md transform scale-[1.02]' 
-                          : stdAvailable && (!isSelectedAA || isFWD) && !isFull && !isLockedFWD
-                            ? 'bg-white border-green-200 text-green-700 hover:bg-green-50'
-                            : 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
+                      className={`relative w-full flex items-center justify-between px-4 py-4 rounded-2xl text-sm font-bold border-2 transition-all duration-200 active:scale-[0.98] ${
+                        // Case 1: FWD Selected (Yellow)
+                        (isFWDSelection && isSelectedAA && isFWD) 
+                          ? 'bg-yellow-400 border-yellow-500 text-yellow-900 shadow-lg shadow-yellow-100 ring-2 ring-yellow-400 ring-offset-2'
+                          : // Case 2: Standard Selected (Green)
+                            isSelectedStd 
+                             ? 'bg-green-600 border-green-700 text-white shadow-lg shadow-green-100 ring-2 ring-green-600 ring-offset-2'
+                             : // Case 3: Available
+                               stdAvailable && (!isSelectedAA || isFWD) && !isFull && !isLockedFWD
+                               ? `bg-white border-gray-100 text-gray-600 hover:bg-gray-50 ${isFWDSelection ? 'hover:border-yellow-300 hover:text-yellow-700' : 'hover:border-green-300 hover:text-green-700'}`
+                               : // Case 4: Disabled
+                                 'bg-gray-50 border-gray-100 text-gray-300 cursor-not-allowed'
                       }`}
                     >
                        <span className="flex items-center gap-2">
-                         {(isSelectedStd || (isFWDSelection && isSelectedAA && isFWD)) && <Check className="w-4 h-4" />} 
-                         {isFWDSelection ? 'Start Here' : 'Standard Shift'}
+                         {isFWDSelection ? 'Confirm Start Date' : 'Standard Shift'}
                        </span>
-                       {isSelectedAA && !isFWD && mode === 'SHOPPER' && !isFWDSelection && <span className="text-xs">AA Selected</span>}
+                       {(isSelectedStd || (isFWDSelection && isSelectedAA && isFWD)) && (
+                           <div className="bg-white/20 p-1 rounded-full">
+                               {isFWDSelection ? <Star className="w-4 h-4 fill-current" /> : <Check className="w-4 h-4" />}
+                           </div>
+                       )}
                     </button>
                   )}
                 </div>
@@ -160,10 +177,10 @@ export const DesktopDayPanel: React.FC<DesktopDayPanelProps> = ({
           })}
         </div>
         
-        <div className="p-4 border-t bg-gray-50 flex justify-end shrink-0">
+        <div className="p-4 bg-gray-50 border-t flex justify-end shrink-0">
           <button 
             onClick={() => setSelectedDay(null)}
-            className="px-8 py-3 bg-gray-900 text-white rounded-xl font-bold hover:bg-gray-800 transition-colors shadow-lg"
+            className="px-8 py-3 bg-gray-900 text-white rounded-xl font-bold hover:bg-black transition-colors shadow-lg active:scale-95"
           >
             Done
           </button>
