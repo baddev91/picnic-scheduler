@@ -69,9 +69,9 @@ export const ShopperSetup: React.FC<ShopperSetupProps> = ({
     <div className="min-h-[100dvh] bg-white flex flex-col items-center justify-between p-6">
        
        <div className="w-full flex justify-center pt-10 pb-4">
-           {/* Used official SVG URL to ensure visibility */}
+           {/* Used a high-availability PNG version of the logo */}
            <img 
-             src="https://upload.wikimedia.org/wikipedia/commons/c/c3/Picnic_logo.svg" 
+             src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c3/Picnic_logo.svg/2560px-Picnic_logo.svg.png" 
              alt="Picnic" 
              className="h-16 w-auto object-contain" 
            />

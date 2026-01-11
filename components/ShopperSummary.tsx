@@ -80,7 +80,7 @@ export const ShopperSummary: React.FC<ShopperSummaryProps> = ({
               <div className="bg-white p-3 border-b flex items-center justify-between gap-2 shrink-0">
                   <div className="flex items-center gap-3 min-w-0">
                       {/* Using public SVG URL */}
-                      <img src="https://upload.wikimedia.org/wikipedia/commons/c/c3/Picnic_logo.svg" alt="Picnic" className="w-10 h-10 object-contain shrink-0" />
+                      <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c3/Picnic_logo.svg/2560px-Picnic_logo.svg.png" alt="Picnic" className="w-10 h-10 object-contain shrink-0" />
                       <div className="flex flex-col min-w-0">
                           <h3 className="font-bold text-gray-900 truncate text-lg leading-tight">{shopper.name}</h3>
                           <div className="flex flex-wrap gap-1.5 mt-1 text-[10px] font-bold text-gray-600">
