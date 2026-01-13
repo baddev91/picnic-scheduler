@@ -1,10 +1,11 @@
+
 import React, { useState, useEffect } from 'react';
 import { ShiftTime, ShiftType, WeeklyTemplate } from '../types';
 import { SHIFT_TIMES } from '../constants';
 import { Button } from './Button';
 import { Check, Ban, CalendarDays, Copy, Save, X, CalendarClock, ArrowRight, Settings2, CalendarRange } from 'lucide-react';
-import { addWeeks, format, startOfWeek } from 'date-fns';
-import nextMonday from 'date-fns/nextMonday';
+import { addWeeks, format } from 'date-fns';
+import startOfWeek from 'date-fns/startOfWeek';
 
 interface WeeklyTemplateModalProps {
   isOpen: boolean;
@@ -109,7 +110,7 @@ export const WeeklyTemplateModal: React.FC<WeeklyTemplateModalProps> = ({
 
   const handleApplyNextMonth = () => {
     // Starting next Monday, for 4 weeks
-    const start = nextMonday(new Date());
+    const start = addWeeks(startOfWeek(new Date(), { weekStartsOn: 1 }), 1);
     onSaveAndApply(currentTemplate, 4, start);
   };
 

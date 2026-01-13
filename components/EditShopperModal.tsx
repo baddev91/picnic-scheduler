@@ -13,6 +13,7 @@ interface EditShopperModalProps {
 }
 
 const GLOVE_SIZES = ['6 (XS)', '7 (S)', '8 (M)', '9 (L)', '10 (XL)', '11 (XXL)', '12 (3XL)', '12 (4XL)'];
+const CLOTHING_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL', '6XL'];
 
 export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onClose, onUpdate }) => {
   const [details, setDetails] = useState<any>({});
@@ -169,7 +170,7 @@ export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onC
                                     onChange={e => setDetails({...details, clothingSize: e.target.value})}
                                     className="w-full p-2 rounded border border-gray-300 text-sm"
                                 >
-                                    {['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL'].map(s => <option key={s} value={s}>{s}</option>)}
+                                    {CLOTHING_SIZES.map(s => <option key={s} value={s}>{s}</option>)}
                                 </select>
                             </div>
                             <div className="space-y-1">
@@ -292,7 +293,7 @@ export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onC
                                   }
 
                                   return (
-                                    <div key={shift.id || idx} className={`grid grid-cols-12 gap-2 items-center p-3 rounded-lg border transition-all ${shift.type === ShiftType.AA ? 'bg-red-50/30 border-red-100' : 'bg-white border-gray-100 hover:border-gray-300'}`}>
+                                    <div key={shift.id || idx} className={`grid grid-cols-12 gap-2 items-center p-3 rounded-lg border transition-all ${shift.type === ShiftType.AA ? 'bg-red-50/30 border-red-100 text-red-700' : 'bg-white border-gray-100 hover:border-gray-300'}`}>
                                         {/* Date Input */}
                                         <div className="col-span-3">
                                             {dayName && (

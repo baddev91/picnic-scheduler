@@ -1,8 +1,9 @@
 import React from 'react';
 import { format } from 'date-fns';
-import { X, Lock, Check, Star, Sun, Moon, Sunrise } from 'lucide-react';
+import { X, Lock, Check, Star, Sun, Moon, Sunrise, Ban, AlertCircle, Clock, CalendarX, AlertTriangle } from 'lucide-react';
 import { ShiftTime, ShiftType, ShopperShift } from '../../types';
 import { SHIFT_TIMES, formatDateKey } from '../../constants';
+import { isRestViolation, isConsecutiveDaysViolation } from '../../utils/validation';
 
 interface DesktopDayPanelProps {
   selectedDay: Date | null;
@@ -49,10 +50,10 @@ export const DesktopDayPanel: React.FC<DesktopDayPanelProps> = ({
   else if (step === 2 && mode === 'SHOPPER') { headerBg = "bg-green-50 border-b-green-100"; headerText = "text-green-900"; }
 
   const getShiftIcon = (time: string) => {
-    if (time.includes('Opening')) return <Sunrise className="w-4 h-4" />;
-    if (time.includes('Morning')) return <Sun className="w-4 h-4" />;
-    if (time.includes('Noon')) return <Sun className="w-4 h-4 rotate-45" />;
-    return <Moon className="w-4 h-4" />;
+    if (time.includes('Opening')) return <Sunrise className="w-5 h-5" />;
+    if (time.includes('Morning')) return <Sun className="w-5 h-5" />;
+    if (time.includes('Noon')) return <Sun className="w-5 h-5 rotate-45" />;
+    return <Moon className="w-5 h-5" />;
   };
 
   return (
@@ -97,28 +98,53 @@ export const DesktopDayPanel: React.FC<DesktopDayPanelProps> = ({
             const isSelectedStd = shiftEntries.some(s => s.type === ShiftType.STANDARD);
 
             const isFWDAllowed = shift === ShiftTime.MORNING || shift === ShiftTime.AFTERNOON;
-            const isFWDButtonDisabled = isFWDSelection && !isFWDAllowed;
+            
+            // --- VALIDATION REASONING ---
+            let disabledReason: { text: string; icon: React.ReactNode; colorClass: string; borderClass: string } | null = null;
+            let isActionDisabled = false;
 
-            if (mode === 'SHOPPER' && !isFWDSelection && step >= 1 && !stdAvailable && !isSelectedStd) return null;
+            if (mode === 'SHOPPER') {
+                if (isFWDSelection) {
+                     if (!stdAvailable) { isActionDisabled = true; disabledReason = null; } // Just hide
+                     else if (!isFWDAllowed) { 
+                       isActionDisabled = true; 
+                       disabledReason = { text: 'Not for Day 1', icon: <AlertCircle className="w-3 h-3" />, colorClass: 'bg-orange-100 text-orange-700', borderClass: 'border-orange-200' }; 
+                     }
+                } else {
+                     // Standard Selection Mode Logic
+                     if (!stdAvailable) {
+                         isActionDisabled = true;
+                         disabledReason = { text: 'Unavailable', icon: <Ban className="w-3 h-3" />, colorClass: 'bg-gray-100 text-gray-500', borderClass: 'border-gray-200' };
+                     } else if (!isSelectedStd && !isSelectedAA) {
+                         if (isRestViolation(dateKey, shift, currentShopperShifts)) {
+                             isActionDisabled = true;
+                             disabledReason = { text: '11h Rest Rule', icon: <Clock className="w-3 h-3" />, colorClass: 'bg-rose-100 text-rose-700', borderClass: 'border-rose-200' };
+                         } else if (isConsecutiveDaysViolation(dateKey, currentShopperShifts)) {
+                             isActionDisabled = true;
+                             disabledReason = { text: 'Max 5 Days', icon: <CalendarX className="w-3 h-3" />, colorClass: 'bg-amber-100 text-amber-700', borderClass: 'border-amber-200' };
+                         }
+                     }
+                }
+                
+                // Full Capacity Check
+                const fwdKey = `${dateKey}_${shift}`;
+                const currentFWDCount = fwdCounts[fwdKey] || 0;
+                const isFull = isFWDSelection && currentFWDCount >= 5;
+                if (isFull && !disabledReason) {
+                     isActionDisabled = true;
+                     disabledReason = { text: 'Full Capacity', icon: <Ban className="w-3 h-3" />, colorClass: 'bg-purple-100 text-purple-700', borderClass: 'border-purple-200' };
+                }
+                
+                if (isLockedFWD) isActionDisabled = true;
+            }
+
             if (isFWDSelection && !stdAvailable) return null;
-
-            const fwdKey = `${dateKey}_${shift}`;
-            const currentFWDCount = fwdCounts[fwdKey] || 0;
-            const isFull = isFWDSelection && currentFWDCount >= 5;
 
             return (
               <div key={shift} className="w-full">
-                {/* Header for the Shift Row */}
-                <div className="flex justify-between items-center mb-2 px-1">
-                    <div className="flex items-center gap-2 text-sm font-bold text-gray-700">
-                        {getShiftIcon(shift)} {shift.split('(')[0]}
-                    </div>
-                    {isFWDButtonDisabled && <span className="text-xs text-red-400 font-medium">Not allowed for Day 1</span>}
-                    {isFull && isFWDSelection && !isFWDButtonDisabled && <span className="text-xs text-red-600 font-bold bg-red-50 px-2 py-0.5 rounded">FULL</span>}
-                </div>
                 
                 <div className="grid grid-cols-1 gap-3">
-                  {/* AA BUTTON (Red Theme) */}
+                  {/* AA BUTTON (Only show if Step 0 or Admin) */}
                   {(mode === 'ADMIN' || (step === 0 && !isFWDSelection)) && (
                     <button
                       onClick={() => {
@@ -126,44 +152,72 @@ export const DesktopDayPanel: React.FC<DesktopDayPanelProps> = ({
                         if (mode === 'SHOPPER' && onShopperToggle && aaAvailable) onShopperToggle(dateKey, shift, ShiftType.AA);
                       }}
                       disabled={mode === 'SHOPPER' && !aaAvailable}
-                      className={`relative w-full flex items-center justify-between px-4 py-4 rounded-2xl text-sm font-bold border-2 transition-all duration-200 active:scale-[0.98] ${
+                      className={`relative w-full flex items-center justify-between px-5 py-4 rounded-2xl text-sm font-bold border-2 transition-all duration-200 active:scale-[0.98] ${
                         isSelectedAA
                           ? 'bg-red-500 border-red-600 text-white shadow-lg shadow-red-100 ring-2 ring-red-500 ring-offset-2' 
                           : aaAvailable
                             ? 'bg-white border-gray-100 text-gray-600 hover:border-red-200 hover:bg-red-50 hover:text-red-600'
-                            : 'bg-gray-50 border-gray-100 text-gray-300 cursor-not-allowed'
+                            : 'bg-gray-50 border-gray-100 text-gray-300 cursor-not-allowed border-dashed'
                       }`}
                     >
-                      <span className="flex items-center gap-2">Always Available</span>
+                      <div className="flex items-center gap-3">
+                          <div className={`p-1.5 rounded-lg ${isSelectedAA ? 'bg-white/20' : 'bg-gray-100 text-gray-400'}`}>
+                             {getShiftIcon(shift)}
+                          </div>
+                          <div className="flex flex-col items-start">
+                              <span>{shift.split('(')[0]}</span>
+                              <span className={`text-[10px] font-normal ${isSelectedAA ? 'text-red-100' : 'text-gray-400'}`}>Always Available</span>
+                          </div>
+                      </div>
                       {isSelectedAA && <div className="bg-white/20 p-1 rounded-full"><Check className="w-4 h-4" /></div>}
+                      {!aaAvailable && mode === 'SHOPPER' && (
+                          <span className="text-[10px] uppercase font-bold bg-gray-200 text-gray-500 px-2 py-1 rounded">Unavailable</span>
+                      )}
                     </button>
                   )}
 
-                  {/* STANDARD BUTTON (Green Theme normally, Yellow for FWD) */}
+                  {/* STANDARD BUTTON - Enhanced Disabled State */}
                   {(mode === 'ADMIN' || step >= 1 || isFWDSelection) && (
                     <button
                       onClick={() => {
                         if (mode === 'ADMIN' && onAdminToggle) onAdminToggle(dateKey, shift, ShiftType.STANDARD);
-                        if (mode === 'SHOPPER' && onShopperToggle && stdAvailable && !isFull && !isLockedFWD) onShopperToggle(dateKey, shift, ShiftType.STANDARD);
+                        if (mode === 'SHOPPER' && onShopperToggle && !isActionDisabled) onShopperToggle(dateKey, shift, ShiftType.STANDARD);
                       }}
-                      disabled={mode === 'SHOPPER' && (isFWDButtonDisabled || !stdAvailable || (isFull && isFWDSelection) || isLockedFWD)}
-                      className={`relative w-full flex items-center justify-between px-4 py-4 rounded-2xl text-sm font-bold border-2 transition-all duration-200 active:scale-[0.98] ${
+                      disabled={mode === 'SHOPPER' && isActionDisabled}
+                      className={`relative w-full flex items-center justify-between px-5 py-3 rounded-2xl text-sm font-bold border-2 transition-all duration-200 ${
                         // Case 1: FWD Selected (Yellow)
                         (isFWDSelection && isSelectedAA && isFWD) 
                           ? 'bg-yellow-400 border-yellow-500 text-yellow-900 shadow-lg shadow-yellow-100 ring-2 ring-yellow-400 ring-offset-2'
                           : // Case 2: Standard Selected (Green)
                             isSelectedStd 
                              ? 'bg-green-600 border-green-700 text-white shadow-lg shadow-green-100 ring-2 ring-green-600 ring-offset-2'
-                             : // Case 3: Available
-                               stdAvailable && (!isSelectedAA || isFWD) && !isFull && !isLockedFWD
-                               ? `bg-white border-gray-100 text-gray-600 hover:bg-gray-50 ${isFWDSelection ? 'hover:border-yellow-300 hover:text-yellow-700' : 'hover:border-green-300 hover:text-green-700'}`
-                               : // Case 4: Disabled
-                                 'bg-gray-50 border-gray-100 text-gray-300 cursor-not-allowed'
+                             : // Case 3: Disabled (Reason specific styling)
+                               (mode === 'SHOPPER' && isActionDisabled && disabledReason)
+                               ? `bg-white border-dashed cursor-not-allowed ${disabledReason.borderClass}`
+                               : // Case 4: Available
+                                 `bg-white border-gray-100 text-gray-600 hover:bg-gray-50 active:scale-[0.98] ${isFWDSelection ? 'hover:border-yellow-300 hover:text-yellow-700' : 'hover:border-green-300 hover:text-green-700'}`
                       }`}
                     >
-                       <span className="flex items-center gap-2">
-                         {isFWDSelection ? 'Confirm Start Date' : 'Standard Shift'}
-                       </span>
+                       <div className={`flex items-center gap-3 ${isActionDisabled ? 'opacity-40' : ''}`}>
+                          <div className={`p-1.5 rounded-lg ${isSelectedStd || (isSelectedAA && isFWDSelection) ? 'bg-white/20' : 'bg-gray-100 text-gray-500'}`}>
+                             {getShiftIcon(shift)}
+                          </div>
+                          <div className="flex flex-col items-start">
+                              <span className="text-sm">{shift.split('(')[0]}</span>
+                              <span className={`text-[10px] font-normal ${isSelectedStd ? 'text-green-100' : (isSelectedAA && isFWDSelection ? 'text-yellow-800' : 'text-gray-400')}`}>
+                                  {shift.match(/\((.*?)\)/)?.[1]}
+                              </span>
+                          </div>
+                       </div>
+                       
+                       {/* CENTERED/RIGHT BADGE FOR DISABLED STATES */}
+                       {mode === 'SHOPPER' && isActionDisabled && disabledReason && (
+                           <div className={`absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] uppercase font-black tracking-wide ${disabledReason.colorClass}`}>
+                               {disabledReason.icon}
+                               {disabledReason.text}
+                           </div>
+                       )}
+
                        {(isSelectedStd || (isFWDSelection && isSelectedAA && isFWD)) && (
                            <div className="bg-white/20 p-1 rounded-full">
                                {isFWDSelection ? <Star className="w-4 h-4 fill-current" /> : <Check className="w-4 h-4" />}

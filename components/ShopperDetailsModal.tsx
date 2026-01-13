@@ -50,6 +50,7 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
   };
 
   const GLOVE_SIZES = ['6 (XS)', '7 (S)', '8 (M)', '9 (L)', '10 (XL)', '11 (XXL)', '12 (3XL)', '12 (4XL)'];
+  const CLOTHING_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL', '6XL'];
 
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
@@ -112,7 +113,7 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
                           onChange={(e) => updateClothing(e.target.value)}
                           className="w-full p-3 bg-gray-50 border rounded-xl outline-none focus:ring-2 focus:ring-purple-500"
                       >
-                          {['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL'].map(s => <option key={s} value={s}>{s}</option>)}
+                          {CLOTHING_SIZES.map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
                    </div>
                    <div>

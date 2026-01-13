@@ -1,5 +1,7 @@
-import { addDays, startOfWeek, addWeeks, format, isSameDay } from 'date-fns';
-import { ShopperRecord, ShiftTime, ShiftType } from '../types';
+
+import { addDays, addWeeks, format } from 'date-fns';
+import startOfWeek from 'date-fns/startOfWeek';
+import { ShopperRecord, ShiftType, ShiftTime } from '../types';
 import { SHIFT_TIMES, formatDateKey } from '../constants';
 
 // Helper to match shift string to index (0-3)

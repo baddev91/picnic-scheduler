@@ -3,12 +3,30 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Force Light Mode on Browser UI elements -->
+    <meta name="color-scheme" content="light">
     <title>Picnic Shift Scheduler</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class', // This disables system-based dark mode
+        theme: {
+          extend: {},
+        },
+      }
+    </script>
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+      
+      /* Force Light Mode at Root Level */
+      :root {
+        color-scheme: light;
+      }
+      
       body {
         font-family: 'Inter', sans-serif;
+        background-color: #ffffff; /* Explicit white background */
+        color: #111827; /* Explicit dark text */
       }
     </style>
   <script type="importmap">
@@ -25,7 +43,7 @@
 }
 </script>
 </head>
-  <body>
+  <body class="bg-white text-gray-900">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>

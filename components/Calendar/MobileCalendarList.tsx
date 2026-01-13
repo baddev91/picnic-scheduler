@@ -1,8 +1,9 @@
 import React from 'react';
 import { format, isWeekend } from 'date-fns';
-import { Lock, Star, Check, Sun, Moon, Sunrise, Sunset } from 'lucide-react';
+import { Lock, Star, Check, Sun, Moon, Sunrise, Sunset, Ban, AlertCircle, Clock, CalendarX } from 'lucide-react';
 import { ShiftTime, ShiftType, ShopperShift } from '../../types';
 import { SHIFT_TIMES, formatDateKey } from '../../constants';
+import { isRestViolation, isConsecutiveDaysViolation } from '../../utils/validation';
 
 interface MobileCalendarListProps {
   daysToList: Date[];
@@ -80,71 +81,90 @@ export const MobileCalendarList: React.FC<MobileCalendarListProps> = ({
 
                     // Rendering Logic
                     if (isFWDSelection && !isFWDAllowed) return null;
-                    if (isFWDSelection && !stdAvailable) return null;
-                    if (mode === 'SHOPPER' && !isFWDSelection && step >= 1 && !stdAvailable && !isSelectedStd) return null;
+                    if (isFWDSelection && !stdAvailable) return null; 
 
                     const fwdKey = `${dateKey}_${shift}`;
                     const currentFWDCount = fwdCounts[fwdKey] || 0;
                     const isFull = isFWDSelection && currentFWDCount >= 5;
                     const isTheFWDSelection = isFWD && shiftEntries.length > 0;
 
+                    // --- VALIDATION REASONING ---
+                    let disabledReason: { text: string; colorClass: string; icon: React.ReactNode } | null = null;
+                    let isActionDisabled = false;
+
+                    if (mode === 'SHOPPER') {
+                        if (isFWDSelection) {
+                            if (!isFWDAllowed) { isActionDisabled = true; disabledReason = { text: 'Not for Day 1', colorClass: 'text-orange-600 bg-orange-50 border-orange-100', icon: <AlertCircle className="w-3 h-3" /> }; }
+                            else if (isFull) { isActionDisabled = true; disabledReason = { text: 'Full', colorClass: 'text-purple-600 bg-purple-50 border-purple-100', icon: <Ban className="w-3 h-3" /> }; }
+                        } else {
+                            if (!stdAvailable) {
+                                isActionDisabled = true;
+                                disabledReason = { text: 'Unavailable', colorClass: 'text-gray-400 bg-gray-50 border-gray-100', icon: <Ban className="w-3 h-3" /> };
+                            } else if (!isSelectedStd && !isSelectedAA) {
+                                if (isRestViolation(dateKey, shift, currentShopperShifts)) {
+                                    isActionDisabled = true;
+                                    disabledReason = { text: '11h Rule', colorClass: 'text-rose-600 bg-rose-50 border-rose-100', icon: <Clock className="w-3 h-3" /> };
+                                } else if (isConsecutiveDaysViolation(dateKey, currentShopperShifts)) {
+                                    isActionDisabled = true;
+                                    disabledReason = { text: 'Max 5 Days', colorClass: 'text-amber-600 bg-amber-50 border-amber-100', icon: <CalendarX className="w-3 h-3" /> };
+                                }
+                            }
+                        }
+                        if (isLockedFWD) isActionDisabled = true;
+                    }
+
                     // Styles Calculation
                     let buttonClass = "bg-white border-gray-200 text-gray-500 hover:border-gray-300"; // Default
                     let iconClass = "text-gray-400 bg-gray-100";
+                    let contentOpacity = "opacity-100";
                     
-                    // 1. AA Style (Red)
                     if (isSelectedAA && !isFWDSelection) {
                         buttonClass = "bg-red-500 border-red-600 text-white shadow-md shadow-red-200 ring-2 ring-red-500 ring-offset-1";
                         iconClass = "bg-white/20 text-white";
-                    } 
-                    // 2. FWD Style (Yellow)
-                    else if (isTheFWDSelection) {
+                    } else if (isTheFWDSelection) {
                          buttonClass = "bg-yellow-400 border-yellow-500 text-yellow-900 shadow-md shadow-yellow-200 ring-2 ring-yellow-400 ring-offset-1";
                          iconClass = "bg-white/40 text-yellow-900";
-                    }
-                    // 3. Standard Style (Green)
-                    else if (isSelectedStd) {
+                    } else if (isSelectedStd) {
                         buttonClass = "bg-green-600 border-green-700 text-white shadow-md shadow-green-200 ring-2 ring-green-600 ring-offset-1";
                         iconClass = "bg-white/20 text-white";
-                    }
-
-                    // Disabled/Locked States
-                    const isDisabled = (mode === 'SHOPPER' && !stdAvailable) || (isFull && !isTheFWDSelection) || isLockedFWD;
-                    if (isDisabled) {
-                        buttonClass = "bg-gray-50 border-gray-100 text-gray-300 cursor-not-allowed opacity-80";
-                        iconClass = "bg-gray-100 text-gray-300";
+                    } else if (isActionDisabled) {
+                        // Better disabled state
+                        buttonClass = "bg-white border-dashed border-gray-200 cursor-not-allowed";
+                        contentOpacity = "opacity-40 grayscale";
                     }
 
                     return (
                       <button
                         key={shift}
-                        disabled={isDisabled}
+                        disabled={isActionDisabled}
                         onClick={() => {
-                           if (mode === 'SHOPPER' && onShopperToggle && stdAvailable && !isFull && !isLockedFWD) {
+                           if (mode === 'SHOPPER' && onShopperToggle && !isActionDisabled) {
                               onShopperToggle(dateKey, shift, ShiftType.STANDARD);
                            }
                         }}
-                        className={`relative flex items-center gap-3 p-3 rounded-xl border-2 transition-all duration-200 active:scale-[0.98] text-left ${buttonClass}`}
+                        className={`relative flex items-center gap-3 p-3 rounded-xl border-2 transition-all duration-200 active:scale-[0.98] text-left overflow-hidden ${buttonClass}`}
                       >
-                          <div className={`p-2 rounded-lg ${iconClass}`}>
+                          <div className={`p-2 rounded-lg ${iconClass} ${contentOpacity}`}>
                               {getShiftIcon(shift)}
                           </div>
                           
-                          <div className="flex-1">
-                              <div className="text-sm font-bold leading-tight">{label}</div>
-                              <div className="text-[10px] opacity-80 font-medium">{time}</div>
+                          <div className="flex-1 min-w-0 z-10">
+                              <div className={`text-sm font-bold leading-tight truncate ${contentOpacity}`}>{label}</div>
+                              
+                              {/* STATUS BADGE REPLACES TIME */}
+                              {mode === 'SHOPPER' && disabledReason ? (
+                                  <div className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border flex items-center gap-1 w-fit mt-1 shadow-sm ${disabledReason.colorClass}`}>
+                                      {disabledReason.icon} {disabledReason.text}
+                                  </div>
+                              ) : (
+                                  <div className={`text-[10px] opacity-80 font-medium truncate ${contentOpacity}`}>{time}</div>
+                              )}
                           </div>
 
                           {/* Status Icons */}
                           {isTheFWDSelection && <Star className="w-5 h-5 fill-white text-white absolute top-2 right-2 opacity-50" />}
                           {isSelectedStd && !isTheFWDSelection && <Check className="w-5 h-5 text-white absolute top-2 right-2 opacity-50" />}
-                          {isLockedFWD && !isTheFWDSelection && <Lock className="w-4 h-4 absolute top-1/2 right-3 -translate-y-1/2" />}
-                          
-                          {isFull && !isTheFWDSelection && (
-                              <span className="absolute inset-0 flex items-center justify-center bg-gray-100/90 font-bold text-gray-500 text-xs rounded-xl uppercase">
-                                  Full
-                              </span>
-                          )}
+                          {isLockedFWD && !isTheFWDSelection && <Lock className="w-4 h-4 absolute top-1/2 right-3 -translate-y-1/2 opacity-20" />}
                       </button>
                     );
                  })}

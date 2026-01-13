@@ -11,7 +11,8 @@ export const getSafeDateFromKey = (dateStr: string): Date => {
 export const calculateGloveSize = (clothingSize: string): string => {
   const map: Record<string, string> = {
     'XS': '6 (XS)', 'S': '7 (S)', 'M': '8 (M)', 'L': '9 (L)',
-    'XL': '10 (XL)', 'XXL': '11 (XXL)', '3XL': '12 (3XL)', '4XL': '12 (4XL)'
+    'XL': '10 (XL)', 'XXL': '11 (XXL)', '3XL': '12 (3XL)', 
+    '4XL': '12 (4XL)', '5XL': '12 (4XL)', '6XL': '12 (4XL)'
   };
   return map[clothingSize] || '8 (M)';
 };
