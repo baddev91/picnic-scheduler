@@ -96,7 +96,7 @@ export const ShopperSetup: React.FC<ShopperSetupProps> = ({
              </div>
 
              <div className="space-y-2">
-                <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight">Welcome!</h2>
+                <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight">Shift Scheduler</h2>
                 <p className="text-gray-500 text-sm font-medium">
                     Let's get you started.<br/>Please enter your <strong>Full Name</strong> below.
                 </p>

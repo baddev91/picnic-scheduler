@@ -78,10 +78,6 @@ export const ShopperSummary: React.FC<ShopperSummaryProps> = ({
               {/* 2. Identity Section (Horizontal & Dense) */}
               <div className="bg-white p-3 border-b flex items-center justify-between gap-2 shrink-0">
                   <div className="flex items-center gap-3 min-w-0">
-                      {/* Text Logo */}
-                      <span className="text-2xl font-black tracking-tighter text-[#E31837] select-none shrink-0">
-                        PICNIC
-                      </span>
                       <div className="flex flex-col min-w-0">
                           <h3 className="font-bold text-gray-900 truncate text-lg leading-tight">{shopper.name}</h3>
                           <div className="flex flex-wrap gap-1.5 mt-1 text-[10px] font-bold text-gray-600">

@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Activity, ChevronDown, ChevronUp, BarChart3, Bus, TrendingUp, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { Activity, ChevronDown, ChevronUp, BarChart3, Bus, TrendingUp, ChevronLeft, ChevronRight, Calendar, Users } from 'lucide-react';
 import { format, eachDayOfInterval, addDays, endOfWeek, addWeeks, isSameDay } from 'date-fns';
 import parseISO from 'date-fns/parseISO';
 import startOfDay from 'date-fns/startOfDay';
@@ -51,7 +51,7 @@ export const AdminHeatmap: React.FC<AdminHeatmapProps> = ({ data }) => {
           }
       });
 
-      return { avgShifts, busRate, busUsers, popularShift, totalShifts };
+      return { avgShifts, busRate, busUsers, popularShift, totalShifts, totalShoppers };
   }, [data]);
 
   // --- HEATMAP DATA CALCULATION ---
@@ -116,7 +116,20 @@ export const AdminHeatmap: React.FC<AdminHeatmapProps> = ({ data }) => {
         {isOpen && (
             <div className="border-t animate-in slide-in-from-top-2 duration-300">
                 {/* 1. METRICS SECTION */}
-                <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x border-b bg-gray-50/50">
+                <div className="grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x border-b bg-gray-50/50">
+                    
+                    {/* TOTAL SHOPPERS CARD */}
+                    <div className="p-6 flex items-center gap-4">
+                        <div className="p-3 bg-emerald-100 text-emerald-600 rounded-full">
+                            <Users className="w-6 h-6" />
+                        </div>
+                        <div>
+                            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Total Shoppers</p>
+                            <p className="text-2xl font-black text-gray-900">{metrics?.totalShoppers || 0}</p>
+                            <p className="text-xs text-gray-500">Submissions</p>
+                        </div>
+                    </div>
+
                     <div className="p-6 flex items-center gap-4">
                         <div className="p-3 bg-blue-100 text-blue-600 rounded-full">
                             <BarChart3 className="w-6 h-6" />

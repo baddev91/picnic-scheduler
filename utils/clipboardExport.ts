@@ -46,11 +46,17 @@ export const generateSpreadsheetRow = (shopper: ShopperRecord, weekOffset: numbe
       const shiftFound = daysShifts.find(s => s.time === timeRef);
 
       if (shiftFound) {
-        // Logic: "FD" if it matches First Working Day, otherwise "X"
-        // Note: fwdDate comparison needs to match the exact day
+        // Logic: 
+        // 1. "FD" if it matches First Working Day exactly
+        // 2. "X" for ANY other shift (Standard or AA)
+        // Note: The date comparison relies on the 'firstWorkingDay' string (YYYY-MM-DD)
         const isFWD = format(currentDay, 'yyyy-MM-dd') === shopper.details.firstWorkingDay;
         
-        rowString += isFWD ? 'FD' : 'X';
+        if (isFWD) {
+            rowString += 'FD';
+        } else {
+            rowString += 'X';
+        }
       } else {
         rowString += ''; // Empty cell
       }

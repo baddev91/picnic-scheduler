@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { X, Pencil, User, MapPin, Save, Calendar, AlertCircle, Trash2, Plus, Hash } from 'lucide-react';
 import { format } from 'date-fns';
@@ -76,7 +77,8 @@ export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onC
         const { error } = await supabase.from('shifts').upsert(updates);
         if (error) throw error;
 
-        onUpdate({ ...shopper, shifts });
+        // Pass the fully updated shifts array back to parent
+        onUpdate({ ...shopper, shifts: shifts });
         setHasUnsavedShiftChanges(false);
         alert("Shift configuration saved successfully!");
     } catch (e: any) {
@@ -110,6 +112,7 @@ export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onC
         const { data: newShift, error } = await supabase.from('shifts').insert([payload]).select().single();
         if (error) throw error;
         
+        // Add new shift and update parent immediately
         const updatedShifts = [...shifts, newShift];
         setShifts(updatedShifts);
         onUpdate({ ...shopper, shifts: updatedShifts });
