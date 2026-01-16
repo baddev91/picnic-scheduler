@@ -20,6 +20,7 @@ import { AdminAuditLog } from './components/AdminAuditLog';
 
 const STORAGE_KEYS = {
   TEMPLATE: 'picnic_admin_template',
+  SHOPPER_SESSION: 'picnic_shopper_session',
 };
 
 export default function App() {
@@ -143,6 +144,30 @@ export default function App() {
     } catch (err) { console.error("Config load error:", err); }
   }, []);
 
+  // --- RESTORE SESSION LOGIC ---
+  useEffect(() => {
+    // Check for saved shopper session on mount
+    const savedSession = localStorage.getItem(STORAGE_KEYS.SHOPPER_SESSION);
+    if (savedSession) {
+        try {
+            const parsed = JSON.parse(savedSession);
+            // Verify if data seems valid and has a name
+            if (parsed.selections?.[0]?.name) {
+                setTempNameInput(parsed.selections[0].name);
+                // If the URL didn't explicitly ask for admin, restore shopper mode
+                const params = new URLSearchParams(window.location.search);
+                if (params.get('mode') !== 'admin') {
+                    setMode(AppMode.SHOPPER_FLOW);
+                    setIsShopperVerified(true); // Assuming if they have local data, they passed auth previously
+                }
+            }
+        } catch(e) {
+            console.error("Failed to restore session", e);
+            localStorage.removeItem(STORAGE_KEYS.SHOPPER_SESSION);
+        }
+    }
+  }, []);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const urlMode = params.get('mode');
@@ -181,7 +206,14 @@ export default function App() {
   };
 
   const handleClearSession = () => {
-    setIsShopperVerified(false); setShowShopperAuth(false); setTempNameInput(''); setMode(AppMode.SHOPPER_SETUP);
+    // Clear Local Storage
+    localStorage.removeItem(STORAGE_KEYS.SHOPPER_SESSION);
+    
+    // Reset State
+    setIsShopperVerified(false); 
+    setShowShopperAuth(false); 
+    setTempNameInput(''); 
+    setMode(AppMode.SHOPPER_SETUP);
   };
 
   const toggleWizardTemplate = (shift: ShiftTime, type: ShiftType) => {

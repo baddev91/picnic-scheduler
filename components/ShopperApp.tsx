@@ -22,6 +22,8 @@ interface ShopperAppProps {
   onExit: () => void;
 }
 
+const STORAGE_KEY = 'picnic_shopper_session';
+
 export const ShopperApp: React.FC<ShopperAppProps> = ({
   shopperName,
   adminAvailability,
@@ -29,19 +31,41 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
   busConfig,
   onExit
 }) => {
-  // State
-  const [step, setStep] = useState<ShopperStep>(ShopperStep.AA_SELECTION);
-  const [selections, setSelections] = useState<ShopperData[]>([{ 
-      name: shopperName, 
-      shifts: [], 
-      details: { 
-          usePicnicBus: null, civilStatus: '', gender: '', clothingSize: 'M', 
-          shoeSize: '40', gloveSize: '8 (M)', isRandstad: false, address: '' 
-      } 
-  }]);
+  // State Initialization with LocalStorage check
+  const [step, setStep] = useState<ShopperStep>(() => {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+          try { return JSON.parse(saved).step || ShopperStep.AA_SELECTION; } catch(e) {}
+      }
+      return ShopperStep.AA_SELECTION;
+  });
+
+  const [selections, setSelections] = useState<ShopperData[]>(() => {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+          try { 
+              const parsed = JSON.parse(saved);
+              if (parsed.selections) return parsed.selections;
+          } catch(e) {}
+      }
+      return [{ 
+          name: shopperName, 
+          shifts: [], 
+          details: { 
+              usePicnicBus: null, civilStatus: '', gender: '', clothingSize: 'M', 
+              shoeSize: '40', gloveSize: '8 (M)', isRandstad: false, address: '' 
+          } 
+      }];
+  });
   
   // Refactored AA State: Array of selected days/times
-  const [aaSelections, setAaSelections] = useState<{ dayIndex: number; time: ShiftTime | null }[]>([]);
+  const [aaSelections, setAaSelections] = useState<{ dayIndex: number; time: ShiftTime | null }[]>(() => {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+          try { return JSON.parse(saved).aaSelections || []; } catch(e) {}
+      }
+      return [];
+  });
 
   const [fwdCounts, setFwdCounts] = useState<Record<string, number>>({});
   const [showFWDConfirmModal, setShowFWDConfirmModal] = useState(false);
@@ -53,12 +77,33 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [showMobileInstructions, setShowMobileInstructions] = useState(false);
-  const [viewMode, setViewMode] = useState<'FLOW' | 'SUMMARY'>('FLOW');
+  const [viewMode, setViewMode] = useState<'FLOW' | 'SUMMARY'>(() => {
+      // Logic: If user was in details step (3), show summary
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+         try {
+             const parsed = JSON.parse(saved);
+             if (parsed.step === ShopperStep.DETAILS) return 'SUMMARY';
+         } catch(e) {}
+      }
+      return 'FLOW';
+  });
 
   // Animation State for Counter
   const [countAnim, setCountAnim] = useState(false);
 
   const flowScrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // --- AUTO SAVE EFFECT ---
+  useEffect(() => {
+    const sessionData = {
+        name: selections[0].name, // Top level for App.tsx to verify
+        step,
+        selections,
+        aaSelections
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionData));
+  }, [step, selections, aaSelections]);
 
   // Effects
   useEffect(() => {
@@ -256,6 +301,7 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
   const handleDetailsSubmit = () => {
     const updated = { ...selections[0], details: { ...selections[0].details, ...tempDetails } };
     setSelections([updated]);
+    setStep(ShopperStep.DETAILS); // Track internal step
     setShowDetailsModal(false);
     setViewMode('SUMMARY');
   };
@@ -278,6 +324,10 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
             if (shiftsError) throw new Error(shiftsError.message);
         }
         setSyncStatus('success');
+        
+        // --- CLEAR LOCAL SESSION ON SUCCESS ---
+        localStorage.removeItem(STORAGE_KEY);
+        
     } catch (error: any) { setSyncStatus('error'); alert(`Failed: ${error.message}`); } finally { setIsSyncing(false); }
   };
 
