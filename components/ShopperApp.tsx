@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { ShiftTime, ShiftType, ShopperData, AdminAvailabilityMap, ShopperDetails, ShopperStep, BusConfig, ShopperShift, AppMode } from '../types';
 import { SHIFT_TIMES, formatDateKey, getShopperAllowedRange, getShopperMinDate } from '../constants';
@@ -39,10 +40,8 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
       } 
   }]);
   
-  const [aaSelection, setAaSelection] = useState<{
-    weekday: { dayIndex: number | null, time: ShiftTime | null },
-    weekend: { dayIndex: number | null, time: ShiftTime | null }
-  }>({ weekday: { dayIndex: null, time: null }, weekend: { dayIndex: null, time: null } });
+  // Refactored AA State: Array of selected days/times
+  const [aaSelections, setAaSelections] = useState<{ dayIndex: number; time: ShiftTime | null }[]>([]);
 
   const [fwdCounts, setFwdCounts] = useState<Record<string, number>>({});
   const [showFWDConfirmModal, setShowFWDConfirmModal] = useState(false);
@@ -57,7 +56,6 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
   const [viewMode, setViewMode] = useState<'FLOW' | 'SUMMARY'>('FLOW');
 
   const flowScrollContainerRef = useRef<HTMLDivElement>(null);
-  const currentShopperIndex = 0; // Simplified for single shopper flow
 
   // Effects
   useEffect(() => {
@@ -98,8 +96,32 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
   };
 
   const handleAAWizardSubmit = () => {
-      const { weekday, weekend } = aaSelection;
-      if (weekday.dayIndex === null || !weekday.time || weekend.dayIndex === null || !weekend.time) { alert("Missing Selection!"); return; }
+      // Validation: Must select exactly 2 days
+      if (aaSelections.length !== 2) { 
+          alert("Please select exactly 2 days for your AA pattern."); 
+          return; 
+      }
+      
+      // Validation: Must select time for all days
+      if (aaSelections.some(s => !s.time)) {
+          alert("Please select a shift time for every selected day.");
+          return;
+      }
+
+      // Validation: Rule Logic (0 WD + 2 WE) OR (1 WD + 1 WE)
+      const weekdays = aaSelections.filter(s => s.dayIndex >= 1 && s.dayIndex <= 5);
+      const weekends = aaSelections.filter(s => s.dayIndex === 0 || s.dayIndex === 6);
+
+      if (weekdays.length > 1) {
+          alert("You can select a maximum of 1 Weekday (Mon-Fri).");
+          return;
+      }
+      
+      // Implicitly check weekend requirement (since total is 2 and max weekday is 1, at least 1 MUST be weekend)
+      if (weekends.length === 0) {
+           alert("You must select at least 1 Weekend day.");
+           return;
+      }
 
       const range = getShopperAllowedRange();
       const newShifts: ShopperShift[] = [];
@@ -110,17 +132,21 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
           if (isBefore(currentDate, minDate)) { currentDate = addDays(currentDate, 1); continue; }
           const dayIndex = getDay(currentDate);
           const dateStr = formatDateKey(currentDate);
-          const checkAvailability = (t: ShiftTime) => {
-              const config = adminAvailability[dateStr];
-              return (!config || !config[t] || config[t]?.includes(ShiftType.AA));
-          };
-          if (dayIndex === weekday.dayIndex && weekday.time && checkAvailability(weekday.time)) newShifts.push({ date: dateStr, time: weekday.time, type: ShiftType.AA });
-          if (dayIndex === weekend.dayIndex && weekend.time && checkAvailability(weekend.time)) newShifts.push({ date: dateStr, time: weekend.time, type: ShiftType.AA });
+          
+          const selectionForDay = aaSelections.find(s => s.dayIndex === dayIndex);
+
+          if (selectionForDay && selectionForDay.time) {
+              const checkAvailability = (t: ShiftTime) => {
+                  const config = adminAvailability[dateStr];
+                  return (!config || !config[t] || config[t]?.includes(ShiftType.AA));
+              };
+              
+              if (checkAvailability(selectionForDay.time)) {
+                  newShifts.push({ date: dateStr, time: selectionForDay.time, type: ShiftType.AA });
+              }
+          }
           currentDate = addDays(currentDate, 1);
       }
-
-      if (!newShifts.some(s => { const d = getDay(getSafeDateFromKey(s.date)); return d >= 1 && d <= 5; })) { alert("No valid Weekday dates found."); return; }
-      if (!newShifts.some(s => { const d = getDay(getSafeDateFromKey(s.date)); return d === 0 || d === 6; })) { alert("No valid Weekend dates found."); return; }
 
       const existingDetails = selections[0].details;
       const newShopperData = { name: shopperName, shifts: newShifts, details: existingDetails };
@@ -260,14 +286,19 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
           </div>
         </div>
         <div className="hidden md:flex gap-4 text-xs font-medium text-gray-500">
-             <span>Selected AA: <strong className="text-red-600">{aaCount}</strong></span>
+             <span>Selected AA: <strong className="text-red-600">{aaSelections.length}</strong></span>
              <span>Selected Standard: <strong className="text-green-600">{stdCount}</strong></span>
         </div>
       </div>
 
       <div ref={flowScrollContainerRef} className="flex-1 overflow-y-auto">
           {step === ShopperStep.AA_SELECTION && (
-              <ShopperAAWizard savedCloudTemplate={savedCloudTemplate} aaSelection={aaSelection} setAaSelection={setAaSelection} handleAAWizardSubmit={handleAAWizardSubmit} />
+              <ShopperAAWizard 
+                  savedCloudTemplate={savedCloudTemplate} 
+                  aaSelections={aaSelections} 
+                  setAaSelections={setAaSelections} 
+                  handleAAWizardSubmit={handleAAWizardSubmit} 
+              />
           )}
           {step === ShopperStep.FWD_SELECTION && (
               <div className="p-4 md:p-6 animate-in slide-in-from-right duration-300">
@@ -321,7 +352,7 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
           step={step === 0 ? 'AA' : step === 1 ? 'FWD' : 'STANDARD'} 
           title={step === 0 ? 'Always Available (AA)' : step === 1 ? 'When do you start?' : 'Select Your Shifts'} 
           message={step === 0 
-              ? <span>These are recurring shifts you commit to every week. Please select <strong>1 Weekday</strong> and <strong>1 Weekend</strong> shift.</span> 
+              ? <span>These are recurring shifts. Select <strong>1 Weekday + 1 Weekend</strong> OR <strong>2 Weekend days</strong>. Total must be 2.</span> 
               : step === 1 ? "Please select the exact day you will have your first shift. It must be a Morning or Afternoon shift." 
               : <span>Please select your standard shifts for the <strong>first 2 working weeks</strong> starting from your selected First Day.</span>
           } 

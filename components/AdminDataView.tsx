@@ -398,45 +398,51 @@ export const AdminDataView: React.FC = () => {
                     </div>
 
                     {/* INTELLIGENT EXPORT SECTION */}
-                    <div className="flex flex-col w-full md:w-auto items-end gap-2">
-                         {subGroupKeys.map((subKey) => {
-                             const cohort = subGroups[subKey];
-                             // If only 1 group exists, show simple buttons. If multiple, show labels.
-                             const showLabel = hasMultipleCohorts;
-                             const dateLabel = isValid(parseISO(subKey)) ? `Start Week: ${format(parseISO(subKey), 'MMM do')}` : subKey;
-                             
-                             return (
-                                 <div key={subKey} className={`flex items-center gap-3 ${showLabel ? 'bg-white/60 p-1.5 rounded-lg border border-gray-100 shadow-sm' : ''}`}>
-                                     {showLabel && (
-                                         <div className="text-[10px] font-bold text-gray-500 flex items-center gap-1.5 pl-1 border-r pr-2 mr-1">
-                                             <CalendarRange className="w-3 h-3 text-purple-500" />
-                                             <span className="whitespace-nowrap">{dateLabel} <span className="text-gray-400">({cohort.length})</span></span>
+                    <div className="flex flex-row items-center gap-4 w-full md:w-auto justify-end">
+                        
+                        {/* Single LS Button for entire batch */}
+                        <button 
+                            onClick={() => handleBulkCopyLSInflow(items, `${fullGroupKey}-LS`)} 
+                            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all border whitespace-nowrap h-full ${copyFeedback[`${fullGroupKey}-LS`] ? 'bg-blue-100 text-blue-700 border-blue-300' : 'bg-white border-blue-200 text-blue-700 hover:bg-blue-50'}`}
+                            title="Copy HR Data for all shoppers in this session"
+                        >
+                            {copyFeedback[`${fullGroupKey}-LS`] ? <Check className="w-3 h-3" /> : <FileSpreadsheet className="w-3 h-3" />} 
+                            {copyFeedback[`${fullGroupKey}-LS`] ? 'LS Copied' : 'Copy LS'}
+                        </button>
+                        
+                        <div className="flex flex-col items-end gap-2">
+                             {subGroupKeys.map((subKey) => {
+                                 const cohort = subGroups[subKey];
+                                 const showLabel = hasMultipleCohorts;
+                                 const dateLabel = isValid(parseISO(subKey)) ? `Start: ${format(parseISO(subKey), 'MMM do')}` : subKey;
+                                 
+                                 return (
+                                     <div key={subKey} className={`flex items-center gap-3 ${showLabel ? 'bg-white/60 p-1.5 rounded-lg border border-gray-100 shadow-sm' : ''}`}>
+                                         {showLabel && (
+                                             <div className="text-[10px] font-bold text-gray-500 flex items-center gap-1.5 pl-1 border-r pr-2 mr-1">
+                                                 <CalendarRange className="w-3 h-3 text-purple-500" />
+                                                 <span className="whitespace-nowrap">{dateLabel} <span className="text-gray-400">({cohort.length})</span></span>
+                                             </div>
+                                         )}
+                                         
+                                         <div className="flex gap-1.5 overflow-x-auto">
+                                            <button 
+                                                onClick={() => handleBulkCopyWeek(cohort, 0, `${fullGroupKey}-${subKey}-W1`)} 
+                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border whitespace-nowrap ${copyFeedback[`${fullGroupKey}-${subKey}-W1`] ? 'bg-green-100 text-green-700 border-green-300' : 'bg-white border-green-200 text-green-700 hover:bg-green-50'}`}
+                                            >
+                                                {copyFeedback[`${fullGroupKey}-${subKey}-W1`] ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />} {copyFeedback[`${fullGroupKey}-${subKey}-W1`] ? 'Copied' : 'W1'}
+                                            </button>
+                                            <button 
+                                                onClick={() => handleBulkCopyWeek(cohort, 1, `${fullGroupKey}-${subKey}-W2`)} 
+                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border whitespace-nowrap ${copyFeedback[`${fullGroupKey}-${subKey}-W2`] ? 'bg-green-100 text-green-700 border-green-300' : 'bg-white border-green-200 text-green-700 hover:bg-green-50'}`}
+                                            >
+                                                {copyFeedback[`${fullGroupKey}-${subKey}-W2`] ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />} {copyFeedback[`${fullGroupKey}-${subKey}-W2`] ? 'Copied' : 'W2'}
+                                            </button>
                                          </div>
-                                     )}
-                                     
-                                     <div className="flex gap-1.5 overflow-x-auto">
-                                        <button 
-                                            onClick={() => handleBulkCopyWeek(cohort, 0, `${fullGroupKey}-${subKey}-W1`)} 
-                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border whitespace-nowrap ${copyFeedback[`${fullGroupKey}-${subKey}-W1`] ? 'bg-green-100 text-green-700 border-green-300' : 'bg-white border-green-200 text-green-700 hover:bg-green-50'}`}
-                                        >
-                                            {copyFeedback[`${fullGroupKey}-${subKey}-W1`] ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />} {copyFeedback[`${fullGroupKey}-${subKey}-W1`] ? 'Copied' : 'W1'}
-                                        </button>
-                                        <button 
-                                            onClick={() => handleBulkCopyWeek(cohort, 1, `${fullGroupKey}-${subKey}-W2`)} 
-                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border whitespace-nowrap ${copyFeedback[`${fullGroupKey}-${subKey}-W2`] ? 'bg-green-100 text-green-700 border-green-300' : 'bg-white border-green-200 text-green-700 hover:bg-green-50'}`}
-                                        >
-                                            {copyFeedback[`${fullGroupKey}-${subKey}-W2`] ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />} {copyFeedback[`${fullGroupKey}-${subKey}-W2`] ? 'Copied' : 'W2'}
-                                        </button>
-                                        <button 
-                                            onClick={() => handleBulkCopyLSInflow(cohort, `${fullGroupKey}-${subKey}-LS`)} 
-                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border whitespace-nowrap ${copyFeedback[`${fullGroupKey}-${subKey}-LS`] ? 'bg-blue-100 text-blue-700 border-blue-300' : 'bg-white border-blue-200 text-blue-700 hover:bg-blue-50'}`}
-                                        >
-                                            {copyFeedback[`${fullGroupKey}-${subKey}-LS`] ? <Check className="w-3 h-3" /> : <FileSpreadsheet className="w-3 h-3" />} {copyFeedback[`${fullGroupKey}-${subKey}-LS`] ? 'Copied' : 'LS'}
-                                        </button>
                                      </div>
-                                 </div>
-                             );
-                         })}
+                                 );
+                             })}
+                        </div>
                     </div>
                 </div>
 

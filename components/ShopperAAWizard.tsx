@@ -1,241 +1,245 @@
+
 import React from 'react';
-import { CalendarRange, Sun, Moon, Sunrise, Sunset, CheckCircle2, Circle } from 'lucide-react';
+import { CalendarRange, CheckCircle2, Circle, Lock, AlertCircle, Clock } from 'lucide-react';
 import { Button } from './Button';
 import { ShiftTime, ShiftType, WeeklyTemplate } from '../types';
 import { SHIFT_TIMES } from '../constants';
 
+interface AASelectionItem {
+    dayIndex: number;
+    time: ShiftTime | null;
+}
+
 interface ShopperAAWizardProps {
   savedCloudTemplate: WeeklyTemplate | null;
-  aaSelection: {
-    weekday: { dayIndex: number | null, time: ShiftTime | null },
-    weekend: { dayIndex: number | null, time: ShiftTime | null }
-  };
-  setAaSelection: React.Dispatch<React.SetStateAction<{
-    weekday: { dayIndex: number | null, time: ShiftTime | null },
-    weekend: { dayIndex: number | null, time: ShiftTime | null }
-  }>>;
+  aaSelections: AASelectionItem[];
+  setAaSelections: React.Dispatch<React.SetStateAction<AASelectionItem[]>>;
   handleAAWizardSubmit: () => void;
 }
 
 export const ShopperAAWizard: React.FC<ShopperAAWizardProps> = ({
   savedCloudTemplate,
-  aaSelection,
-  setAaSelection,
+  aaSelections,
+  setAaSelections,
   handleAAWizardSubmit
 }) => {
-  const WEEKDAYS = [
-      { index: 1, name: 'Monday' }, { index: 2, name: 'Tuesday' }, { index: 3, name: 'Wednesday' },
-      { index: 4, name: 'Thursday' }, { index: 5, name: 'Friday' }
-  ];
-  const WEEKENDS = [
-      { index: 6, name: 'Saturday' }, { index: 0, name: 'Sunday' }
-  ];
   
-  // Helper for Shift Icons
-  const getShiftIcon = (time: string) => {
-      if (time.includes('Opening')) return <Sunrise className="w-4 h-4" />;
-      if (time.includes('Morning')) return <Sun className="w-4 h-4" />;
-      if (time.includes('Noon')) return <Sun className="w-4 h-4 rotate-45" />;
-      return <Moon className="w-4 h-4" />;
-  };
+  // Logic helpers
+  const currentWeekdayCount = aaSelections.filter(s => s.dayIndex >= 1 && s.dayIndex <= 5).length;
+  const currentTotal = aaSelections.length;
 
-  const isDayValid = (dayIndex: number) => {
-      if (!savedCloudTemplate || Object.keys(savedCloudTemplate).length === 0) return true;
-      const dayConfig = savedCloudTemplate[dayIndex];
-      if (!dayConfig) return false;
-      return SHIFT_TIMES.some(time => dayConfig[time]?.includes(ShiftType.AA));
-  };
+  const isDayDisabled = (dayIndex: number) => {
+      // 1. Check Cloud Template availability first
+      if (savedCloudTemplate && Object.keys(savedCloudTemplate).length > 0) {
+          const dayConfig = savedCloudTemplate[dayIndex];
+          const hasAA = dayConfig && SHIFT_TIMES.some(time => dayConfig[time]?.includes(ShiftType.AA));
+          if (!hasAA) return true;
+      }
 
-  const isShiftValidForDay = (dayIndex: number | null, shift: ShiftTime) => {
-      if (dayIndex === null) return false;
-      if (!savedCloudTemplate || Object.keys(savedCloudTemplate).length === 0) return true;
+      // 2. Check Selection Rules
+      const isSelected = aaSelections.some(s => s.dayIndex === dayIndex);
+      if (isSelected) return false; // Always allow deselecting
       
-      const dayConfig = savedCloudTemplate[dayIndex];
-      if (!dayConfig) return false;
+      // Rule: Max 2 Days Total
+      if (currentTotal >= 2) return true;
 
-      const allowedTypes = dayConfig[shift];
-      return allowedTypes?.includes(ShiftType.AA);
+      // Rule: Max 1 Weekday
+      const isWeekday = dayIndex >= 1 && dayIndex <= 5;
+      if (isWeekday && currentWeekdayCount >= 1) return true;
+
+      return false;
+  };
+
+  const isShiftDisabled = (dayIndex: number, shift: ShiftTime) => {
+      if (!savedCloudTemplate || Object.keys(savedCloudTemplate).length === 0) return false;
+      const dayConfig = savedCloudTemplate[dayIndex];
+      if (!dayConfig) return true;
+      return !dayConfig[shift]?.includes(ShiftType.AA);
+  };
+
+  const handleToggleDay = (dayIndex: number) => {
+      setAaSelections(prev => {
+          const exists = prev.find(s => s.dayIndex === dayIndex);
+          if (exists) {
+              return prev.filter(s => s.dayIndex !== dayIndex);
+          } else {
+              if (isDayDisabled(dayIndex)) return prev;
+              // Add day with default time null
+              return [...prev, { dayIndex, time: null }];
+          }
+      });
+  };
+
+  const handleSetTime = (dayIndex: number, time: ShiftTime) => {
+      setAaSelections(prev => prev.map(s => s.dayIndex === dayIndex ? { ...s, time } : s));
+  };
+
+  const renderDayCard = (dayIndex: number, label: string, isWeekend: boolean) => {
+      const selection = aaSelections.find(s => s.dayIndex === dayIndex);
+      const isSelected = !!selection;
+      const disabled = isDayDisabled(dayIndex);
+
+      return (
+          <div 
+            key={dayIndex}
+            className={`
+                relative rounded-2xl border transition-all duration-300 flex flex-col overflow-hidden group
+                ${isSelected 
+                    ? 'border-red-400 bg-white shadow-xl shadow-red-100/50 ring-1 ring-red-100 scale-[1.01] z-10' 
+                    : disabled
+                        ? 'border-gray-100 bg-gray-50/50 opacity-60 grayscale cursor-not-allowed'
+                        : 'border-gray-200 bg-white hover:border-red-300 hover:shadow-md cursor-pointer'
+                }
+            `}
+          >
+              {/* Card Header (Clickable to toggle day) */}
+              <button 
+                  onClick={() => handleToggleDay(dayIndex)}
+                  disabled={disabled}
+                  className="w-full text-left p-4 flex justify-between items-center outline-none"
+              >
+                  <div>
+                      <span className={`text-[10px] font-bold uppercase tracking-widest block mb-1 ${isWeekend ? 'text-red-400' : 'text-gray-400'}`}>
+                          {isWeekend ? 'Weekend' : 'Weekday'}
+                      </span>
+                      <span className={`text-xl font-black tracking-tight ${isSelected ? 'text-red-600' : 'text-gray-800'}`}>
+                          {label}
+                      </span>
+                  </div>
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center border transition-all duration-300 ${
+                      isSelected 
+                        ? 'bg-red-500 border-red-500 text-white shadow-md shadow-red-200' 
+                        : 'bg-white border-gray-200 group-hover:border-red-300'
+                  }`}>
+                      {isSelected && <CheckCircle2 className="w-4 h-4" />}
+                  </div>
+              </button>
+
+              {/* Time Selection (Visible only if selected) */}
+              {isSelected && (
+                  <div className="px-4 pb-4 animate-in slide-in-from-top-2 pt-0">
+                      <div className="w-full h-px bg-gradient-to-r from-red-50 to-transparent mb-4"></div>
+                      <p className="text-xs font-bold text-gray-500 mb-2 flex items-center gap-1">
+                          <Clock className="w-3 h-3" /> Select Time:
+                      </p>
+                      <div className="grid grid-cols-1 gap-2">
+                          {SHIFT_TIMES.map(shift => {
+                              const shiftDisabled = isShiftDisabled(dayIndex, shift);
+                              const isTimeSelected = selection.time === shift;
+                              const shiftName = shift.split('(')[0].trim();
+                              const shiftHours = shift.match(/\((.*?)\)/)?.[1] || '';
+                              
+                              return (
+                                  <button
+                                      key={shift}
+                                      disabled={shiftDisabled}
+                                      onClick={() => handleSetTime(dayIndex, shift)}
+                                      className={`
+                                          w-full text-left px-3 py-3 rounded-xl border transition-all flex items-center justify-between group/btn
+                                          ${isTimeSelected 
+                                              ? 'bg-red-500 text-white border-red-500 shadow-md shadow-red-200' 
+                                              : shiftDisabled
+                                                  ? 'bg-gray-50 text-gray-300 border-transparent cursor-not-allowed'
+                                                  : 'bg-white text-gray-600 border-gray-100 hover:border-red-300 hover:bg-red-50/50'
+                                          }
+                                      `}
+                                  >
+                                      <div className="flex flex-col">
+                                          <span className={`text-sm font-bold leading-none ${isTimeSelected ? 'text-white' : (shiftDisabled ? 'text-gray-300' : 'text-gray-800')}`}>
+                                              {shiftName}
+                                          </span>
+                                          <span className={`text-[10px] font-medium mt-1 tracking-wide ${isTimeSelected ? 'text-red-100' : 'text-gray-400'}`}>
+                                              {shiftHours}
+                                          </span>
+                                      </div>
+                                      
+                                      {isTimeSelected && <div className="bg-white/20 p-1 rounded-full"><CheckCircle2 className="w-3.5 h-3.5 text-white" /></div>}
+                                      {!isTimeSelected && !shiftDisabled && <Circle className="w-3.5 h-3.5 text-gray-200 group-hover/btn:text-red-300" />}
+                                  </button>
+                              );
+                          })}
+                      </div>
+                  </div>
+              )}
+
+              {/* Disabled Overlay Icon */}
+              {!isSelected && disabled && (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <Lock className="w-5 h-5 text-gray-300 opacity-50" />
+                  </div>
+              )}
+          </div>
+      );
   };
 
   return (
-      <div className="bg-gray-50/50 p-4 md:p-8 animate-in fade-in duration-500">
-          <div className="max-w-4xl mx-auto space-y-8">
-              
-              {/* Instructions Banner - Improved UX: Less alarming, more informative */}
-              <div className="bg-white border border-red-100 p-5 rounded-2xl flex gap-4 shadow-sm items-start">
-                  <div className="bg-red-50 p-3 rounded-xl text-red-600 shrink-0">
-                      <CalendarRange className="w-6 h-6" />
-                  </div>
+      <div className="bg-white min-h-full flex flex-col">
+          
+          {/* Progress Header */}
+          <div className="bg-white border-b sticky top-0 z-20 px-6 py-4 shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
+              <div className="max-w-5xl mx-auto flex justify-between items-center">
                   <div>
-                      <h3 className="font-bold text-gray-900 text-lg">Define your AA Pattern</h3>
-                      <p className="text-sm text-gray-600 mt-1 leading-relaxed">
-                          "Always Available" (AA) shifts are recurring shifts you commit to working <strong>every week</strong>. 
-                          Please select <strong>1 Weekday</strong> and <strong>1 Weekend day</strong>.
-                      </p>
+                      <h2 className="text-xl font-black text-gray-900 tracking-tight">AA Pattern</h2>
+                      <p className="text-xs text-gray-500 font-medium mt-0.5">Select exactly 2 days.</p>
+                  </div>
+                  <div className={`px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 transition-all shadow-sm border ${
+                      currentTotal === 2 ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-500 border-gray-200'
+                  }`}>
+                      <CalendarRange className="w-4 h-4" />
+                      {currentTotal} / 2 Selected
                   </div>
               </div>
+          </div>
 
-              <div className="grid md:grid-cols-2 gap-6 lg:gap-8">
-                  {/* Weekday Selection */}
-                  <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col h-full hover:shadow-md transition-shadow duration-300">
-                      <div className="mb-4 pb-4 border-b border-gray-50">
-                        <h4 className="font-bold text-gray-900 flex items-center gap-2 text-lg">
-                            <div className="w-8 h-8 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-sm font-black">1</div>
-                            Select a Weekday
-                        </h4>
-                      </div>
+          <div className="flex-1 p-4 md:p-8 overflow-y-auto bg-gray-50/50">
+              <div className="max-w-5xl mx-auto">
+                  
+                  {/* Info Banner - Softer Look */}
+                  {(currentTotal < 2) && (
+                     <div className="mb-8 bg-blue-50/80 border border-blue-100 p-5 rounded-2xl flex gap-4 text-blue-900 text-sm animate-in fade-in shadow-sm">
+                        <div className="bg-blue-100 p-2 rounded-lg h-fit text-blue-600">
+                           <AlertCircle className="w-5 h-5" />
+                        </div>
+                        <div className="leading-relaxed">
+                           <strong className="block mb-1 text-blue-700">Selection Rules</strong>
+                           You can choose <strong>1 Weekday + 1 Weekend</strong>, OR <strong>2 Weekend days</strong>.
+                           <br/><span className="text-blue-600/80 text-xs">Selecting a weekday will automatically lock other weekdays to prevent errors.</span>
+                        </div>
+                     </div>
+                  )}
+
+                  {/* The Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+                      {/* Weekdays */}
+                      {[1, 2, 3, 4, 5].map(idx => {
+                          const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+                          return renderDayCard(idx, names[idx-1], false);
+                      })}
                       
-                      <div className="grid grid-cols-2 gap-2 mb-6">
-                          {WEEKDAYS.map(d => {
-                              const enabled = isDayValid(d.index);
-                              const isSelected = aaSelection.weekday.dayIndex === d.index;
-                              return (
-                                <button
-                                    key={d.index}
-                                    disabled={!enabled}
-                                    onClick={() => setAaSelection(prev => ({ 
-                                        ...prev, 
-                                        weekday: { dayIndex: d.index, time: null } 
-                                    }))}
-                                    className={`py-3 px-4 rounded-xl text-sm font-bold transition-all duration-200 transform active:scale-95 ${
-                                        !enabled 
-                                        ? 'bg-gray-50 text-gray-300 cursor-not-allowed border border-transparent' 
-                                        : isSelected
-                                            ? 'bg-red-600 text-white shadow-lg shadow-red-200 ring-2 ring-red-600 ring-offset-2' 
-                                            : 'bg-white border border-gray-200 text-gray-600 hover:border-red-300 hover:bg-red-50'
-                                    }`}
-                                >
-                                    {d.name}
-                                </button>
-                              );
-                          })}
-                      </div>
+                      {/* Divider for Mobile */}
+                      <div className="sm:hidden col-span-1 h-px bg-gray-200 my-2"></div>
 
-                      <div className="space-y-3 mt-auto">
-                           <p className="text-xs font-bold text-gray-400 uppercase tracking-wider pl-1">Preferred Time</p>
-                           <div className="flex flex-col gap-2">
-                              {SHIFT_TIMES.map(t => {
-                                  const isEnabled = isShiftValidForDay(aaSelection.weekday.dayIndex, t);
-                                  const isSelected = aaSelection.weekday.time === t;
-                                  return (
-                                      <button
-                                          key={t}
-                                          disabled={!isEnabled}
-                                          onClick={() => setAaSelection(prev => ({ ...prev, weekday: { ...prev.weekday, time: t } }))}
-                                          className={`group relative p-3 rounded-xl text-sm text-left font-medium border transition-all duration-200 ${
-                                              !isEnabled 
-                                              ? 'border-gray-100 bg-gray-50 opacity-50 cursor-not-allowed'
-                                              : isSelected
-                                                  ? 'border-red-600 bg-red-50 text-red-900 ring-1 ring-red-600'
-                                                  : 'border-gray-200 bg-white text-gray-600 hover:border-red-300 hover:shadow-sm'
-                                          }`}
-                                      >
-                                          <div className="flex justify-between items-center">
-                                              <div className="flex items-center gap-3">
-                                                  <div className={`p-2 rounded-lg transition-colors ${isSelected ? 'bg-red-200 text-red-700' : 'bg-gray-100 text-gray-400 group-hover:bg-red-100 group-hover:text-red-500'}`}>
-                                                      {getShiftIcon(t)}
-                                                  </div>
-                                                  <div>
-                                                      <span className="block font-bold">{t.split('(')[0]}</span>
-                                                      <span className="text-xs opacity-70 font-normal">{t.match(/\((.*?)\)/)?.[1]}</span>
-                                                  </div>
-                                              </div>
-                                              {isSelected 
-                                                ? <CheckCircle2 className="w-5 h-5 text-red-600" />
-                                                : <Circle className="w-5 h-5 text-gray-200 group-hover:text-gray-300" />
-                                              }
-                                          </div>
-                                      </button>
-                                  );
-                              })}
-                           </div>
-                      </div>
-                  </div>
-
-                  {/* Weekend Selection */}
-                  <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex flex-col h-full hover:shadow-md transition-shadow duration-300">
-                      <div className="mb-4 pb-4 border-b border-gray-50">
-                        <h4 className="font-bold text-gray-900 flex items-center gap-2 text-lg">
-                            <div className="w-8 h-8 rounded-full bg-yellow-100 text-yellow-600 flex items-center justify-center text-sm font-black">2</div>
-                            Select a Weekend
-                        </h4>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-2 mb-6">
-                          {WEEKENDS.map(d => {
-                              const enabled = isDayValid(d.index);
-                              const isSelected = aaSelection.weekend.dayIndex === d.index;
-                              return (
-                                <button
-                                    key={d.index}
-                                    disabled={!enabled}
-                                    onClick={() => setAaSelection(prev => ({ 
-                                        ...prev, 
-                                        weekend: { dayIndex: d.index, time: null } 
-                                    }))}
-                                    className={`py-3 px-4 rounded-xl text-sm font-bold transition-all duration-200 transform active:scale-95 ${
-                                        !enabled 
-                                        ? 'bg-gray-50 text-gray-300 cursor-not-allowed border border-transparent' 
-                                        : isSelected
-                                            ? 'bg-red-600 text-white shadow-lg shadow-red-200 ring-2 ring-red-600 ring-offset-2' 
-                                            : 'bg-white border border-gray-200 text-gray-600 hover:border-red-300 hover:bg-red-50'
-                                    }`}
-                                >
-                                    {d.name}
-                                </button>
-                              );
-                          })}
-                      </div>
-
-                      <div className="space-y-3 mt-auto">
-                           <p className="text-xs font-bold text-gray-400 uppercase tracking-wider pl-1">Preferred Time</p>
-                           <div className="flex flex-col gap-2">
-                              {SHIFT_TIMES.map(t => {
-                                  const isEnabled = isShiftValidForDay(aaSelection.weekend.dayIndex, t);
-                                  const isSelected = aaSelection.weekend.time === t;
-                                  return (
-                                      <button
-                                          key={t}
-                                          disabled={!isEnabled}
-                                          onClick={() => setAaSelection(prev => ({ ...prev, weekend: { ...prev.weekend, time: t } }))}
-                                          className={`group relative p-3 rounded-xl text-sm text-left font-medium border transition-all duration-200 ${
-                                              !isEnabled 
-                                              ? 'border-gray-100 bg-gray-50 opacity-50 cursor-not-allowed'
-                                              : isSelected
-                                                  ? 'border-red-600 bg-red-50 text-red-900 ring-1 ring-red-600'
-                                                  : 'border-gray-200 bg-white text-gray-600 hover:border-red-300 hover:shadow-sm'
-                                          }`}
-                                      >
-                                          <div className="flex justify-between items-center">
-                                              <div className="flex items-center gap-3">
-                                                  <div className={`p-2 rounded-lg transition-colors ${isSelected ? 'bg-red-200 text-red-700' : 'bg-gray-100 text-gray-400 group-hover:bg-red-100 group-hover:text-red-500'}`}>
-                                                      {getShiftIcon(t)}
-                                                  </div>
-                                                  <div>
-                                                      <span className="block font-bold">{t.split('(')[0]}</span>
-                                                      <span className="text-xs opacity-70 font-normal">{t.match(/\((.*?)\)/)?.[1]}</span>
-                                                  </div>
-                                              </div>
-                                              {isSelected 
-                                                ? <CheckCircle2 className="w-5 h-5 text-red-600" />
-                                                : <Circle className="w-5 h-5 text-gray-200 group-hover:text-gray-300" />
-                                              }
-                                          </div>
-                                      </button>
-                                  );
-                              })}
-                           </div>
-                      </div>
+                      {/* Weekends */}
+                      {[6, 0].map(idx => {
+                          return renderDayCard(idx, idx === 6 ? 'Sat' : 'Sun', true);
+                      })}
                   </div>
               </div>
-              
-              <div className="pt-4 pb-8 flex justify-center">
+          </div>
+
+          {/* Footer Action */}
+          <div className="bg-white border-t p-4 md:p-6 sticky bottom-0 z-20 shadow-[0_-5px_20px_rgba(0,0,0,0.03)]">
+              <div className="max-w-5xl mx-auto flex justify-center">
                   <Button 
-                      fullWidth 
                       onClick={handleAAWizardSubmit}
-                      className="py-4 text-lg shadow-xl hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 max-w-md"
+                      disabled={currentTotal !== 2 || aaSelections.some(s => !s.time)}
+                      className={`w-full md:w-auto md:min-w-[320px] py-4 text-lg shadow-xl hover:-translate-y-1 transition-all duration-300 font-bold ${
+                        currentTotal === 2 && aaSelections.every(s => s.time) 
+                        ? 'shadow-red-200 hover:shadow-red-300' 
+                        : 'opacity-50 cursor-not-allowed'
+                      }`}
                   >
-                      Confirm Pattern
+                      Confirm AA Pattern
                   </Button>
               </div>
           </div>
