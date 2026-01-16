@@ -52,6 +52,15 @@ export interface ShopperRecord {
   rank?: number;
 }
 
+export interface AuditLogRecord {
+  id: number;
+  operation_type: 'INSERT' | 'UPDATE' | 'DELETE';
+  record_id: string;
+  old_data: any; // JSONB
+  new_data: any; // JSONB
+  changed_at: string; // Timestamp
+}
+
 export enum AppMode {
   HOME = 'HOME',
   ADMIN = 'ADMIN',
@@ -72,7 +81,8 @@ export enum AdminWizardStep {
   WIZARD_DAYS = 'WIZARD_DAYS', // Configuring Mon-Sun
   WIZARD_APPLY = 'WIZARD_APPLY', // Selecting duration
   VIEW_SUBMISSIONS = 'VIEW_SUBMISSIONS', // New Data Dashboard
-  BUS_CONFIG = 'BUS_CONFIG' // New Bus Schedule Manager
+  BUS_CONFIG = 'BUS_CONFIG', // New Bus Schedule Manager
+  VIEW_LOGS = 'VIEW_LOGS' // New Audit Log Viewer
 }
 
 // --- BUS CONFIGURATION TYPES ---

@@ -16,6 +16,7 @@ import { AdminWizardDays, AdminWizardApply } from './components/AdminWizard';
 import { ShopperSetup } from './components/ShopperSetup';
 import { AdminBusConfig } from './components/AdminBusConfig';
 import { ShopperApp } from './components/ShopperApp';
+import { AdminAuditLog } from './components/AdminAuditLog';
 
 const STORAGE_KEYS = {
   TEMPLATE: 'picnic_admin_template',
@@ -263,7 +264,8 @@ export default function App() {
                           <h2 className="text-lg font-bold text-gray-800 leading-none">Admin Panel</h2>
                           <span className="text-xs text-gray-400 font-medium">
                               {adminWizardStep === AdminWizardStep.VIEW_SUBMISSIONS ? 'Data Viewer' : 
-                               adminWizardStep === AdminWizardStep.BUS_CONFIG ? 'Bus Manager' : 'Wizard Mode'}
+                               adminWizardStep === AdminWizardStep.BUS_CONFIG ? 'Bus Manager' : 
+                               adminWizardStep === AdminWizardStep.VIEW_LOGS ? 'Audit Logs' : 'Wizard Mode'}
                           </span>
                       </div>
                   </div>
@@ -306,6 +308,9 @@ export default function App() {
                           onSave={saveBusConfigToSupabase}
                           onBack={() => setAdminWizardStep(AdminWizardStep.DASHBOARD)}
                       />
+                  )}
+                  {adminWizardStep === AdminWizardStep.VIEW_LOGS && (
+                      <AdminAuditLog onBack={() => setAdminWizardStep(AdminWizardStep.DASHBOARD)} />
                   )}
               </div>
             </div>

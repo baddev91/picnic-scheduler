@@ -1,5 +1,6 @@
+
 import React, { useState } from 'react';
-import { Settings2, KeyRound, RefreshCw, Save, Share2, CalendarRange, Table, Bus, ArrowRight, ShieldCheck, Lock, UserCog, Info, AlertTriangle, Clock, CalendarCheck, Zap, ChevronDown, ChevronUp } from 'lucide-react';
+import { Settings2, KeyRound, RefreshCw, Save, Share2, CalendarRange, Table, Bus, ArrowRight, ShieldCheck, Lock, UserCog, Info, AlertTriangle, Clock, CalendarCheck, Zap, ChevronDown, ChevronUp, History } from 'lucide-react';
 import { Button } from './Button';
 import { AdminWizardStep, WeeklyTemplate } from '../types';
 import { MIN_DAYS_TO_START } from '../constants';
@@ -65,6 +66,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <h1 className="text-3xl font-black text-gray-900 tracking-tight">Dashboard</h1>
                   <p className="text-gray-500 mt-1">Manage schedules, settings and view submissions.</p>
               </div>
+              <Button 
+                 variant="secondary" 
+                 onClick={() => setAdminWizardStep(AdminWizardStep.VIEW_LOGS)}
+                 className="flex items-center gap-2 border-gray-300 hover:border-black transition-colors"
+              >
+                  <History className="w-4 h-4" /> Audit Logs
+              </Button>
           </div>
 
           <div className="grid md:grid-cols-2 gap-6">

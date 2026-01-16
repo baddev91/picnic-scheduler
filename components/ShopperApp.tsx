@@ -5,7 +5,7 @@ import { SHIFT_TIMES, formatDateKey, getShopperAllowedRange, getShopperMinDate }
 import { Button } from './Button';
 import { CalendarView } from './CalendarView';
 import { MobileInstructionModal } from './MobileInstructionModal';
-import { User, PlayCircle, CheckCircle, ArrowRight } from 'lucide-react';
+import { User, PlayCircle, CheckCircle, ArrowRight, Layers, CalendarCheck } from 'lucide-react';
 import { addDays, getDay, endOfWeek, addWeeks, isBefore } from 'date-fns';
 import { supabase } from '../supabaseClient';
 import { ShopperAAWizard } from './ShopperAAWizard';
@@ -55,6 +55,9 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
   const [showMobileInstructions, setShowMobileInstructions] = useState(false);
   const [viewMode, setViewMode] = useState<'FLOW' | 'SUMMARY'>('FLOW');
 
+  // Animation State for Counter
+  const [countAnim, setCountAnim] = useState(false);
+
   const flowScrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Effects
@@ -64,6 +67,36 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
     setTimeout(() => { if (flowScrollContainerRef.current) flowScrollContainerRef.current.scrollTop = 0; window.scrollTo(0, 0); }, 50);
     if (viewMode === 'FLOW') setShowMobileInstructions(true);
   }, [step, viewMode]);
+
+  // --- LOGIC: Calculate Total Shifts (FWD + AA + Standard) in the valid 2-week range ---
+  const currentData = selections[0];
+  const fwdDateStr = currentData.details?.firstWorkingDay;
+  let totalShiftCount = 0;
+
+  if (fwdDateStr) {
+      const fwdDate = getSafeDateFromKey(fwdDateStr);
+      // Range: FWD -> Sunday of the *next* week (Total 2 working weeks roughly)
+      const limitDateKey = formatDateKey(endOfWeek(addWeeks(fwdDate, 1), { weekStartsOn: 1 }));
+      
+      totalShiftCount = currentData.shifts.filter(s => 
+          s.date >= fwdDateStr && s.date <= limitDateKey
+      ).length;
+  } else {
+      // If FWD is not set yet, just show current selection count (likely just AA generated ones)
+      totalShiftCount = currentData.shifts.length;
+  }
+
+  const aaCount = currentData.shifts.filter(s => s.type === ShiftType.AA).length;
+  const stdCount = currentData.shifts.filter(s => s.type === ShiftType.STANDARD).length; // Kept for header debug only
+
+  // Trigger animation when TOTAL shift count changes
+  useEffect(() => {
+      if (step === ShopperStep.STANDARD_SELECTION) {
+          setCountAnim(true);
+          const t = setTimeout(() => setCountAnim(false), 300);
+          return () => clearTimeout(t);
+      }
+  }, [totalShiftCount, step]);
 
   // Logic
   const fetchFWDCounts = async () => {
@@ -268,8 +301,6 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
       if (step > s) return "bg-green-100 text-green-700";
       return "bg-gray-100 text-gray-400";
   };
-  const aaCount = data.shifts.filter(s => s.type === ShiftType.AA).length;
-  const stdCount = data.shifts.filter(s => s.type === ShiftType.STANDARD).length;
 
   return (
     <div className="h-[100dvh] bg-gray-50 flex flex-col overflow-hidden">
@@ -337,10 +368,33 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
       </div>
 
       {step === ShopperStep.STANDARD_SELECTION && (
-            <div className="bg-white p-4 border-t sticky bottom-0 z-20 pb-8 md:pb-4 shadow-[0_-5px_10px_rgba(0,0,0,0.05)]">
-               <div className="max-w-5xl mx-auto flex justify-between items-center">
-                  <Button variant="secondary" onClick={() => setStep(ShopperStep.FWD_SELECTION)}>Back</Button>
-                  <Button onClick={() => setShowDetailsModal(true)} className="px-8 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all">Review & Finish <ArrowRight className="w-4 h-4 ml-2" /></Button>
+            <div className="bg-white px-4 py-3 border-t sticky bottom-0 z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.06)]">
+               <div className="max-w-5xl mx-auto space-y-3">
+                  {/* Dynamic Shift Counter UI */}
+                  <div className="flex items-center justify-between px-2">
+                       <div className="flex items-center gap-2 text-gray-400">
+                           <Layers className="w-4 h-4" />
+                           <span className="text-[10px] font-bold uppercase tracking-widest">Total Selection</span>
+                       </div>
+                       
+                       <div className={`flex items-center gap-3 transition-all duration-300 ${countAnim ? 'scale-110' : 'scale-100'}`}>
+                           <div className={`text-3xl font-black leading-none transition-colors duration-300 ${countAnim ? 'text-green-500' : 'text-gray-900'}`}>
+                               {totalShiftCount}
+                           </div>
+                           <div className={`text-xs font-bold uppercase tracking-wider px-2 py-1 rounded-md transition-colors duration-300 ${countAnim ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                               Total Shifts
+                           </div>
+                       </div>
+                  </div>
+
+                  <div className="flex justify-between items-center gap-3">
+                      <Button variant="secondary" onClick={() => setStep(ShopperStep.FWD_SELECTION)} className="px-6 border-gray-200">
+                          Back
+                      </Button>
+                      <Button onClick={() => setShowDetailsModal(true)} className="flex-1 shadow-xl hover:shadow-2xl hover:-translate-y-0.5 transition-all bg-gray-900 hover:bg-black text-white py-3.5 rounded-xl flex items-center justify-center gap-2">
+                          <CalendarCheck className="w-5 h-5" /> Review & Finish <ArrowRight className="w-4 h-4" />
+                      </Button>
+                  </div>
                </div>
             </div>
       )}

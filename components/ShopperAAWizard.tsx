@@ -212,7 +212,7 @@ export const ShopperAAWizard: React.FC<ShopperAAWizardProps> = ({
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
                       {/* Weekdays */}
                       {[1, 2, 3, 4, 5].map(idx => {
-                          const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+                          const names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
                           return renderDayCard(idx, names[idx-1], false);
                       })}
                       
@@ -221,7 +221,7 @@ export const ShopperAAWizard: React.FC<ShopperAAWizardProps> = ({
 
                       {/* Weekends */}
                       {[6, 0].map(idx => {
-                          return renderDayCard(idx, idx === 6 ? 'Sat' : 'Sun', true);
+                          return renderDayCard(idx, idx === 6 ? 'Saturday' : 'Sunday', true);
                       })}
                   </div>
               </div>

@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { supabase } from '../supabaseClient';
-import { Download, Search, RefreshCw, SaveAll, Copy, FileSpreadsheet, Check, Sun, Sunset, Bell, ArrowUpCircle, Pencil, Trash2, ChevronDown, ChevronUp, CalendarRange, Clock, AlertCircle } from 'lucide-react';
+import { Download, Search, RefreshCw, SaveAll, Copy, FileSpreadsheet, Check, Sun, Sunset, Bell, ArrowUpCircle, Pencil, Trash2, ChevronDown, ChevronUp, CalendarRange, Clock, AlertCircle, Users, ArrowRight, Calendar } from 'lucide-react';
 import { format, startOfWeek, parseISO, isValid } from 'date-fns';
 import { ShopperRecord, ShiftType } from '../types';
 import { AdminHeatmap } from './AdminHeatmap';
@@ -68,6 +68,11 @@ export const AdminDataView: React.FC = () => {
   // Copy Feedback State
   const [copyFeedback, setCopyFeedback] = useState<Record<string, boolean>>({});
 
+  // Use a ref to track the ID of the shopper currently being edited
+  // This allows fetchData to update the modal content without stale closures
+  const editingShopperIdRef = useRef<string | null>(null);
+  useEffect(() => { editingShopperIdRef.current = editingShopper?.id || null; }, [editingShopper]);
+
   const fetchData = async () => {
     setLoading(true);
     const { data: shoppers, error } = await supabase
@@ -76,7 +81,14 @@ export const AdminDataView: React.FC = () => {
       .order('rank', { ascending: true }) 
       .order('created_at', { ascending: false });
 
-    if (!error) setData(shoppers || []);
+    if (!error && shoppers) {
+        setData(shoppers);
+        // If we are currently editing someone, update their record in the modal to match DB
+        if (editingShopperIdRef.current) {
+            const current = shoppers.find(s => s.id === editingShopperIdRef.current);
+            if (current) setEditingShopper(current);
+        }
+    }
     setLoading(false);
   };
 
@@ -209,8 +221,28 @@ export const AdminDataView: React.FC = () => {
         return;
     }
     try {
+      // 1. Snapshot the shifts before deleting!
+      // This is crucial because standard Audit triggers only capture the row being deleted.
+      // By injecting the shifts into 'details', we ensure the 'OLD' record in shoppers_audit 
+      // contains the shift data needed for restoration.
+      const shopperToDelete = data.find(s => s.id === id);
+      
+      if (shopperToDelete && shopperToDelete.shifts && shopperToDelete.shifts.length > 0) {
+          // Update the shopper one last time with a backup of their shifts in the details JSON
+          await supabase.from('shoppers').update({ 
+             details: { 
+                 ...shopperToDelete.details, 
+                 _archived_shifts: shopperToDelete.shifts 
+             }
+          }).eq('id', id);
+      }
+
+      // 2. Delete Shifts (Required if no ON DELETE CASCADE, but usually good practice to clean up)
       await supabase.from('shifts').delete().eq('shopper_id', id);
+      
+      // 3. Delete Shopper (This triggers the Audit Log, which now captures the _archived_shifts)
       await supabase.from('shoppers').delete().eq('id', id);
+
       setData(prev => prev.filter(item => item.id !== id));
       setDeleteConfirmId(null);
     } catch (err: any) { alert(`Error: ${err.message}`); }
@@ -265,12 +297,15 @@ export const AdminDataView: React.FC = () => {
               subtitle: isMorning ? 'Morning Session' : 'Afternoon Session',
               icon: isMorning ? <Sun className="w-5 h-5" /> : <Sunset className="w-5 h-5" />,
               colorClass: isMorning ? 'bg-orange-100 text-orange-600' : 'bg-indigo-100 text-indigo-600',
-              bgClass: isMorning ? 'bg-orange-50/50' : 'bg-indigo-50/50'
+              bgClass: isMorning ? 'bg-orange-50/50' : 'bg-indigo-50/50',
+              // New Chip Styles
+              chipDateBase: isMorning ? 'bg-orange-100/50 text-orange-900 border-orange-200' : 'bg-indigo-100/50 text-indigo-900 border-indigo-200',
+              chipCount: isMorning ? 'bg-white text-orange-700 border-orange-200' : 'bg-white text-indigo-700 border-indigo-200'
           };
       } else {
           // START_DATE View
           if (groupKey.includes('NO_DATE')) {
-              return { title: 'No Start Date Set', subtitle: 'Pending setup', icon: <Clock className="w-5 h-5" />, colorClass: 'bg-gray-200 text-gray-600', bgClass: 'bg-gray-100' };
+              return { title: 'No Start Date Set', subtitle: 'Pending setup', icon: <Clock className="w-5 h-5" />, colorClass: 'bg-gray-200 text-gray-600', bgClass: 'bg-gray-100', chipDateBase: 'bg-gray-100 text-gray-700 border-gray-200', chipCount: 'bg-white text-gray-500' };
           }
           const dateDisplay = isValid(parseISO(groupKey)) ? format(parseISO(groupKey), 'MMM do') : groupKey;
           let rangeString = dateDisplay;
@@ -285,7 +320,9 @@ export const AdminDataView: React.FC = () => {
               subtitle: `Starting Week Group`,
               icon: <CalendarRange className="w-5 h-5" />,
               colorClass: 'bg-emerald-100 text-emerald-600',
-              bgClass: 'bg-emerald-50/50'
+              bgClass: 'bg-emerald-50/50',
+              chipDateBase: 'bg-emerald-100/50 text-emerald-900 border-emerald-200',
+              chipCount: 'bg-white text-emerald-700 border-emerald-200'
           };
       }
   };
@@ -309,7 +346,7 @@ export const AdminDataView: React.FC = () => {
       return subGroups;
   };
 
-  if (loading) return <div className="flex flex-col items-center justify-center h-64 text-gray-500 gap-3"><RefreshCw className="w-8 h-8 animate-spin text-purple-600" /><p>Loading records...</p></div>;
+  if (loading && !data.length) return <div className="flex flex-col items-center justify-center h-64 text-gray-500 gap-3"><RefreshCw className="w-8 h-8 animate-spin text-purple-600" /><p>Loading records...</p></div>;
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in relative">
@@ -381,8 +418,10 @@ export const AdminDataView: React.FC = () => {
 
             return (
             <div key={fullGroupKey} className="bg-white rounded-xl shadow-sm border overflow-hidden">
-                <div className={`border-b px-4 md:px-6 py-3 flex flex-col md:flex-row items-center justify-between gap-4 ${headerInfo.bgClass}`}>
-                    <div className="flex items-center gap-3 w-full md:w-auto">
+                <div className={`border-b px-4 md:px-6 py-4 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-6 ${headerInfo.bgClass}`}>
+                    
+                    {/* LEFT: TITLE & META */}
+                    <div className="flex items-center gap-3 w-full xl:w-auto">
                         <div className={`p-2 rounded-lg ${headerInfo.colorClass}`}>
                              {headerInfo.icon}
                         </div>
@@ -397,48 +436,66 @@ export const AdminDataView: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* INTELLIGENT EXPORT SECTION */}
-                    <div className="flex flex-row items-center gap-4 w-full md:w-auto justify-end">
+                    {/* RIGHT: REDESIGNED EXPORT TOOLBAR */}
+                    <div className="flex flex-col md:flex-row items-start md:items-center gap-4 w-full xl:w-auto xl:justify-end">
                         
-                        {/* Single LS Button for entire batch */}
+                        {/* 1. Global Action: Copy LS (Primary Button) */}
                         <button 
                             onClick={() => handleBulkCopyLSInflow(items, `${fullGroupKey}-LS`)} 
-                            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all border whitespace-nowrap h-full ${copyFeedback[`${fullGroupKey}-LS`] ? 'bg-blue-100 text-blue-700 border-blue-300' : 'bg-white border-blue-200 text-blue-700 hover:bg-blue-50'}`}
-                            title="Copy HR Data for all shoppers in this session"
+                            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md group whitespace-nowrap ${
+                                copyFeedback[`${fullGroupKey}-LS`] 
+                                ? 'bg-blue-700 text-white shadow-blue-200' 
+                                : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-100 hover:shadow-blue-200'
+                            }`}
+                            title="Copy HR Data for everyone in this session"
                         >
-                            {copyFeedback[`${fullGroupKey}-LS`] ? <Check className="w-3 h-3" /> : <FileSpreadsheet className="w-3 h-3" />} 
-                            {copyFeedback[`${fullGroupKey}-LS`] ? 'LS Copied' : 'Copy LS'}
+                            {copyFeedback[`${fullGroupKey}-LS`] ? <Check className="w-4 h-4" /> : <FileSpreadsheet className="w-4 h-4 group-hover:scale-110 transition-transform" />} 
+                            {copyFeedback[`${fullGroupKey}-LS`] ? 'LS Data Copied!' : 'Copy LS Data'}
                         </button>
                         
-                        <div className="flex flex-col items-end gap-2">
+                        {/* Vertical Separator (Hidden on Mobile) */}
+                        <div className="hidden md:block w-px h-8 bg-gray-300/50 mx-2"></div>
+
+                        {/* 2. Specific Action Chips (Start Date Groups) */}
+                        <div className="flex flex-wrap gap-3 items-center">
                              {subGroupKeys.map((subKey) => {
                                  const cohort = subGroups[subKey];
-                                 const showLabel = hasMultipleCohorts;
-                                 const dateLabel = isValid(parseISO(subKey)) ? `Start: ${format(parseISO(subKey), 'MMM do')}` : subKey;
+                                 const dateLabel = isValid(parseISO(subKey)) ? format(parseISO(subKey), 'MMM d') : 'Unknown';
                                  
                                  return (
-                                     <div key={subKey} className={`flex items-center gap-3 ${showLabel ? 'bg-white/60 p-1.5 rounded-lg border border-gray-100 shadow-sm' : ''}`}>
-                                         {showLabel && (
-                                             <div className="text-[10px] font-bold text-gray-500 flex items-center gap-1.5 pl-1 border-r pr-2 mr-1">
-                                                 <CalendarRange className="w-3 h-3 text-purple-500" />
-                                                 <span className="whitespace-nowrap">{dateLabel} <span className="text-gray-400">({cohort.length})</span></span>
-                                             </div>
-                                         )}
-                                         
-                                         <div className="flex gap-1.5 overflow-x-auto">
-                                            <button 
-                                                onClick={() => handleBulkCopyWeek(cohort, 0, `${fullGroupKey}-${subKey}-W1`)} 
-                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border whitespace-nowrap ${copyFeedback[`${fullGroupKey}-${subKey}-W1`] ? 'bg-green-100 text-green-700 border-green-300' : 'bg-white border-green-200 text-green-700 hover:bg-green-50'}`}
-                                            >
-                                                {copyFeedback[`${fullGroupKey}-${subKey}-W1`] ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />} {copyFeedback[`${fullGroupKey}-${subKey}-W1`] ? 'Copied' : 'W1'}
-                                            </button>
-                                            <button 
-                                                onClick={() => handleBulkCopyWeek(cohort, 1, `${fullGroupKey}-${subKey}-W2`)} 
-                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border whitespace-nowrap ${copyFeedback[`${fullGroupKey}-${subKey}-W2`] ? 'bg-green-100 text-green-700 border-green-300' : 'bg-white border-green-200 text-green-700 hover:bg-green-50'}`}
-                                            >
-                                                {copyFeedback[`${fullGroupKey}-${subKey}-W2`] ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />} {copyFeedback[`${fullGroupKey}-${subKey}-W2`] ? 'Copied' : 'W2'}
-                                            </button>
+                                     <div key={subKey} className="flex items-center bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden group hover:border-gray-300 transition-all">
+                                         {/* Date Label Header */}
+                                         <div className={`px-3 py-2 border-r flex items-center gap-2 text-[10px] font-bold transition-colors cursor-default ${headerInfo.chipDateBase}`}>
+                                             <span className="whitespace-nowrap flex items-center gap-1.5">
+                                                 <Calendar className="w-3 h-3 opacity-50" />
+                                                 {dateLabel}
+                                             </span>
+                                             <span className={`px-1.5 py-0.5 rounded text-[9px] border ${headerInfo.chipCount}`}>{cohort.length}</span>
                                          </div>
+                                         
+                                         {/* W1 Button */}
+                                         <button 
+                                            onClick={() => handleBulkCopyWeek(cohort, 0, `${fullGroupKey}-${subKey}-W1`)}
+                                            className={`px-3 py-2 text-[10px] font-bold border-r border-gray-100 hover:bg-green-50 transition-colors flex items-center gap-1.5 ${
+                                                copyFeedback[`${fullGroupKey}-${subKey}-W1`] ? 'text-green-700 bg-green-50' : 'text-gray-600 hover:text-green-700'
+                                            }`}
+                                            title={`Copy Week 1 for ${dateLabel} start`}
+                                         >
+                                             {copyFeedback[`${fullGroupKey}-${subKey}-W1`] ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3 text-gray-400" />}
+                                             W1
+                                         </button>
+
+                                         {/* W2 Button */}
+                                         <button 
+                                            onClick={() => handleBulkCopyWeek(cohort, 1, `${fullGroupKey}-${subKey}-W2`)}
+                                            className={`px-3 py-2 text-[10px] font-bold hover:bg-green-50 transition-colors flex items-center gap-1.5 ${
+                                                copyFeedback[`${fullGroupKey}-${subKey}-W2`] ? 'text-green-700 bg-green-50' : 'text-gray-600 hover:text-green-700'
+                                            }`}
+                                            title={`Copy Week 2 for ${dateLabel} start`}
+                                         >
+                                             {copyFeedback[`${fullGroupKey}-${subKey}-W2`] ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3 text-gray-400" />}
+                                             W2
+                                         </button>
                                      </div>
                                  );
                              })}
@@ -546,7 +603,12 @@ export const AdminDataView: React.FC = () => {
         {Object.keys(groupedData).length === 0 && <div className="text-center py-12 text-gray-400 bg-white rounded-xl border border-dashed">No submissions found.</div>}
       </div>
 
-      <EditShopperModal shopper={editingShopper} onClose={() => setEditingShopper(null)} onUpdate={(updated) => setData(prev => prev.map(i => i.id === updated.id ? updated : i))} />
+      <EditShopperModal 
+          shopper={editingShopper} 
+          onClose={() => setEditingShopper(null)} 
+          onUpdate={(updated) => setData(prev => prev.map(i => i.id === updated.id ? updated : i))} 
+          onRefresh={fetchData}
+      />
     </div>
   );
 };

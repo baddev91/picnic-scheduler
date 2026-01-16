@@ -11,12 +11,13 @@ interface EditShopperModalProps {
   shopper: ShopperRecord | null;
   onClose: () => void;
   onUpdate: (updatedShopper: ShopperRecord) => void;
+  onRefresh?: () => void;
 }
 
 const GLOVE_SIZES = ['6 (XS)', '7 (S)', '8 (M)', '9 (L)', '10 (XL)', '11 (XXL)', '12 (3XL)', '12 (4XL)'];
 const CLOTHING_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL', '6XL'];
 
-export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onClose, onUpdate }) => {
+export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onClose, onUpdate, onRefresh }) => {
   const [details, setDetails] = useState<any>({});
   const [shifts, setShifts] = useState<any[]>([]);
   const [newShiftDate, setNewShiftDate] = useState('');
@@ -77,8 +78,10 @@ export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onC
         const { error } = await supabase.from('shifts').upsert(updates);
         if (error) throw error;
 
-        // Pass the fully updated shifts array back to parent
-        onUpdate({ ...shopper, shifts: shifts });
+        // Force a server-side refresh to ensure data consistency
+        if (onRefresh) onRefresh();
+        else onUpdate({ ...shopper, shifts: shifts });
+        
         setHasUnsavedShiftChanges(false);
         alert("Shift configuration saved successfully!");
     } catch (e: any) {
@@ -112,10 +115,16 @@ export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onC
         const { data: newShift, error } = await supabase.from('shifts').insert([payload]).select().single();
         if (error) throw error;
         
-        // Add new shift and update parent immediately
-        const updatedShifts = [...shifts, newShift];
-        setShifts(updatedShifts);
-        onUpdate({ ...shopper, shifts: updatedShifts });
+        // IMMEDIATE SYNC: Update parent data to ensure consistency with DB
+        if (onRefresh) {
+            onRefresh(); 
+        } else {
+            // Fallback for older implementations
+            const updatedShifts = [...shifts, newShift];
+            setShifts(updatedShifts);
+            onUpdate({ ...shopper, shifts: updatedShifts });
+        }
+        
         resetShiftForm();
     } catch (e: any) {
         alert("Error adding shift: " + e.message);

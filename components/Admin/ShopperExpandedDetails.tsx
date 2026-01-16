@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { User, MapPin, Sheet, Copy, FileSpreadsheet, Calendar } from 'lucide-react';
+import { User, MapPin, Sheet, Copy, FileSpreadsheet, Calendar, Star } from 'lucide-react';
 import { format } from 'date-fns';
 import { ShopperRecord, ShiftType } from '../../types';
 import { 
@@ -121,12 +122,35 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
                     <h4 className="font-bold text-gray-900 mb-3 flex items-center gap-2"><Calendar className="w-4 h-4" /> All Selected Shifts ({(shopper.shifts || []).length})</h4>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                         {(shopper.shifts || []).length > 0 ? (
-                            [...(shopper.shifts || [])].sort((a: any, b: any) => a.date.localeCompare(b.date)).map((shift: any, idx: number) => (
-                                <div key={idx} className={`p-2 rounded border text-xs ${shift.type === ShiftType.AA ? 'bg-red-50 border-red-100 text-red-700' : 'bg-green-50 border-green-100 text-green-700'}`}>
-                                    <div className="font-bold">{formatDateDisplay(shift.date)}</div>
-                                    <div className="truncate" title={shift.time}>{shift.time.split('(')[0]}</div>
-                                </div>
-                            ))
+                            [...(shopper.shifts || [])]
+                              .sort((a: any, b: any) => a.date.localeCompare(b.date))
+                              .map((shift: any, idx: number) => {
+                                  // Check if this is the First Working Day
+                                  const isFWD = shopper.details?.firstWorkingDay === shift.date;
+                                  
+                                  let styleClass = '';
+                                  if (isFWD) {
+                                      styleClass = 'bg-yellow-50 border-yellow-300 text-yellow-800 ring-1 ring-yellow-200';
+                                  } else if (shift.type === ShiftType.AA) {
+                                      styleClass = 'bg-red-50 border-red-100 text-red-700';
+                                  } else {
+                                      styleClass = 'bg-green-50 border-green-100 text-green-700';
+                                  }
+
+                                  return (
+                                    <div key={idx} className={`relative p-2 rounded border text-xs flex flex-col justify-center ${styleClass}`}>
+                                        {isFWD && (
+                                            <div className="absolute top-1 right-1">
+                                                <Star className="w-3 h-3 fill-yellow-500 text-yellow-600" />
+                                            </div>
+                                        )}
+                                        <div className="font-bold">{formatDateDisplay(shift.date)}</div>
+                                        <div className="truncate pr-4" title={shift.time}>
+                                            {shift.time.split('(')[0]}
+                                        </div>
+                                    </div>
+                                  );
+                              })
                         ) : <span className="text-gray-400 italic text-sm">No shifts selected</span>}
                     </div>
                 </div>
