@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { format, isWeekend, isAfter, isBefore } from 'date-fns';
 import { ChevronLeft, ChevronRight, Lock, Star } from 'lucide-react';
@@ -73,14 +74,25 @@ export const DesktopCalendarGrid: React.FC<DesktopCalendarGridProps> = ({
           
           const aaLabel = status.aaShift ? getShiftLabel(status.aaShift.time) : null;
           const stdLabel = status.stdShift ? getShiftLabel(status.stdShift.time) : null;
+          
+          // Determine if this day is effectively "Locked" for Standard Selection because it's AA or FWD
+          const isLockedForStandard = mode === 'SHOPPER' && !isFWDSelection && !isDisabled && (status.aaShift || status.isFirstWorkingDay);
+          
+          let cellBgClass = 'bg-white hover:bg-blue-50 cursor-pointer active:bg-blue-100';
+          if (isDisabled) cellBgClass = 'bg-gray-100';
+          else if (isFWDSelection && status.isFirstWorkingDay) cellBgClass = 'bg-yellow-50 ring-2 ring-inset ring-yellow-400';
+          else if (isLockedForStandard) {
+             // Distinct style for locked days in Standard Mode
+             if (status.isFirstWorkingDay) cellBgClass = 'bg-yellow-50/60 ring-2 ring-inset ring-yellow-200 cursor-default';
+             else if (status.aaShift) cellBgClass = 'bg-red-50/50 cursor-default ring-inset ring-1 ring-red-100';
+          }
 
           return (
             <div 
               key={day.toISOString()} 
               className={`min-h-[80px] md:min-h-[120px] relative transition-all flex flex-col p-1 md:p-2
-                ${isDisabled ? 'bg-gray-100' : 'bg-white hover:bg-blue-50 cursor-pointer active:bg-blue-100'}
+                ${cellBgClass}
                 ${!isCurrentMonth ? 'opacity-40' : ''}
-                ${isFWDSelection && status.isFirstWorkingDay ? 'bg-yellow-50 ring-2 ring-inset ring-yellow-400' : ''}
               `}
               onClick={() => {
                 if (!isDisabled) setSelectedDay(day);
@@ -91,6 +103,13 @@ export const DesktopCalendarGrid: React.FC<DesktopCalendarGridProps> = ({
                 <div className="absolute top-1 right-1 md:top-2 md:left-2 md:right-auto z-10 pointer-events-none" title="First Working Day">
                   <Star className="w-3 h-3 md:w-5 md:h-5 text-yellow-500 fill-yellow-500 drop-shadow-sm" />
                 </div>
+              )}
+              
+              {/* Locked Indicator for Standard Step */}
+              {isLockedForStandard && (
+                  <div className="absolute top-1 right-1 md:top-2 md:right-2 z-10 opacity-30">
+                      <Lock className="w-3 h-3 md:w-4 md:h-4 text-gray-500" />
+                  </div>
               )}
 
               {/* Day Number */}

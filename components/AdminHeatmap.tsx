@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState, useEffect } from 'react';
 import { Activity, ChevronDown, ChevronUp, BarChart3, Bus, TrendingUp, ChevronLeft, ChevronRight, Calendar, Users } from 'lucide-react';
 import { format, eachDayOfInterval, addDays, endOfWeek, addWeeks, isSameDay } from 'date-fns';
@@ -115,51 +116,47 @@ export const AdminHeatmap: React.FC<AdminHeatmapProps> = ({ data }) => {
 
         {isOpen && (
             <div className="border-t animate-in slide-in-from-top-2 duration-300">
-                {/* 1. METRICS SECTION */}
-                <div className="grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x border-b bg-gray-50/50">
+                {/* 1. METRICS SECTION (Responsive Grid) */}
+                <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-y md:divide-y-0 border-b bg-gray-50/50">
                     
                     {/* TOTAL SHOPPERS CARD */}
-                    <div className="p-6 flex items-center gap-4">
-                        <div className="p-3 bg-emerald-100 text-emerald-600 rounded-full">
-                            <Users className="w-6 h-6" />
+                    <div className="p-4 md:p-6 flex items-center gap-3 md:gap-4">
+                        <div className="p-2 md:p-3 bg-emerald-100 text-emerald-600 rounded-full shrink-0">
+                            <Users className="w-5 h-5 md:w-6 md:h-6" />
                         </div>
-                        <div>
-                            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Total Shoppers</p>
-                            <p className="text-2xl font-black text-gray-900">{metrics?.totalShoppers || 0}</p>
-                            <p className="text-xs text-gray-500">Submissions</p>
-                        </div>
-                    </div>
-
-                    <div className="p-6 flex items-center gap-4">
-                        <div className="p-3 bg-blue-100 text-blue-600 rounded-full">
-                            <BarChart3 className="w-6 h-6" />
-                        </div>
-                        <div>
-                            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Avg. Shifts</p>
-                            <p className="text-2xl font-black text-gray-900">{metrics?.avgShifts || '0'}</p>
-                            <p className="text-xs text-gray-500">Per shopper</p>
+                        <div className="min-w-0">
+                            <p className="text-[10px] md:text-xs font-bold text-gray-400 uppercase tracking-wider truncate">Shoppers</p>
+                            <p className="text-xl md:text-2xl font-black text-gray-900">{metrics?.totalShoppers || 0}</p>
                         </div>
                     </div>
 
-                    <div className="p-6 flex items-center gap-4">
-                        <div className="p-3 bg-purple-100 text-purple-600 rounded-full">
-                            <Bus className="w-6 h-6" />
+                    <div className="p-4 md:p-6 flex items-center gap-3 md:gap-4">
+                        <div className="p-2 md:p-3 bg-blue-100 text-blue-600 rounded-full shrink-0">
+                            <BarChart3 className="w-5 h-5 md:w-6 md:h-6" />
                         </div>
-                        <div>
-                            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Bus Usage</p>
-                            <p className="text-2xl font-black text-gray-900">{metrics?.busRate || '0'}%</p>
-                            <p className="text-xs text-gray-500">{metrics?.busUsers} shoppers</p>
+                        <div className="min-w-0">
+                            <p className="text-[10px] md:text-xs font-bold text-gray-400 uppercase tracking-wider truncate">Avg. Shifts</p>
+                            <p className="text-xl md:text-2xl font-black text-gray-900">{metrics?.avgShifts || '0'}</p>
                         </div>
                     </div>
 
-                    <div className="p-6 flex items-center gap-4">
-                        <div className="p-3 bg-orange-100 text-orange-600 rounded-full">
-                            <TrendingUp className="w-6 h-6" />
+                    <div className="p-4 md:p-6 flex items-center gap-3 md:gap-4">
+                        <div className="p-2 md:p-3 bg-purple-100 text-purple-600 rounded-full shrink-0">
+                            <Bus className="w-5 h-5 md:w-6 md:h-6" />
                         </div>
-                        <div>
-                            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Peak Shift</p>
-                            <p className="text-2xl font-black text-gray-900">{metrics?.popularShift || '-'}</p>
-                            <p className="text-xs text-gray-500">Most requested</p>
+                        <div className="min-w-0">
+                            <p className="text-[10px] md:text-xs font-bold text-gray-400 uppercase tracking-wider truncate">Bus Usage</p>
+                            <p className="text-xl md:text-2xl font-black text-gray-900">{metrics?.busRate || '0'}%</p>
+                        </div>
+                    </div>
+
+                    <div className="p-4 md:p-6 flex items-center gap-3 md:gap-4">
+                        <div className="p-2 md:p-3 bg-orange-100 text-orange-600 rounded-full shrink-0">
+                            <TrendingUp className="w-5 h-5 md:w-6 md:h-6" />
+                        </div>
+                        <div className="min-w-0">
+                            <p className="text-[10px] md:text-xs font-bold text-gray-400 uppercase tracking-wider truncate">Peak Shift</p>
+                            <p className="text-xl md:text-2xl font-black text-gray-900 truncate" title={metrics?.popularShift}>{metrics?.popularShift || '-'}</p>
                         </div>
                     </div>
                 </div>

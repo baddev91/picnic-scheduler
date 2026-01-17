@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { format, isWeekend } from 'date-fns';
 import { Lock, Star, Check, Sun, Moon, Sunrise, Sunset, Ban, AlertCircle, Clock, CalendarX } from 'lucide-react';
@@ -50,11 +51,20 @@ export const MobileCalendarList: React.FC<MobileCalendarListProps> = ({
          const status = getShopperDayStatus(day);
          const isFWD = status.isFirstWorkingDay;
          const isLockedFWD = mode === 'SHOPPER' && !isFWDSelection && step === 2 && isFWD;
+         
+         // Visual distinction for days that have AA or are FWD during Standard Step
+         const isLockedDayContainer = mode === 'SHOPPER' && step === 2 && (status.aaShift || isFWD);
+
+         let headerBgClass = isWeekend(day) ? 'bg-red-50/50' : 'bg-gray-50/50';
+         if (isLockedDayContainer) {
+             if (isFWD) headerBgClass = 'bg-yellow-50 border-b border-yellow-100';
+             else if (status.aaShift) headerBgClass = 'bg-red-50 border-b border-red-100';
+         }
 
          return (
-           <div key={dateKey} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+           <div key={dateKey} className={`bg-white rounded-2xl shadow-sm border overflow-hidden ${isLockedDayContainer ? (isFWD ? 'border-yellow-200 shadow-yellow-50' : 'border-red-200 shadow-red-50') : 'border-gray-100'}`}>
               {/* Header */}
-              <div className={`px-4 py-3 flex justify-between items-center ${isWeekend(day) ? 'bg-red-50/50' : 'bg-gray-50/50'}`}>
+              <div className={`px-4 py-3 flex justify-between items-center ${headerBgClass}`}>
                  <div className="flex items-center gap-3">
                     <div className={`flex flex-col items-center justify-center w-12 h-12 rounded-xl border shadow-sm ${isWeekend(day) ? 'bg-white border-red-100 text-red-600' : 'bg-white border-gray-200 text-gray-700'}`}>
                         <div className="text-[10px] font-bold uppercase tracking-wider">{format(day, 'EEE')}</div>
@@ -65,6 +75,11 @@ export const MobileCalendarList: React.FC<MobileCalendarListProps> = ({
                         {isFWD && <div className="text-[10px] font-bold text-yellow-600 bg-yellow-100 px-2 py-0.5 rounded-full w-fit mt-1 flex items-center gap-1"><Star className="w-3 h-3 fill-yellow-600" /> First Working Day</div>}
                     </div>
                  </div>
+                 {isLockedDayContainer && (
+                     <div className="text-gray-300">
+                         <Lock className="w-5 h-5" />
+                     </div>
+                 )}
               </div>
 
               {/* Grid */}

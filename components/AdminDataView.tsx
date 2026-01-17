@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { Download, Search, RefreshCw, SaveAll, Copy, FileSpreadsheet, Check, Sun, Sunset, Bell, ArrowUpCircle, Pencil, Trash2, ChevronDown, ChevronUp, CalendarRange, Clock, AlertCircle, Users, ArrowRight, Calendar } from 'lucide-react';
-import { format, startOfWeek, parseISO, isValid } from 'date-fns';
+import { format, startOfWeek, parseISO, isValid, addWeeks, addDays } from 'date-fns';
 import { ShopperRecord, ShiftType } from '../types';
 import { AdminHeatmap } from './AdminHeatmap';
 import { EditShopperModal } from './EditShopperModal';
@@ -191,9 +191,21 @@ export const AdminDataView: React.FC = () => {
       setTimeout(() => setCopyFeedback(prev => ({ ...prev, [key]: false })), 2000);
   };
 
-  const handleBulkCopyWeek = (shoppers: ShopperRecord[], weekOffset: number, feedbackKey: string) => {
+  // NEW: Smart Calendar Export
+  // This aggregates mixed start dates into unified calendar weeks
+  const handleSmartCalendarExport = (
+      entries: { shopper: ShopperRecord, offset: number }[],
+      feedbackKey: string
+  ) => {
       try {
-          const rows = shoppers.map(s => generateSpreadsheetRow(s, weekOffset)).join('\n');
+          // Sort entries by name for consistency inside the copy
+          entries.sort((a, b) => a.shopper.name.localeCompare(b.shopper.name));
+
+          const rows = entries.map(entry => {
+              // Reuse existing logic: generate row for this shopper at this specific offset (W1 or W2)
+              return generateSpreadsheetRow(entry.shopper, entry.offset);
+          }).join('\n');
+          
           navigator.clipboard.writeText(rows);
           triggerFeedback(feedbackKey);
       } catch (e: any) { alert("Bulk copy failed: " + e.message); }
@@ -222,13 +234,9 @@ export const AdminDataView: React.FC = () => {
     }
     try {
       // 1. Snapshot the shifts before deleting!
-      // This is crucial because standard Audit triggers only capture the row being deleted.
-      // By injecting the shifts into 'details', we ensure the 'OLD' record in shoppers_audit 
-      // contains the shift data needed for restoration.
       const shopperToDelete = data.find(s => s.id === id);
       
       if (shopperToDelete && shopperToDelete.shifts && shopperToDelete.shifts.length > 0) {
-          // Update the shopper one last time with a backup of their shifts in the details JSON
           await supabase.from('shoppers').update({ 
              details: { 
                  ...shopperToDelete.details, 
@@ -237,10 +245,7 @@ export const AdminDataView: React.FC = () => {
           }).eq('id', id);
       }
 
-      // 2. Delete Shifts (Required if no ON DELETE CASCADE, but usually good practice to clean up)
       await supabase.from('shifts').delete().eq('shopper_id', id);
-      
-      // 3. Delete Shopper (This triggers the Audit Log, which now captures the _archived_shifts)
       await supabase.from('shoppers').delete().eq('id', id);
 
       setData(prev => prev.filter(item => item.id !== id));
@@ -298,7 +303,6 @@ export const AdminDataView: React.FC = () => {
               icon: isMorning ? <Sun className="w-5 h-5" /> : <Sunset className="w-5 h-5" />,
               colorClass: isMorning ? 'bg-orange-100 text-orange-600' : 'bg-indigo-100 text-indigo-600',
               bgClass: isMorning ? 'bg-orange-50/50' : 'bg-indigo-50/50',
-              // New Chip Styles
               chipDateBase: isMorning ? 'bg-orange-100/50 text-orange-900 border-orange-200' : 'bg-indigo-100/50 text-indigo-900 border-indigo-200',
               chipCount: isMorning ? 'bg-white text-orange-700 border-orange-200' : 'bg-white text-indigo-700 border-indigo-200'
           };
@@ -308,12 +312,6 @@ export const AdminDataView: React.FC = () => {
               return { title: 'No Start Date Set', subtitle: 'Pending setup', icon: <Clock className="w-5 h-5" />, colorClass: 'bg-gray-200 text-gray-600', bgClass: 'bg-gray-100', chipDateBase: 'bg-gray-100 text-gray-700 border-gray-200', chipCount: 'bg-white text-gray-500' };
           }
           const dateDisplay = isValid(parseISO(groupKey)) ? format(parseISO(groupKey), 'MMM do') : groupKey;
-          let rangeString = dateDisplay;
-          if (isValid(parseISO(groupKey))) {
-             const end = new Date(parseISO(groupKey));
-             end.setDate(end.getDate() + 6);
-             rangeString = `${dateDisplay} - ${format(end, 'MMM do')}`;
-          }
 
           return {
               title: `Week of ${dateDisplay}`,
@@ -327,23 +325,31 @@ export const AdminDataView: React.FC = () => {
       }
   };
 
-  // HELPER TO SUB-GROUP SHOPPERS BY START WEEK
-  const getSubGroupsByStartWeek = (items: ShopperRecord[]) => {
-      const subGroups: Record<string, ShopperRecord[]> = {};
-      items.forEach(item => {
-          let key = 'Unknown Start';
-          if (item.details?.firstWorkingDay) {
-              const date = parseISO(item.details.firstWorkingDay);
-              if (isValid(date)) {
-                  // Group by Monday of that week
-                  const monday = startOfWeek(date, { weekStartsOn: 1 });
-                  key = format(monday, 'yyyy-MM-dd');
-              }
-          }
-          if (!subGroups[key]) subGroups[key] = [];
-          subGroups[key].push(item);
+  // HELPER TO GENERATE SMART CALENDAR BUTTONS
+  const getSmartCalendarBuckets = (items: ShopperRecord[]) => {
+      const buckets: Record<string, { shopper: ShopperRecord, offset: number }[]> = {};
+
+      items.forEach(shopper => {
+          if (!shopper.details?.firstWorkingDay) return;
+          const fwd = parseISO(shopper.details.firstWorkingDay);
+          if (!isValid(fwd)) return;
+
+          // Bucket 1: The Week of Start (W1)
+          const w1Monday = startOfWeek(fwd, { weekStartsOn: 1 });
+          const w1Key = format(w1Monday, 'yyyy-MM-dd');
+          
+          if (!buckets[w1Key]) buckets[w1Key] = [];
+          buckets[w1Key].push({ shopper, offset: 0 }); // offset 0 = W1
+
+          // Bucket 2: The Week After (W2)
+          const w2Monday = addWeeks(w1Monday, 1);
+          const w2Key = format(w2Monday, 'yyyy-MM-dd');
+          
+          if (!buckets[w2Key]) buckets[w2Key] = [];
+          buckets[w2Key].push({ shopper, offset: 1 }); // offset 1 = W2
       });
-      return subGroups;
+
+      return buckets;
   };
 
   if (loading && !data.length) return <div className="flex flex-col items-center justify-center h-64 text-gray-500 gap-3"><RefreshCw className="w-8 h-8 animate-spin text-purple-600" /><p>Loading records...</p></div>;
@@ -411,10 +417,9 @@ export const AdminDataView: React.FC = () => {
         {Object.entries(groupedData).sort((a,b) => b[0].localeCompare(a[0])).map(([fullGroupKey, items]: [string, ShopperRecord[]]) => {
             const headerInfo = formatHeaderDisplay(fullGroupKey);
             
-            // ANALYZE SUB-GROUPS (for Intelligent Export)
-            const subGroups = getSubGroupsByStartWeek(items);
-            const subGroupKeys = Object.keys(subGroups).sort();
-            const hasMultipleCohorts = subGroupKeys.length > 1;
+            // GENERATE SMART CALENDAR BUCKETS
+            const calendarBuckets = getSmartCalendarBuckets(items);
+            const calendarKeys = Object.keys(calendarBuckets).sort();
 
             return (
             <div key={fullGroupKey} className="bg-white rounded-xl shadow-sm border overflow-hidden">
@@ -456,49 +461,43 @@ export const AdminDataView: React.FC = () => {
                         {/* Vertical Separator (Hidden on Mobile) */}
                         <div className="hidden md:block w-px h-8 bg-gray-300/50 mx-2"></div>
 
-                        {/* 2. Specific Action Chips (Start Date Groups) */}
-                        <div className="flex flex-wrap gap-3 items-center">
-                             {subGroupKeys.map((subKey) => {
-                                 const cohort = subGroups[subKey];
-                                 const dateLabel = isValid(parseISO(subKey)) ? format(parseISO(subKey), 'MMM d') : 'Unknown';
-                                 
-                                 return (
-                                     <div key={subKey} className="flex items-center bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden group hover:border-gray-300 transition-all">
-                                         {/* Date Label Header */}
-                                         <div className={`px-3 py-2 border-r flex items-center gap-2 text-[10px] font-bold transition-colors cursor-default ${headerInfo.chipDateBase}`}>
-                                             <span className="whitespace-nowrap flex items-center gap-1.5">
-                                                 <Calendar className="w-3 h-3 opacity-50" />
-                                                 {dateLabel}
-                                             </span>
-                                             <span className={`px-1.5 py-0.5 rounded text-[9px] border ${headerInfo.chipCount}`}>{cohort.length}</span>
-                                         </div>
-                                         
-                                         {/* W1 Button */}
-                                         <button 
-                                            onClick={() => handleBulkCopyWeek(cohort, 0, `${fullGroupKey}-${subKey}-W1`)}
-                                            className={`px-3 py-2 text-[10px] font-bold border-r border-gray-100 hover:bg-green-50 transition-colors flex items-center gap-1.5 ${
-                                                copyFeedback[`${fullGroupKey}-${subKey}-W1`] ? 'text-green-700 bg-green-50' : 'text-gray-600 hover:text-green-700'
-                                            }`}
-                                            title={`Copy Week 1 for ${dateLabel} start`}
-                                         >
-                                             {copyFeedback[`${fullGroupKey}-${subKey}-W1`] ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3 text-gray-400" />}
-                                             W1
-                                         </button>
+                        {/* 2. SMART CALENDAR EXPORT BUTTONS */}
+                        <div className="flex flex-wrap gap-2 items-center">
+                             {calendarKeys.length === 0 ? (
+                                <span className="text-xs text-gray-400 italic px-2">No dates set</span>
+                             ) : (
+                                calendarKeys.map((mondayKey) => {
+                                   const entries = calendarBuckets[mondayKey];
+                                   const mondayDate = parseISO(mondayKey);
+                                   const sundayDate = addDays(mondayDate, 6);
+                                   
+                                   const label = `Week of ${format(mondayDate, 'MMM d')}`;
+                                   const rangeLabel = `${format(mondayDate, 'd')} - ${format(sundayDate, 'd MMM')}`;
+                                   const btnId = `${fullGroupKey}-${mondayKey}-SMART`;
 
-                                         {/* W2 Button */}
-                                         <button 
-                                            onClick={() => handleBulkCopyWeek(cohort, 1, `${fullGroupKey}-${subKey}-W2`)}
-                                            className={`px-3 py-2 text-[10px] font-bold hover:bg-green-50 transition-colors flex items-center gap-1.5 ${
-                                                copyFeedback[`${fullGroupKey}-${subKey}-W2`] ? 'text-green-700 bg-green-50' : 'text-gray-600 hover:text-green-700'
-                                            }`}
-                                            title={`Copy Week 2 for ${dateLabel} start`}
-                                         >
-                                             {copyFeedback[`${fullGroupKey}-${subKey}-W2`] ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3 text-gray-400" />}
-                                             W2
-                                         </button>
-                                     </div>
-                                 );
-                             })}
+                                   return (
+                                       <button
+                                           key={mondayKey}
+                                           onClick={() => handleSmartCalendarExport(entries, btnId)}
+                                           className={`flex flex-col items-center justify-center px-4 py-1.5 rounded-lg border shadow-sm transition-all group ${
+                                              copyFeedback[btnId]
+                                              ? 'bg-green-50 border-green-200 text-green-700'
+                                              : 'bg-white border-gray-200 hover:border-purple-300 hover:shadow-md'
+                                           }`}
+                                           title={`Copy shifts for ${entries.length} shoppers for ${rangeLabel}`}
+                                       >
+                                           <div className="flex items-center gap-1.5 text-[10px] uppercase font-bold text-gray-400 group-hover:text-purple-500">
+                                              {copyFeedback[btnId] ? <Check className="w-3 h-3" /> : <Calendar className="w-3 h-3" />}
+                                              {label}
+                                           </div>
+                                           <div className="flex items-center gap-2 text-xs font-bold text-gray-800">
+                                               <span>{entries.length} People</span>
+                                               {copyFeedback[btnId] && <span className="text-green-600">Copied!</span>}
+                                           </div>
+                                       </button>
+                                   );
+                                })
+                             )}
                         </div>
                     </div>
                 </div>

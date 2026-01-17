@@ -201,9 +201,9 @@ export const ShopperAAWizard: React.FC<ShopperAAWizardProps> = ({
                            <AlertCircle className="w-5 h-5" />
                         </div>
                         <div className="leading-relaxed">
-                           <strong className="block mb-1 text-blue-700">Selection Rules</strong>
-                           You can choose <strong>1 Weekday + 1 Weekend</strong>, OR <strong>2 Weekend days</strong>.
-                           <br/><span className="text-blue-600/80 text-xs">Selecting a weekday will automatically lock other weekdays to prevent errors.</span>
+                           <strong className="block mb-1 text-blue-700">Recurring Schedule ("AA")</strong>
+                           You are choosing 2 fixed days to work <strong>every week</strong>. 
+                           <br/>Select either: <strong>1 Weekday + 1 Weekend</strong> OR <strong>Sat + Sun</strong>.
                         </div>
                      </div>
                   )}

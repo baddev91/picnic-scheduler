@@ -357,7 +357,13 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
       {/* Header */}
       <div className="bg-white px-6 py-4 shadow-sm border-b sticky top-0 z-20 flex justify-between items-center shrink-0">
         <div>
-          <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2"><User className="w-5 h-5 text-gray-400" /> {shopperName}</h2>
+          <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+            {/* Hidden Exit Button on Icon */}
+            <button onClick={onExit} className="hover:text-red-500 transition-colors outline-none cursor-default active:scale-95" title="Exit to Setup">
+                <User className="w-5 h-5 text-gray-400" />
+            </button>
+            {shopperName}
+          </h2>
           <div className="flex items-center gap-2 text-xs font-bold mt-1">
              <span className={`px-3 py-1 rounded-full transition-all ${getStepBadgeClass(0)}`}>1. AA Shifts</span>
              <div className="w-4 h-0.5 bg-gray-200"></div>
@@ -454,11 +460,41 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
           isOpen={showMobileInstructions} 
           onClose={() => setShowMobileInstructions(false)} 
           step={step === 0 ? 'AA' : step === 1 ? 'FWD' : 'STANDARD'} 
-          title={step === 0 ? 'Always Available (AA)' : step === 1 ? 'When do you start?' : 'Select Your Shifts'} 
+          title={step === 0 ? 'Set your 2 Fixed Days (AA)' : step === 1 ? 'When do you start?' : 'Select Your Shifts'} 
           message={step === 0 
-              ? <span>These are recurring shifts. Select <strong>1 Weekday + 1 Weekend</strong> OR <strong>2 Weekend days</strong>. Total must be 2.</span> 
+              ? <div className="space-y-4 text-left">
+                  <div>
+                      <p className="font-bold text-gray-900">What are AA Shifts?</p>
+                      <p className="text-gray-600 text-sm mt-1 leading-relaxed">"AA" stands for <strong>Always Available</strong>. These are the 2 specific days <u>every week</u> where you guarantee you can work.</p>
+                  </div>
+                  <div className="bg-red-50 p-4 rounded-xl border border-red-100">
+                      <p className="text-xs font-bold text-red-800 uppercase tracking-wider mb-3">Allowed Combinations:</p>
+                      <ul className="space-y-3 text-sm text-gray-800">
+                          <li className="flex items-center gap-3">
+                              <div className="w-6 h-6 rounded-full bg-white border border-red-200 text-red-600 flex items-center justify-center font-bold text-xs shadow-sm shrink-0">A</div>
+                              <span><strong>1 Weekday</strong> (Mon-Fri) <br/>+ <strong>1 Weekend</strong> (Sat/Sun)</span>
+                          </li>
+                          <li className="flex items-center gap-3">
+                               <div className="w-6 h-6 rounded-full bg-white border border-red-200 text-red-600 flex items-center justify-center font-bold text-xs shadow-sm shrink-0">B</div>
+                              <span><strong>Both Weekend Days</strong> (Sat + Sun)</span>
+                          </li>
+                      </ul>
+                      <p className="text-xs text-red-500 mt-3 font-medium border-t border-red-100 pt-2">
+                          ❌ You cannot choose 2 Weekdays.
+                      </p>
+                  </div>
+              </div>
               : step === 1 ? "Please select the exact day you will have your first shift. It must be a Morning or Afternoon shift." 
-              : <span>Please select your standard shifts for the <strong>first 2 working weeks</strong> starting from your selected First Day.</span>
+              : <div className="space-y-4 text-left">
+                  <div>
+                      <p className="font-bold text-gray-900 text-lg">Fill in the gaps!</p>
+                      <p className="text-sm text-gray-600 mt-1 leading-relaxed">Your <strong>First Working Day</strong> and your <strong>AA Shifts</strong> (Fixed Days) are already set and locked.</p>
+                  </div>
+                  <div className="bg-green-50 p-4 rounded-xl border border-green-100 text-sm text-green-800 leading-relaxed shadow-sm">
+                      <strong className="block mb-1 text-green-900 uppercase text-xs tracking-wider">Goal:</strong> 
+                      Please select your remaining <strong>Standard Shifts</strong> to complete your schedule for the <strong>first 2 weeks</strong> of work.
+                  </div>
+                </div>
           } 
       />
 

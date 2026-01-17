@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, Pencil, User, MapPin, Save, Calendar, AlertCircle, Trash2, Plus, Hash } from 'lucide-react';
+import { X, Pencil, User, MapPin, Save, Calendar, AlertCircle, Trash2, Plus, Hash, Check } from 'lucide-react';
 import { format } from 'date-fns';
 import { supabase } from '../supabaseClient';
 import { Button } from './Button';
@@ -132,12 +132,12 @@ export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onC
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[95vh] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-0 md:p-4 animate-in fade-in">
+        <div className="bg-white md:rounded-2xl rounded-t-2xl shadow-2xl w-full max-w-5xl h-[95vh] md:max-h-[90vh] flex flex-col overflow-hidden">
             <div className="px-6 py-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
                 <div>
-                    <h3 className="font-bold text-xl text-gray-800 flex items-center gap-2">
-                        <Pencil className="w-5 h-5 text-purple-600" /> Edit Shopper Record
+                    <h3 className="font-bold text-lg md:text-xl text-gray-800 flex items-center gap-2">
+                        <Pencil className="w-5 h-5 text-purple-600" /> Edit Record
                     </h3>
                     <p className="text-sm text-gray-500">{shopper.name}</p>
                 </div>
@@ -146,7 +146,9 @@ export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onC
                 </button>
             </div>
             <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
-                <div className="w-full md:w-1/3 border-r bg-gray-50 p-6 overflow-y-auto space-y-4">
+                
+                {/* LEFT: PERSONAL DETAILS */}
+                <div className="w-full md:w-1/3 border-r bg-gray-50 p-6 overflow-y-auto space-y-4 shrink-0">
                     <div className="flex items-center gap-2 mb-2">
                        <User className="w-4 h-4 text-gray-500" />
                        <h4 className="font-bold text-gray-700 uppercase text-xs tracking-wider">Personal Details</h4>
@@ -269,8 +271,10 @@ export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onC
                         </div>
                     </div>
                 </div>
-                <div className="flex-1 p-6 overflow-hidden flex flex-col bg-white">
-                    <div className="flex justify-between items-center mb-4">
+
+                {/* RIGHT: SHIFT CONFIGURATION */}
+                <div className="flex-1 p-4 md:p-6 overflow-hidden flex flex-col bg-white">
+                    <div className="flex justify-between items-center mb-4 shrink-0">
                         <h4 className="font-bold text-gray-700 uppercase text-xs tracking-wider flex items-center gap-2">
                             <Calendar className="w-4 h-4" /> Shift Configuration
                         </h4>
@@ -280,12 +284,15 @@ export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onC
                           </span>
                         )}
                     </div>
-                    <div className="grid grid-cols-12 gap-2 text-[10px] uppercase font-bold text-gray-400 mb-2 px-3">
+                    
+                    {/* Desktop Header */}
+                    <div className="hidden md:grid grid-cols-12 gap-2 text-[10px] uppercase font-bold text-gray-400 mb-2 px-3 shrink-0">
                         <div className="col-span-3">Date</div>
                         <div className="col-span-3">Time</div>
                         <div className="col-span-4 text-center">Type Assignment</div>
                         <div className="col-span-2 text-right">Actions</div>
                     </div>
+
                     <div className="flex-1 overflow-y-auto space-y-2 pr-2 mb-4">
                         {shifts.length === 0 ? (
                             <div className="text-center py-12 text-gray-400 text-sm italic border-2 border-dashed rounded-xl bg-gray-50">
@@ -304,12 +311,16 @@ export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onC
                                       }
                                   }
 
+                                  const rowBg = shift.type === ShiftType.AA ? 'bg-red-50/30 border-red-100' : 'bg-white border-gray-100';
+                                  const rowHover = 'hover:border-gray-300';
+
                                   return (
-                                    <div key={shift.id || idx} className={`grid grid-cols-12 gap-2 items-center p-3 rounded-lg border transition-all ${shift.type === ShiftType.AA ? 'bg-red-50/30 border-red-100 text-red-700' : 'bg-white border-gray-100 hover:border-gray-300'}`}>
-                                        {/* Date Input */}
-                                        <div className="col-span-3">
+                                    <div key={shift.id || idx} className={`p-3 rounded-lg border transition-all ${rowBg} ${rowHover} flex flex-col md:grid md:grid-cols-12 md:gap-2 md:items-center`}>
+                                        
+                                        {/* Date Field */}
+                                        <div className="md:col-span-3 mb-2 md:mb-0">
                                             {dayName && (
-                                                <div className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider mb-0.5">
+                                                <div className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider mb-0.5 md:hidden">
                                                     {dayName}
                                                 </div>
                                             )}
@@ -317,16 +328,16 @@ export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onC
                                                 type="date"
                                                 value={shift.date}
                                                 onChange={(e) => handleLocalShiftUpdate(shift.id, 'date', e.target.value)}
-                                                className="w-full text-xs font-bold text-gray-800 bg-transparent border-b border-dashed border-gray-300 focus:border-purple-500 outline-none p-1"
+                                                className="w-full text-sm md:text-xs font-bold text-gray-800 bg-transparent border-b border-dashed border-gray-300 focus:border-purple-500 outline-none p-1"
                                             />
                                         </div>
                                         
-                                        {/* Time Select */}
-                                        <div className="col-span-3">
+                                        {/* Time Field */}
+                                        <div className="md:col-span-3 mb-3 md:mb-0">
                                             <select
                                                 value={shift.time}
                                                 onChange={(e) => handleLocalShiftUpdate(shift.id, 'time', e.target.value)}
-                                                className="w-full text-xs text-gray-500 bg-transparent border-b border-dashed border-gray-300 focus:border-purple-500 outline-none p-1"
+                                                className="w-full text-sm md:text-xs text-gray-500 bg-transparent border-b border-dashed border-gray-300 focus:border-purple-500 outline-none p-1"
                                             >
                                                 {SHIFT_TIMES.map(t => (
                                                     <option key={t} value={t}>{t.split('(')[0]}</option>
@@ -335,23 +346,27 @@ export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onC
                                         </div>
                                         
                                         {/* Type Toggles */}
-                                        <div className="col-span-4 flex justify-center">
+                                        <div className="md:col-span-4 flex justify-between md:justify-center items-center mb-2 md:mb-0">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase md:hidden">Type</span>
                                             <div className="flex bg-white rounded-lg border shadow-sm p-1">
-                                                <button onClick={() => handleLocalShiftUpdate(shift.id, 'type', ShiftType.STANDARD)} className={`px-3 py-1 rounded text-[10px] font-bold transition-all ${shift.type === ShiftType.STANDARD ? 'bg-green-100 text-green-700 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>Std</button>
-                                                <button onClick={() => handleLocalShiftUpdate(shift.id, 'type', ShiftType.AA)} className={`px-3 py-1 rounded text-[10px] font-bold transition-all ${shift.type === ShiftType.AA ? 'bg-red-100 text-red-700 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>AA</button>
+                                                <button onClick={() => handleLocalShiftUpdate(shift.id, 'type', ShiftType.STANDARD)} className={`px-4 md:px-3 py-1.5 md:py-1 rounded text-xs md:text-[10px] font-bold transition-all ${shift.type === ShiftType.STANDARD ? 'bg-green-100 text-green-700 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>Std</button>
+                                                <button onClick={() => handleLocalShiftUpdate(shift.id, 'type', ShiftType.AA)} className={`px-4 md:px-3 py-1.5 md:py-1 rounded text-xs md:text-[10px] font-bold transition-all ${shift.type === ShiftType.AA ? 'bg-red-100 text-red-700 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>AA</button>
                                             </div>
                                         </div>
                                         
-                                        {/* Delete */}
-                                        <div className="col-span-2 text-right">
-                                            <button onClick={() => handleRemoveShift(shift.id)} className="p-1.5 text-gray-300 hover:text-red-600 hover:bg-red-50 rounded transition-all" title="Remove Shift"><Trash2 className="w-4 h-4" /></button>
+                                        {/* Delete Action */}
+                                        <div className="md:col-span-2 text-right border-t md:border-t-0 pt-2 md:pt-0 mt-1 md:mt-0 flex justify-end">
+                                            <button onClick={() => handleRemoveShift(shift.id)} className="p-2 md:p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-all flex items-center gap-1" title="Remove Shift">
+                                                <span className="md:hidden text-xs font-bold">Remove</span> <Trash2 className="w-4 h-4" />
+                                            </button>
                                         </div>
                                     </div>
                                   );
                               })
                         )}
                     </div>
-                    <div className="space-y-4">
+                    
+                    <div className="space-y-4 shrink-0">
                         <div className={`transition-all duration-300 ${hasUnsavedShiftChanges ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none absolute bottom-0'}`}>
                             <Button onClick={handleSaveShiftConfiguration} fullWidth className="py-3 bg-orange-600 hover:bg-orange-700 shadow-lg text-white">
                                 <Save className="w-4 h-4 mr-2" /> Save Shift Configuration
@@ -364,11 +379,11 @@ export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onC
                                 <select value={newShiftTime} onChange={(e) => setNewShiftTime(e.target.value as ShiftTime)} className="flex-1 p-2 rounded-lg border text-sm outline-none focus:ring-2 focus:ring-green-500 bg-white">
                                     {SHIFT_TIMES.map(t => (<option key={t} value={t}>{t.split('(')[0]}</option>))}
                                 </select>
-                                <select value={newShiftType} onChange={(e) => setNewShiftType(e.target.value as ShiftType)} className="w-24 p-2 rounded-lg border text-sm outline-none focus:ring-2 focus:ring-green-500 bg-white">
+                                <select value={newShiftType} onChange={(e) => setNewShiftType(e.target.value as ShiftType)} className="w-full md:w-24 p-2 rounded-lg border text-sm outline-none focus:ring-2 focus:ring-green-500 bg-white">
                                     <option value={ShiftType.STANDARD}>Std</option>
                                     <option value={ShiftType.AA}>AA</option>
                                 </select>
-                                <Button onClick={handleAddShift} disabled={!newShiftDate} variant="secondary" className="px-4 py-2 text-xs">Add</Button>
+                                <Button onClick={handleAddShift} disabled={!newShiftDate} variant="secondary" className="px-4 py-2 text-xs h-10 md:h-auto">Add</Button>
                             </div>
                         </div>
                     </div>
