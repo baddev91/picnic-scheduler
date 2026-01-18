@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { format, isWeekend } from 'date-fns';
-import { Lock, Star, Check, Sun, Moon, Sunrise, Sunset, Ban, AlertCircle, Clock, CalendarX } from 'lucide-react';
+import { Lock, Star, Check, Sun, Moon, Sunrise, Sunset, Ban, AlertCircle, Clock, CalendarX, Plus } from 'lucide-react';
 import { ShiftTime, ShiftType, ShopperShift } from '../../types';
 import { SHIFT_TIMES, formatDateKey } from '../../constants';
 import { isRestViolation, isConsecutiveDaysViolation } from '../../utils/validation';
@@ -55,24 +55,46 @@ export const MobileCalendarList: React.FC<MobileCalendarListProps> = ({
          // Visual distinction for days that have AA or are FWD during Standard Step
          const isLockedDayContainer = mode === 'SHOPPER' && step === 2 && (status.aaShift || isFWD);
 
+         // Muted styles for headers in Step 3 if day is locked
          let headerBgClass = isWeekend(day) ? 'bg-red-50/50' : 'bg-gray-50/50';
+         let borderColor = 'border-gray-100';
+         let shadowColor = 'shadow-sm';
+
          if (isLockedDayContainer) {
-             if (isFWD) headerBgClass = 'bg-yellow-50 border-b border-yellow-100';
-             else if (status.aaShift) headerBgClass = 'bg-red-50 border-b border-red-100';
+             // In Step 3, make locked containers look neutral/finished
+             headerBgClass = 'bg-gray-100 text-gray-500'; 
+             borderColor = 'border-gray-200';
+             shadowColor = 'shadow-sm grayscale'; 
          }
 
          return (
-           <div key={dateKey} className={`bg-white rounded-2xl shadow-sm border overflow-hidden ${isLockedDayContainer ? (isFWD ? 'border-yellow-200 shadow-yellow-50' : 'border-red-200 shadow-red-50') : 'border-gray-100'}`}>
+           <div key={dateKey} className={`bg-white rounded-2xl ${shadowColor} border overflow-hidden ${borderColor}`}>
               {/* Header */}
               <div className={`px-4 py-3 flex justify-between items-center ${headerBgClass}`}>
                  <div className="flex items-center gap-3">
-                    <div className={`flex flex-col items-center justify-center w-12 h-12 rounded-xl border shadow-sm ${isWeekend(day) ? 'bg-white border-red-100 text-red-600' : 'bg-white border-gray-200 text-gray-700'}`}>
+                    <div className={`flex flex-col items-center justify-center w-12 h-12 rounded-xl border shadow-sm 
+                        ${isLockedDayContainer 
+                            ? 'bg-gray-50 border-gray-200 text-gray-400' 
+                            : isWeekend(day) ? 'bg-white border-red-100 text-red-600' : 'bg-white border-gray-200 text-gray-700'
+                        }`}>
                         <div className="text-[10px] font-bold uppercase tracking-wider">{format(day, 'EEE')}</div>
                         <div className="text-xl font-black leading-none">{format(day, 'd')}</div>
                     </div>
                     <div>
-                        <div className="text-sm font-bold text-gray-900">{format(day, 'MMMM yyyy')}</div>
-                        {isFWD && <div className="text-[10px] font-bold text-yellow-600 bg-yellow-100 px-2 py-0.5 rounded-full w-fit mt-1 flex items-center gap-1"><Star className="w-3 h-3 fill-yellow-600" /> First Working Day</div>}
+                        <div className={`text-sm font-bold ${isLockedDayContainer ? 'text-gray-500' : 'text-gray-900'}`}>{format(day, 'MMMM yyyy')}</div>
+                        
+                        {isFWD && (
+                            <div className={`text-[10px] font-bold px-2 py-0.5 rounded-full w-fit mt-1 flex items-center gap-1
+                                ${isLockedDayContainer ? 'bg-gray-200 text-gray-600' : 'text-yellow-600 bg-yellow-100'}
+                            `}>
+                                <Star className={`w-3 h-3 ${isLockedDayContainer ? 'fill-gray-600' : 'fill-yellow-600'}`} /> First Working Day
+                            </div>
+                        )}
+                        {status.aaShift && step === 2 && (
+                             <div className="text-[10px] font-bold bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full w-fit mt-1 flex items-center gap-1">
+                                 <Lock className="w-3 h-3" /> AA Day
+                             </div>
+                        )}
                     </div>
                  </div>
                  {isLockedDayContainer && (
@@ -118,10 +140,10 @@ export const MobileCalendarList: React.FC<MobileCalendarListProps> = ({
                             } else if (!isSelectedStd && !isSelectedAA) {
                                 if (isRestViolation(dateKey, shift, currentShopperShifts)) {
                                     isActionDisabled = true;
-                                    disabledReason = { text: '11h Rule', colorClass: 'text-rose-600 bg-rose-50 border-rose-100', icon: <Clock className="w-3 h-3" /> };
+                                    disabledReason = { text: '11h Rule', colorClass: 'text-gray-400 bg-gray-50 border-gray-200', icon: <Clock className="w-3 h-3" /> };
                                 } else if (isConsecutiveDaysViolation(dateKey, currentShopperShifts)) {
                                     isActionDisabled = true;
-                                    disabledReason = { text: 'Max 5 Days', colorClass: 'text-amber-600 bg-amber-50 border-amber-100', icon: <CalendarX className="w-3 h-3" /> };
+                                    disabledReason = { text: 'Max 5 Days', colorClass: 'text-gray-400 bg-gray-50 border-gray-200', icon: <CalendarX className="w-3 h-3" /> };
                                 }
                             }
                         }
@@ -134,18 +156,36 @@ export const MobileCalendarList: React.FC<MobileCalendarListProps> = ({
                     let contentOpacity = "opacity-100";
                     
                     if (isSelectedAA && !isFWDSelection) {
-                        buttonClass = "bg-red-500 border-red-600 text-white shadow-md shadow-red-200 ring-2 ring-red-500 ring-offset-1";
-                        iconClass = "bg-white/20 text-white";
+                        if (step === 2) {
+                            // Grey out AA in Step 3
+                            buttonClass = "bg-gray-100 border-gray-200 text-gray-500 cursor-default shadow-inner";
+                            iconClass = "bg-gray-200 text-gray-400";
+                        } else {
+                            // Bright Red in Step 1
+                            buttonClass = "bg-red-500 border-red-600 text-white shadow-md shadow-red-200 ring-2 ring-red-500 ring-offset-1";
+                            iconClass = "bg-white/20 text-white";
+                        }
                     } else if (isTheFWDSelection) {
-                         buttonClass = "bg-yellow-400 border-yellow-500 text-yellow-900 shadow-md shadow-yellow-200 ring-2 ring-yellow-400 ring-offset-1";
-                         iconClass = "bg-white/40 text-yellow-900";
+                         if (step === 2) {
+                             // Grey out FWD in Step 3
+                             buttonClass = "bg-gray-100 border-gray-200 text-gray-500 cursor-default shadow-inner";
+                             iconClass = "bg-gray-200 text-gray-400";
+                         } else {
+                             // Bright Yellow in Step 2
+                             buttonClass = "bg-yellow-400 border-yellow-500 text-yellow-900 shadow-md shadow-yellow-200 ring-2 ring-yellow-400 ring-offset-1";
+                             iconClass = "bg-white/40 text-yellow-900";
+                         }
                     } else if (isSelectedStd) {
                         buttonClass = "bg-green-600 border-green-700 text-white shadow-md shadow-green-200 ring-2 ring-green-600 ring-offset-1";
                         iconClass = "bg-white/20 text-white";
                     } else if (isActionDisabled) {
-                        // Better disabled state
                         buttonClass = "bg-white border-dashed border-gray-200 cursor-not-allowed";
                         contentOpacity = "opacity-40 grayscale";
+                    } else {
+                        // ** AVAILABLE AND CLICKABLE **
+                        // Make border slightly more visible and text clearly actionable
+                        buttonClass = "bg-white border-2 border-emerald-200 text-emerald-800 shadow-sm hover:border-emerald-400 hover:bg-emerald-50 active:scale-[0.98]";
+                        iconClass = "bg-emerald-50 text-emerald-600";
                     }
 
                     return (
@@ -160,26 +200,38 @@ export const MobileCalendarList: React.FC<MobileCalendarListProps> = ({
                         className={`relative flex items-center gap-3 p-3 rounded-xl border-2 transition-all duration-200 active:scale-[0.98] text-left overflow-hidden ${buttonClass}`}
                       >
                           <div className={`p-2 rounded-lg ${iconClass} ${contentOpacity}`}>
-                              {getShiftIcon(shift)}
+                              {step === 2 && (isSelectedAA || isTheFWDSelection) ? <Lock className="w-4 h-4" /> : getShiftIcon(shift)}
                           </div>
                           
                           <div className="flex-1 min-w-0 z-10">
                               <div className={`text-sm font-bold leading-tight truncate ${contentOpacity}`}>{label}</div>
                               
-                              {/* STATUS BADGE REPLACES TIME */}
                               {mode === 'SHOPPER' && disabledReason ? (
                                   <div className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border flex items-center gap-1 w-fit mt-1 shadow-sm ${disabledReason.colorClass}`}>
                                       {disabledReason.icon} {disabledReason.text}
                                   </div>
                               ) : (
-                                  <div className={`text-[10px] opacity-80 font-medium truncate ${contentOpacity}`}>{time}</div>
+                                  <div className={`text-[10px] opacity-80 font-medium truncate ${contentOpacity}`}>
+                                      {step === 2 && (isSelectedAA || isTheFWDSelection) ? 'Locked' : time}
+                                  </div>
                               )}
                           </div>
 
                           {/* Status Icons */}
-                          {isTheFWDSelection && <Star className="w-5 h-5 fill-white text-white absolute top-2 right-2 opacity-50" />}
+                          {isTheFWDSelection && step !== 2 && <Star className="w-5 h-5 fill-white text-white absolute top-2 right-2 opacity-50" />}
                           {isSelectedStd && !isTheFWDSelection && <Check className="w-5 h-5 text-white absolute top-2 right-2 opacity-50" />}
-                          {isLockedFWD && !isTheFWDSelection && <Lock className="w-4 h-4 absolute top-1/2 right-3 -translate-y-1/2 opacity-20" />}
+                          
+                          {/* AVAILABLE ICON (Plus) for Step 3 Available slots */}
+                          {!isSelectedStd && !isSelectedAA && !isActionDisabled && !isLockedDayContainer && step === 2 && (
+                              <div className="absolute top-1/2 right-3 -translate-y-1/2 opacity-20 text-emerald-600">
+                                  <Plus className="w-5 h-5" />
+                              </div>
+                          )}
+                          
+                          {/* Lock Icon Overlay for Step 3 */}
+                          {step === 2 && (isSelectedAA || isTheFWDSelection) && (
+                              <Lock className="w-4 h-4 absolute top-2 right-2 text-gray-400 opacity-50" />
+                          )}
                       </button>
                     );
                  })}

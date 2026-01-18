@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { format, isWeekend, isAfter, isBefore } from 'date-fns';
-import { ChevronLeft, ChevronRight, Lock, Star } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Lock, Star, CheckCircle2, Plus } from 'lucide-react';
 import { formatDateKey } from '../../constants';
 import { AdminAvailabilityMap } from '../../types';
 
@@ -75,22 +75,32 @@ export const DesktopCalendarGrid: React.FC<DesktopCalendarGridProps> = ({
           const aaLabel = status.aaShift ? getShiftLabel(status.aaShift.time) : null;
           const stdLabel = status.stdShift ? getShiftLabel(status.stdShift.time) : null;
           
-          // Determine if this day is effectively "Locked" for Standard Selection because it's AA or FWD
-          const isLockedForStandard = mode === 'SHOPPER' && !isFWDSelection && !isDisabled && (status.aaShift || status.isFirstWorkingDay);
+          // Step 3 Logic: Standard Selection Mode
+          const isStandardSelectionStep = mode === 'SHOPPER' && !isFWDSelection;
+          const isLockedForStandard = isStandardSelectionStep && !isDisabled && (status.aaShift || status.isFirstWorkingDay);
+          const isAvailableForStandard = isStandardSelectionStep && !isDisabled && !isLockedForStandard;
           
-          let cellBgClass = 'bg-white hover:bg-blue-50 cursor-pointer active:bg-blue-100';
-          if (isDisabled) cellBgClass = 'bg-gray-100';
-          else if (isFWDSelection && status.isFirstWorkingDay) cellBgClass = 'bg-yellow-50 ring-2 ring-inset ring-yellow-400';
-          else if (isLockedForStandard) {
-             // Distinct style for locked days in Standard Mode
-             if (status.isFirstWorkingDay) cellBgClass = 'bg-yellow-50/60 ring-2 ring-inset ring-yellow-200 cursor-default';
-             else if (status.aaShift) cellBgClass = 'bg-red-50/50 cursor-default ring-inset ring-1 ring-red-100';
+          let cellBgClass = 'bg-white';
+          
+          if (isDisabled) {
+              cellBgClass = 'bg-gray-100 cursor-default';
+          } else if (isFWDSelection && status.isFirstWorkingDay) {
+              cellBgClass = 'bg-yellow-50 ring-2 ring-inset ring-yellow-400';
+          } else if (isLockedForStandard) {
+             cellBgClass = 'bg-gray-50/80 cursor-default';
+          } else if (isAvailableForStandard) {
+             // ENHANCED VISIBILITY FOR CLICKABLE DAYS
+             // White background + Emerald Border + Shadow to suggest "Click me to fill"
+             cellBgClass = 'bg-white ring-inset ring-2 ring-emerald-100/70 hover:ring-emerald-300 shadow-sm cursor-pointer hover:bg-emerald-50/30 transition-all z-10';
+          } else {
+             // Default available (e.g. Admin or Step 1)
+             cellBgClass = 'bg-white hover:bg-blue-50 cursor-pointer';
           }
 
           return (
             <div 
               key={day.toISOString()} 
-              className={`min-h-[80px] md:min-h-[120px] relative transition-all flex flex-col p-1 md:p-2
+              className={`min-h-[80px] md:min-h-[120px] relative flex flex-col p-1 md:p-2 transition-all
                 ${cellBgClass}
                 ${!isCurrentMonth ? 'opacity-40' : ''}
               `}
@@ -101,26 +111,40 @@ export const DesktopCalendarGrid: React.FC<DesktopCalendarGridProps> = ({
               {/* First Working Day Indicator */}
               {status.isFirstWorkingDay && (
                 <div className="absolute top-1 right-1 md:top-2 md:left-2 md:right-auto z-10 pointer-events-none" title="First Working Day">
-                  <Star className="w-3 h-3 md:w-5 md:h-5 text-yellow-500 fill-yellow-500 drop-shadow-sm" />
+                  {isStandardSelectionStep ? (
+                      <Star className="w-3 h-3 md:w-4 md:h-4 text-gray-400 fill-gray-400" />
+                  ) : (
+                      <Star className="w-3 h-3 md:w-5 md:h-5 text-yellow-500 fill-yellow-500 drop-shadow-sm" />
+                  )}
                 </div>
               )}
               
               {/* Locked Indicator for Standard Step */}
               {isLockedForStandard && (
-                  <div className="absolute top-1 right-1 md:top-2 md:right-2 z-10 opacity-30">
-                      <Lock className="w-3 h-3 md:w-4 md:h-4 text-gray-500" />
+                  <div className="absolute top-1 right-1 md:top-2 md:right-2 z-10">
+                      <Lock className="w-3 h-3 md:w-4 md:h-4 text-gray-400 opacity-60" />
                   </div>
               )}
 
               {/* Day Number */}
-              <div className={`text-sm md:text-lg font-semibold mb-1 md:mb-2 ${isWeekendDay ? 'text-red-500' : 'text-gray-700'} ${isDisabled ? 'opacity-40' : ''} ${status.isFirstWorkingDay ? 'mr-3 md:mr-0 md:ml-6' : ''}`}>
+              <div className={`text-sm md:text-lg font-semibold mb-1 md:mb-2 
+                  ${isWeekendDay && !isLockedForStandard ? 'text-red-500' : 'text-gray-700'} 
+                  ${isDisabled ? 'opacity-40' : ''} 
+                  ${status.isFirstWorkingDay ? 'mr-3 md:mr-0 md:ml-6' : ''}
+                  ${isLockedForStandard ? 'text-gray-400' : ''}
+              `}>
                 {format(day, 'd')}
               </div>
               
               {/* Cell Content - Responsive View */}
               <div className="flex flex-col gap-1 flex-1">
                 {status.aaShift && aaLabel && !isFWDSelection && (
-                  <div className="p-0.5 md:px-2 md:py-1.5 bg-red-100 border border-red-200 text-red-800 rounded md:rounded-lg text-[9px] md:text-xs font-bold shadow-sm flex items-center justify-center md:justify-between">
+                  <div className={`p-0.5 md:px-2 md:py-1.5 border rounded md:rounded-lg text-[9px] md:text-xs font-bold shadow-sm flex items-center justify-center md:justify-between
+                      ${isStandardSelectionStep 
+                          ? 'bg-gray-100 border-gray-200 text-gray-500' // Neutral style for Step 3
+                          : 'bg-red-100 border-red-200 text-red-800' // Red style for Step 1
+                      }
+                  `}>
                     <span className="hidden md:inline">AA</span>
                     <span className="md:hidden">{aaLabel.mobile}</span>
                     <span className="hidden md:inline">{aaLabel.desktop}</span>
@@ -133,6 +157,13 @@ export const DesktopCalendarGrid: React.FC<DesktopCalendarGridProps> = ({
                     <span className="md:hidden">{stdLabel.mobile}</span>
                     <span className="hidden md:inline">{stdLabel.desktop}</span>
                   </div>
+                )}
+
+                {/* Available Indicator Hint (Only on hover/desktop for Step 3) */}
+                {isAvailableForStandard && !status.stdShift && (
+                    <div className="mt-auto text-center hidden md:flex items-center justify-center opacity-0 hover:opacity-100 text-emerald-400 transition-opacity">
+                        <Plus className="w-5 h-5" />
+                    </div>
                 )}
 
                 {/* FWD Selection Mode Indicators */}

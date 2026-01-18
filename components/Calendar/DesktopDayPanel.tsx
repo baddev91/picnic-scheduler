@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { format } from 'date-fns';
 import { X, Lock, Check, Star, Sun, Moon, Sunrise, Ban, AlertCircle, Clock, CalendarX, AlertTriangle } from 'lucide-react';
@@ -84,7 +85,7 @@ export const DesktopDayPanel: React.FC<DesktopDayPanelProps> = ({
 
         <div className="p-6 space-y-4 overflow-y-auto bg-white">
           {isLockedFWD && (
-             <div className="p-4 bg-yellow-50 text-yellow-800 text-sm rounded-xl border border-yellow-200 flex items-center gap-3 font-medium">
+             <div className="p-4 bg-gray-50 text-gray-500 text-sm rounded-xl border border-gray-200 flex items-center gap-3 font-medium">
                  <Lock className="w-5 h-5" /> This is your First Working Day. <br/>Go back to Step 2 to change it.
              </div>
           )}
@@ -118,10 +119,12 @@ export const DesktopDayPanel: React.FC<DesktopDayPanelProps> = ({
                      } else if (!isSelectedStd && !isSelectedAA) {
                          if (isRestViolation(dateKey, shift, currentShopperShifts)) {
                              isActionDisabled = true;
-                             disabledReason = { text: '11h Rest Rule', icon: <Clock className="w-3 h-3" />, colorClass: 'bg-rose-100 text-rose-700', borderClass: 'border-rose-200' };
+                             // NEUTRAL GREY for 11h
+                             disabledReason = { text: '11h Rest Rule', icon: <Clock className="w-3 h-3" />, colorClass: 'bg-gray-100 text-gray-400', borderClass: 'border-gray-200' };
                          } else if (isConsecutiveDaysViolation(dateKey, currentShopperShifts)) {
                              isActionDisabled = true;
-                             disabledReason = { text: 'Max 5 Days', icon: <CalendarX className="w-3 h-3" />, colorClass: 'bg-amber-100 text-amber-700', borderClass: 'border-amber-200' };
+                             // NEUTRAL GREY for 5 days
+                             disabledReason = { text: 'Max 5 Days', icon: <CalendarX className="w-3 h-3" />, colorClass: 'bg-gray-100 text-gray-400', borderClass: 'border-gray-200' };
                          }
                      }
                 }
@@ -176,7 +179,7 @@ export const DesktopDayPanel: React.FC<DesktopDayPanelProps> = ({
                     </button>
                   )}
 
-                  {/* STANDARD BUTTON - Enhanced Disabled State */}
+                  {/* STANDARD BUTTON - Enhanced Disabled State & Clickable Hint */}
                   {(mode === 'ADMIN' || step >= 1 || isFWDSelection) && (
                     <button
                       onClick={() => {
@@ -185,27 +188,30 @@ export const DesktopDayPanel: React.FC<DesktopDayPanelProps> = ({
                       }}
                       disabled={mode === 'SHOPPER' && isActionDisabled}
                       className={`relative w-full flex items-center justify-between px-5 py-3 rounded-2xl text-sm font-bold border-2 transition-all duration-200 ${
-                        // Case 1: FWD Selected (Yellow)
-                        (isFWDSelection && isSelectedAA && isFWD) 
-                          ? 'bg-yellow-400 border-yellow-500 text-yellow-900 shadow-lg shadow-yellow-100 ring-2 ring-yellow-400 ring-offset-2'
-                          : // Case 2: Standard Selected (Green)
-                            isSelectedStd 
-                             ? 'bg-green-600 border-green-700 text-white shadow-lg shadow-green-100 ring-2 ring-green-600 ring-offset-2'
-                             : // Case 3: Disabled (Reason specific styling)
-                               (mode === 'SHOPPER' && isActionDisabled && disabledReason)
-                               ? `bg-white border-dashed cursor-not-allowed ${disabledReason.borderClass}`
-                               : // Case 4: Available
-                                 `bg-white border-gray-100 text-gray-600 hover:bg-gray-50 active:scale-[0.98] ${isFWDSelection ? 'hover:border-yellow-300 hover:text-yellow-700' : 'hover:border-green-300 hover:text-green-700'}`
+                        // Case 1: AA/FWD Selected in Step 3 (Ghosted/Locked)
+                        (step === 2 && (isSelectedAA || (isFWDSelection && isSelectedAA && isFWD)))
+                          ? 'bg-gray-100 border-gray-200 text-gray-500 cursor-default shadow-inner'
+                          : // Case 2: FWD Selected in Step 2 (Highlighted Yellow)
+                            (isFWDSelection && isSelectedAA && isFWD) 
+                             ? 'bg-yellow-400 border-yellow-500 text-yellow-900 shadow-lg shadow-yellow-100 ring-2 ring-yellow-400 ring-offset-2'
+                             : // Case 3: Standard Selected (Green)
+                               isSelectedStd 
+                                ? 'bg-green-600 border-green-700 text-white shadow-lg shadow-green-100 ring-2 ring-green-600 ring-offset-2'
+                                : // Case 4: Disabled (Reason specific styling)
+                                  (mode === 'SHOPPER' && isActionDisabled && disabledReason)
+                                  ? `bg-white border-dashed cursor-not-allowed ${disabledReason.borderClass}`
+                                  : // Case 5: Available (Subtle Green Tint)
+                                    `bg-emerald-50/40 border-emerald-100/60 text-gray-600 hover:bg-green-50 active:scale-[0.98] ${isFWDSelection ? 'hover:border-yellow-300 hover:text-yellow-700' : 'hover:border-green-300 hover:text-green-700'}`
                       }`}
                     >
                        <div className={`flex items-center gap-3 ${isActionDisabled ? 'opacity-40' : ''}`}>
-                          <div className={`p-1.5 rounded-lg ${isSelectedStd || (isSelectedAA && isFWDSelection) ? 'bg-white/20' : 'bg-gray-100 text-gray-500'}`}>
-                             {getShiftIcon(shift)}
+                          <div className={`p-1.5 rounded-lg ${isSelectedStd || (isSelectedAA && isFWDSelection && step !== 2) ? 'bg-white/20' : 'bg-gray-100 text-gray-500'}`}>
+                             {step === 2 && isSelectedAA ? <Lock className="w-5 h-5" /> : getShiftIcon(shift)}
                           </div>
                           <div className="flex flex-col items-start">
                               <span className="text-sm">{shift.split('(')[0]}</span>
-                              <span className={`text-[10px] font-normal ${isSelectedStd ? 'text-green-100' : (isSelectedAA && isFWDSelection ? 'text-yellow-800' : 'text-gray-400')}`}>
-                                  {shift.match(/\((.*?)\)/)?.[1]}
+                              <span className={`text-[10px] font-normal ${isSelectedStd ? 'text-green-100' : (isSelectedAA && isFWDSelection && step !== 2 ? 'text-yellow-800' : 'text-gray-400')}`}>
+                                  {step === 2 && isSelectedAA ? 'Locked Shift' : shift.match(/\((.*?)\)/)?.[1]}
                               </span>
                           </div>
                        </div>
@@ -218,9 +224,16 @@ export const DesktopDayPanel: React.FC<DesktopDayPanelProps> = ({
                            </div>
                        )}
 
-                       {(isSelectedStd || (isFWDSelection && isSelectedAA && isFWD)) && (
+                       {(isSelectedStd || (isFWDSelection && isSelectedAA && isFWD)) && step !== 2 && (
                            <div className="bg-white/20 p-1 rounded-full">
                                {isFWDSelection ? <Star className="w-4 h-4 fill-current" /> : <Check className="w-4 h-4" />}
+                           </div>
+                       )}
+                       
+                       {/* Lock Icon for Step 3 AA/FWD */}
+                       {step === 2 && isSelectedAA && (
+                           <div className="text-gray-400">
+                               <Lock className="w-4 h-4" />
                            </div>
                        )}
                     </button>
