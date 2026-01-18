@@ -70,6 +70,7 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
   const [fwdCounts, setFwdCounts] = useState<Record<string, number>>({});
   const [showFWDConfirmModal, setShowFWDConfirmModal] = useState(false);
   const [pendingFWD, setPendingFWD] = useState<{ date: string; shift: ShiftTime } | null>(null);
+  const [isCheckingFWD, setIsCheckingFWD] = useState(false); // New Loading State
   
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [tempDetails, setTempDetails] = useState<ShopperDetails>(selections[0].details!);
@@ -239,9 +240,46 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
       setShowFWDConfirmModal(true);
   };
 
-  const confirmFWDSelection = () => {
+  const confirmFWDSelection = async () => {
       if (!pendingFWD) return;
+      
+      setIsCheckingFWD(true);
       const { date: dateStr, shift } = pendingFWD;
+
+      try {
+          // --- BUG FIX: REALTIME DB CHECK ---
+          // 1. Get all shoppers who have selected this date as their FWD
+          const { data: potentialConflicts } = await supabase
+              .from('shoppers')
+              .select('id')
+              .eq('details->>firstWorkingDay', dateStr);
+
+          if (potentialConflicts && potentialConflicts.length > 0) {
+              const conflictingIds = potentialConflicts.map(c => c.id);
+              
+              // 2. Count how many of them have this exact shift time
+              const { count } = await supabase
+                  .from('shifts')
+                  .select('*', { count: 'exact', head: true })
+                  .in('shopper_id', conflictingIds)
+                  .eq('date', dateStr)
+                  .eq('time', shift);
+
+              // 3. If count >= 5, STOP.
+              if (count !== null && count >= 5) {
+                  alert("Oops! This slot was just filled by another user. Please select a different time or day.");
+                  fetchFWDCounts(); // Refresh the UI counters
+                  setIsCheckingFWD(false);
+                  setShowFWDConfirmModal(false);
+                  return;
+              }
+          }
+      } catch (err) {
+          console.error("Availability check failed", err);
+          // In case of error, we proceed cautiously or alert. Proceeding for now to not block if offline.
+      }
+
+      // Proceed with local selection if check passed
       const existing = selections[0];
       const previousFWD = existing.details?.firstWorkingDay;
       const wasAA = existing.shifts.some(s => s.date === dateStr && s.time === shift && s.type === ShiftType.AA);
@@ -258,6 +296,7 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
       setStep(ShopperStep.STANDARD_SELECTION);
       setShowFWDConfirmModal(false);
       setPendingFWD(null);
+      setIsCheckingFWD(false);
   };
 
   const handleStandardShiftToggle = (dateStr: string, shift: ShiftTime, type: ShiftType) => {
@@ -500,10 +539,11 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
 
       <FWDConfirmationModal 
           isOpen={showFWDConfirmModal}
-          onClose={() => setShowFWDConfirmModal(false)}
+          onClose={() => !isCheckingFWD && setShowFWDConfirmModal(false)}
           onConfirm={confirmFWDSelection}
           date={pendingFWD?.date || null}
           shift={pendingFWD?.shift || null}
+          isChecking={isCheckingFWD}
       />
 
       <ShopperDetailsModal 

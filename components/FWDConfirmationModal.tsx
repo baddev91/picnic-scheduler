@@ -1,6 +1,7 @@
+
 import React from 'react';
 import { format } from 'date-fns';
-import { Calendar, Clock, ArrowRight } from 'lucide-react';
+import { Calendar, Clock, ArrowRight, Loader2 } from 'lucide-react';
 import { Button } from './Button';
 import { ShiftTime } from '../types';
 
@@ -10,6 +11,7 @@ interface FWDConfirmationModalProps {
   onConfirm: () => void;
   date: string | null;
   shift: ShiftTime | null;
+  isChecking?: boolean;
 }
 
 export const FWDConfirmationModal: React.FC<FWDConfirmationModalProps> = ({
@@ -17,7 +19,8 @@ export const FWDConfirmationModal: React.FC<FWDConfirmationModalProps> = ({
   onClose,
   onConfirm,
   date,
-  shift
+  shift,
+  isChecking = false
 }) => {
   if (!isOpen || !date || !shift) return null;
 
@@ -64,11 +67,19 @@ export const FWDConfirmationModal: React.FC<FWDConfirmationModalProps> = ({
         </div>
 
         <div className="p-4 bg-gray-50 border-t flex gap-3">
-            <Button onClick={onClose} variant="secondary" className="flex-1">
+            <Button onClick={onClose} variant="secondary" className="flex-1" disabled={isChecking}>
                 Cancel
             </Button>
-            <Button onClick={onConfirm} className="flex-[2] bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white border-none shadow-lg">
-                Confirm <ArrowRight className="w-4 h-4 ml-2" />
+            <Button 
+                onClick={onConfirm} 
+                disabled={isChecking}
+                className="flex-[2] bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white border-none shadow-lg"
+            >
+                {isChecking ? (
+                    <>Checking... <Loader2 className="w-4 h-4 ml-2 animate-spin" /></>
+                ) : (
+                    <>Confirm <ArrowRight className="w-4 h-4 ml-2" /></>
+                )}
             </Button>
         </div>
       </div>
