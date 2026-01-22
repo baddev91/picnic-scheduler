@@ -26,7 +26,12 @@ export const ShopperAAWizard: React.FC<ShopperAAWizardProps> = ({
   
   // Logic helpers
   const currentWeekdayCount = aaSelections.filter(s => s.dayIndex >= 1 && s.dayIndex <= 5).length;
-  const currentTotal = aaSelections.length;
+  
+  // UX FIX: Count only fully completed selections (Day + Time)
+  const completedCount = aaSelections.filter(s => s.time !== null).length;
+  
+  // We still track total 'cards' open to enforce the max 2 limit for picking days
+  const activeCardsCount = aaSelections.length;
 
   const isDayDisabled = (dayIndex: number) => {
       // 1. Check Cloud Template availability first
@@ -41,7 +46,7 @@ export const ShopperAAWizard: React.FC<ShopperAAWizardProps> = ({
       if (isSelected) return false; // Always allow deselecting
       
       // Rule: Max 2 Days Total
-      if (currentTotal >= 2) return true;
+      if (activeCardsCount >= 2) return true;
 
       // Rule: Max 1 Weekday
       const isWeekday = dayIndex >= 1 && dayIndex <= 5;
@@ -77,6 +82,7 @@ export const ShopperAAWizard: React.FC<ShopperAAWizardProps> = ({
   const renderDayCard = (dayIndex: number, label: string, isWeekend: boolean) => {
       const selection = aaSelections.find(s => s.dayIndex === dayIndex);
       const isSelected = !!selection;
+      const isTimeSelected = !!selection?.time;
       const disabled = isDayDisabled(dayIndex);
 
       return (
@@ -107,11 +113,14 @@ export const ShopperAAWizard: React.FC<ShopperAAWizardProps> = ({
                       </span>
                   </div>
                   <div className={`w-7 h-7 rounded-full flex items-center justify-center border transition-all duration-300 ${
-                      isSelected 
+                      isTimeSelected 
                         ? 'bg-red-500 border-red-500 text-white shadow-md shadow-red-200' 
-                        : 'bg-white border-gray-200 group-hover:border-red-300'
+                        : isSelected 
+                            ? 'bg-white border-red-200' 
+                            : 'bg-white border-gray-200 group-hover:border-red-300'
                   }`}>
-                      {isSelected && <CheckCircle2 className="w-4 h-4" />}
+                      {isTimeSelected && <CheckCircle2 className="w-4 h-4" />}
+                      {isSelected && !isTimeSelected && <div className="w-2 h-2 rounded-full bg-red-200 animate-pulse" />}
                   </div>
               </button>
 
@@ -125,7 +134,7 @@ export const ShopperAAWizard: React.FC<ShopperAAWizardProps> = ({
                       <div className="grid grid-cols-1 gap-2">
                           {SHIFT_TIMES.map(shift => {
                               const shiftDisabled = isShiftDisabled(dayIndex, shift);
-                              const isTimeSelected = selection.time === shift;
+                              const isShiftChosen = selection.time === shift;
                               const shiftName = shift.split('(')[0].trim();
                               const shiftHours = shift.match(/\((.*?)\)/)?.[1] || '';
                               
@@ -136,25 +145,25 @@ export const ShopperAAWizard: React.FC<ShopperAAWizardProps> = ({
                                       onClick={() => handleSetTime(dayIndex, shift)}
                                       className={`
                                           w-full text-left px-3 py-3 rounded-xl border transition-all flex items-center justify-between group/btn
-                                          ${isTimeSelected 
+                                          ${isShiftChosen 
                                               ? 'bg-red-500 text-white border-red-500 shadow-md shadow-red-200' 
                                               : shiftDisabled
-                                                  ? 'bg-gray-50 text-gray-300 border-transparent cursor-not-allowed'
+                                                  ? 'hidden' // Hide disabled AA shifts in wizard to reduce clutter
                                                   : 'bg-white text-gray-600 border-gray-100 hover:border-red-300 hover:bg-red-50/50'
                                           }
                                       `}
                                   >
                                       <div className="flex flex-col">
-                                          <span className={`text-sm font-bold leading-none ${isTimeSelected ? 'text-white' : (shiftDisabled ? 'text-gray-300' : 'text-gray-800')}`}>
+                                          <span className={`text-sm font-bold leading-none ${isShiftChosen ? 'text-white' : 'text-gray-800'}`}>
                                               {shiftName}
                                           </span>
-                                          <span className={`text-[10px] font-medium mt-1 tracking-wide ${isTimeSelected ? 'text-red-100' : 'text-gray-400'}`}>
+                                          <span className={`text-[10px] font-medium mt-1 tracking-wide ${isShiftChosen ? 'text-red-100' : 'text-gray-400'}`}>
                                               {shiftHours}
                                           </span>
                                       </div>
                                       
-                                      {isTimeSelected && <div className="bg-white/20 p-1 rounded-full"><CheckCircle2 className="w-3.5 h-3.5 text-white" /></div>}
-                                      {!isTimeSelected && !shiftDisabled && <Circle className="w-3.5 h-3.5 text-gray-200 group-hover/btn:text-red-300" />}
+                                      {isShiftChosen && <div className="bg-white/20 p-1 rounded-full"><CheckCircle2 className="w-3.5 h-3.5 text-white" /></div>}
+                                      {!isShiftChosen && <Circle className="w-3.5 h-3.5 text-gray-200 group-hover/btn:text-red-300" />}
                                   </button>
                               );
                           })}
@@ -183,10 +192,10 @@ export const ShopperAAWizard: React.FC<ShopperAAWizardProps> = ({
                       <p className="text-xs text-gray-500 font-medium mt-0.5">Select exactly 2 days.</p>
                   </div>
                   <div className={`px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 transition-all shadow-sm border ${
-                      currentTotal === 2 ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-500 border-gray-200'
+                      completedCount === 2 ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-500 border-gray-200'
                   }`}>
                       <CalendarRange className="w-4 h-4" />
-                      {currentTotal} / 2 Selected
+                      {completedCount} / 2 Selected
                   </div>
               </div>
           </div>
@@ -195,7 +204,7 @@ export const ShopperAAWizard: React.FC<ShopperAAWizardProps> = ({
               <div className="max-w-5xl mx-auto">
                   
                   {/* Info Banner - Softer Look */}
-                  {(currentTotal < 2) && (
+                  {(completedCount < 2) && (
                      <div className="mb-8 bg-blue-50/80 border border-blue-100 p-5 rounded-2xl flex gap-4 text-blue-900 text-sm animate-in fade-in shadow-sm">
                         <div className="bg-blue-100 p-2 rounded-lg h-fit text-blue-600">
                            <AlertCircle className="w-5 h-5" />
@@ -232,9 +241,9 @@ export const ShopperAAWizard: React.FC<ShopperAAWizardProps> = ({
               <div className="max-w-5xl mx-auto flex justify-center">
                   <Button 
                       onClick={handleAAWizardSubmit}
-                      disabled={currentTotal !== 2 || aaSelections.some(s => !s.time)}
+                      disabled={completedCount !== 2}
                       className={`w-full md:w-auto md:min-w-[320px] py-4 text-lg shadow-xl hover:-translate-y-1 transition-all duration-300 font-bold ${
-                        currentTotal === 2 && aaSelections.every(s => s.time) 
+                        completedCount === 2
                         ? 'shadow-red-200 hover:shadow-red-300' 
                         : 'opacity-50 cursor-not-allowed'
                       }`}
