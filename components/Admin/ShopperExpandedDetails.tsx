@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, MapPin, Sheet, Copy, FileSpreadsheet, Calendar, Star, CheckCircle, XCircle, Clock, AlertTriangle, X, Check, Globe } from 'lucide-react';
+import { User, MapPin, Sheet, Copy, FileSpreadsheet, Calendar, Star, CheckCircle, XCircle, Clock, AlertTriangle, X, Check, Globe, FileText, Save } from 'lucide-react';
 import { format } from 'date-fns';
+import { supabase } from '../../supabaseClient';
 import { ShopperRecord, ShiftType } from '../../types';
 import { 
     generateSpreadsheetRow, 
@@ -12,17 +13,26 @@ import {
 interface ShopperExpandedDetailsProps {
     shopper: ShopperRecord;
     onStatusUpdate?: (id: string, status: 'PENDING' | 'SHOWED_UP' | 'NO_SHOW') => void;
+    onUpdateShopper?: (shopper: ShopperRecord) => void;
 }
 
-export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ shopper, onStatusUpdate }) => {
+export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ shopper, onStatusUpdate, onUpdateShopper }) => {
     // Local state for confirmation flow
     const [pendingStatus, setPendingStatus] = useState<'PENDING' | 'SHOWED_UP' | 'NO_SHOW' | null>(null);
+    
+    // Notes State
+    const [notes, setNotes] = useState(shopper.details?.notes || '');
+    const [isSavingNotes, setIsSavingNotes] = useState(false);
+    const [noteSaved, setNoteSaved] = useState(false);
 
     // Reset pending status if shopper data updates externally
     useEffect(() => {
         setPendingStatus(null);
-    }, [shopper.details?.firstDayStatus]);
+        setNotes(shopper.details?.notes || '');
+    }, [shopper.details?.firstDayStatus, shopper.id]);
     
+    const hasNoteChanged = notes !== (shopper.details?.notes || '');
+
     // --- COPY HANDLERS (Local to the item) ---
     const handleCopyForSheet = (weekOffset: number) => {
         try {
@@ -56,6 +66,33 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
             alert(`Copied LS Inflow Data for ${shopper.name}!\n\nReady to paste.`);
         } catch(e: any) {
             alert("Clipboard error: " + e.message);
+        }
+    };
+
+    // --- NOTE SAVING ---
+    const handleSaveNote = async () => {
+        setIsSavingNotes(true);
+        try {
+            const newDetails = { ...shopper.details, notes: notes };
+            
+            const { error } = await supabase
+                .from('shoppers')
+                .update({ details: newDetails })
+                .eq('id', shopper.id);
+
+            if (error) throw error;
+
+            // Optimistic update via parent callback
+            if (onUpdateShopper) {
+                onUpdateShopper({ ...shopper, details: newDetails });
+            }
+            
+            setNoteSaved(true);
+            setTimeout(() => setNoteSaved(false), 2000);
+        } catch (err: any) {
+            alert("Failed to save note: " + err.message);
+        } finally {
+            setIsSavingNotes(false);
         }
     };
 
@@ -157,7 +194,7 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
                     </div>
                 </div>
 
-                {/* RIGHT COL: Shifts Grid */}
+                {/* RIGHT COL: Shifts Grid + Notes */}
                 <div className="col-span-2">
                     
                     {/* ATTENDANCE CHECK CONTROL */}
@@ -238,39 +275,81 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
                         </div>
                     )}
 
-                    <h4 className="font-bold text-gray-900 mb-3 flex items-center gap-2 text-sm"><Calendar className="w-4 h-4" /> All Selected Shifts ({(shopper.shifts || []).length})</h4>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                        {(shopper.shifts || []).length > 0 ? (
-                            [...(shopper.shifts || [])]
-                              .sort((a: any, b: any) => a.date.localeCompare(b.date))
-                              .map((shift: any, idx: number) => {
-                                  // Check if this is the First Working Day
-                                  const isFWD = shopper.details?.firstWorkingDay === shift.date;
-                                  
-                                  let styleClass = '';
-                                  if (isFWD) {
-                                      styleClass = 'bg-yellow-50 border-yellow-300 text-yellow-800 ring-1 ring-yellow-200';
-                                  } else if (shift.type === ShiftType.AA) {
-                                      styleClass = 'bg-red-50 border-red-100 text-red-700';
-                                  } else {
-                                      styleClass = 'bg-green-50 border-green-100 text-green-700';
-                                  }
+                    <div className="flex gap-6 flex-col lg:flex-row">
+                        <div className="flex-1">
+                            <h4 className="font-bold text-gray-900 mb-3 flex items-center gap-2 text-sm"><Calendar className="w-4 h-4" /> All Selected Shifts ({(shopper.shifts || []).length})</h4>
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                                {(shopper.shifts || []).length > 0 ? (
+                                    [...(shopper.shifts || [])]
+                                    .sort((a: any, b: any) => a.date.localeCompare(b.date))
+                                    .map((shift: any, idx: number) => {
+                                        // Check if this is the First Working Day
+                                        const isFWD = shopper.details?.firstWorkingDay === shift.date;
+                                        
+                                        let styleClass = '';
+                                        if (isFWD) {
+                                            styleClass = 'bg-yellow-50 border-yellow-300 text-yellow-800 ring-1 ring-yellow-200';
+                                        } else if (shift.type === ShiftType.AA) {
+                                            styleClass = 'bg-red-50 border-red-100 text-red-700';
+                                        } else {
+                                            styleClass = 'bg-green-50 border-green-100 text-green-700';
+                                        }
 
-                                  return (
-                                    <div key={idx} className={`relative p-2 rounded border text-xs flex flex-col justify-center ${styleClass}`}>
-                                        {isFWD && (
-                                            <div className="absolute top-1 right-1">
-                                                <Star className="w-3 h-3 fill-yellow-500 text-yellow-600" />
+                                        return (
+                                            <div key={idx} className={`relative p-2 rounded border text-xs flex flex-col justify-center ${styleClass}`}>
+                                                {isFWD && (
+                                                    <div className="absolute top-1 right-1">
+                                                        <Star className="w-3 h-3 fill-yellow-500 text-yellow-600" />
+                                                    </div>
+                                                )}
+                                                <div className="font-bold">{formatDateDisplay(shift.date)}</div>
+                                                <div className="truncate pr-4" title={shift.time}>
+                                                    {shift.time.split('(')[0]}
+                                                </div>
                                             </div>
-                                        )}
-                                        <div className="font-bold">{formatDateDisplay(shift.date)}</div>
-                                        <div className="truncate pr-4" title={shift.time}>
-                                            {shift.time.split('(')[0]}
-                                        </div>
+                                        );
+                                    })
+                                ) : <span className="text-gray-400 italic text-sm">No shifts selected</span>}
+                            </div>
+                        </div>
+
+                        {/* NEW CLEAN ADMIN NOTES DESIGN */}
+                        <div className="w-full lg:w-64 shrink-0 mt-4 lg:mt-0 flex flex-col">
+                             <div className="bg-white border border-gray-200 rounded-xl shadow-sm flex flex-col h-full overflow-hidden focus-within:ring-2 focus-within:ring-purple-500/10 focus-within:border-purple-300 transition-all">
+                                <div className="bg-gray-50/50 px-3 py-2 border-b border-gray-100 flex items-center justify-between">
+                                    <h5 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                                        <FileText className="w-3 h-3" /> Notes
+                                    </h5>
+                                    {hasNoteChanged && (
+                                        <span className="text-[10px] text-orange-500 font-bold animate-pulse">Unsaved</span>
+                                    )}
+                                </div>
+                                
+                                <textarea 
+                                    className="w-full flex-1 bg-white p-3 text-sm text-gray-700 placeholder:text-gray-300 outline-none resize-none min-h-[100px] leading-relaxed"
+                                    placeholder="Add specific instructions or observations here..."
+                                    value={notes}
+                                    onChange={(e) => setNotes(e.target.value)}
+                                />
+                                
+                                {hasNoteChanged && (
+                                    <div className="p-2 bg-gray-50 border-t border-gray-100 animate-in slide-in-from-bottom-2 fade-in">
+                                        <button 
+                                            onClick={handleSaveNote}
+                                            disabled={isSavingNotes}
+                                            className={`w-full py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm ${
+                                                noteSaved 
+                                                ? 'bg-green-500 text-white' 
+                                                : 'bg-gray-900 text-white hover:bg-black'
+                                            }`}
+                                        >
+                                            {noteSaved ? <Check className="w-3 h-3" /> : <Save className="w-3 h-3" />}
+                                            {noteSaved ? 'Saved' : 'Save Changes'}
+                                        </button>
                                     </div>
-                                  );
-                              })
-                        ) : <span className="text-gray-400 italic text-sm">No shifts selected</span>}
+                                )}
+                             </div>
+                        </div>
                     </div>
                 </div>
             </div>

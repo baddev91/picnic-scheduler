@@ -3,7 +3,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { AuditLogRecord } from '../types';
 import { format } from 'date-fns';
-import { History, RefreshCw, RotateCcw, Trash2, PlusCircle, Pencil, AlertCircle, ArrowLeft, CheckCircle2, CalendarDays, Clock, FileText } from 'lucide-react';
+import { History, RefreshCw, RotateCcw, Trash2, PlusCircle, Pencil, AlertCircle, ArrowLeft, CheckCircle2, CalendarDays, Clock, FileText, StickyNote } from 'lucide-react';
 import { Button } from './Button';
 
 interface AdminAuditLogProps {
@@ -168,6 +168,8 @@ export const AdminAuditLog: React.FC<AdminAuditLogProps> = ({ onBack }) => {
   const renderDiff = (log: AuditLogRecord) => {
       const name = log.new_data?.name || log.old_data?.name || 'Unknown';
       const pn = log.new_data?.details?.pnNumber || log.old_data?.details?.pnNumber || '';
+      const oldNotes = log.old_data?.details?.notes;
+      const newNotes = log.new_data?.details?.notes;
       
       let shiftBackupCount = 0;
       if (log.operation_type === 'DELETE') {
@@ -176,7 +178,7 @@ export const AdminAuditLog: React.FC<AdminAuditLogProps> = ({ onBack }) => {
       }
       
       return (
-          <div className="flex flex-col">
+          <div className="flex flex-col gap-1">
               <span className="font-bold text-gray-800 flex items-center gap-2 text-sm md:text-base">
                   {name}
                   {shiftBackupCount > 0 && (
@@ -189,10 +191,21 @@ export const AdminAuditLog: React.FC<AdminAuditLogProps> = ({ onBack }) => {
               
               <div className="mt-1 text-xs text-gray-500">
                   {log.operation_type === 'UPDATE' && log.old_data && log.new_data && (
-                      <div className="flex flex-col md:flex-row gap-1 md:gap-2">
+                      <div className="flex flex-col gap-1">
                            {log.old_data.name !== log.new_data.name && <span>Name changed.</span>}
-                           {JSON.stringify(log.old_data.details) !== JSON.stringify(log.new_data.details) && <span>Details updated.</span>}
+                           {JSON.stringify(log.old_data.details) !== JSON.stringify(log.new_data.details) && !newNotes && <span>Details updated.</span>}
+                           {/* Note Specific Update */}
+                           {oldNotes !== newNotes && (
+                               <span className="flex items-center gap-1 text-yellow-600 font-bold bg-yellow-50 px-1.5 py-0.5 rounded w-fit">
+                                   <StickyNote className="w-3 h-3" /> Note updated
+                               </span>
+                           )}
                       </div>
+                  )}
+                  {log.operation_type === 'DELETE' && oldNotes && (
+                      <span className="flex items-center gap-1 text-gray-400 mt-1">
+                          <StickyNote className="w-3 h-3" /> Note included in backup
+                      </span>
                   )}
               </div>
           </div>
@@ -308,7 +321,7 @@ export const AdminAuditLog: React.FC<AdminAuditLogProps> = ({ onBack }) => {
           <div>
               <strong>Deep Restore Enabled:</strong>
               <p className="mt-1 opacity-90 leading-relaxed text-xs md:text-sm">
-                  Hold button for 1.5s to restore. The system recovers <strong>Profile + Shifts</strong>.
+                  Hold button for 1.5s to restore. The system recovers <strong>Profile + Shifts + Notes</strong>.
               </p>
           </div>
       </div>

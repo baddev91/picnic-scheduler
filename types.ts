@@ -36,6 +36,7 @@ export interface ShopperDetails {
   firstWorkingDay?: string; // YYYY-MM-DD
   pnNumber?: string; // e.g. PN123456
   firstDayStatus?: 'PENDING' | 'SHOWED_UP' | 'NO_SHOW'; // New Attendance Tracking
+  notes?: string; // NEW: Admin Notes
 }
 
 export interface ShopperData {

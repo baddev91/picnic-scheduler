@@ -208,6 +208,11 @@ export const AdminDataView: React.FC = () => {
       }
   };
 
+  // --- UPDATE SHOPPER GENERIC (Used for Notes) ---
+  const handleUpdateShopper = (updatedShopper: ShopperRecord) => {
+      setData(prev => prev.map(s => s.id === updatedShopper.id ? updatedShopper : s));
+  };
+
   // --- DRAG AND DROP ---
   const onDragStart = (e: React.DragEvent, index: number, group: string, id: string) => {
       dragItem.current = { index, group };
@@ -334,7 +339,7 @@ export const AdminDataView: React.FC = () => {
 
   // --- CSV Export ---
   const downloadCSV = () => {
-    const headers = ['Name', 'PN Number', 'Registered At', 'First Working Day', 'Attendance Status', 'Bus', 'Randstad', 'Address', 'AA Pattern', 'Shift Details'];
+    const headers = ['Name', 'PN Number', 'Registered At', 'First Working Day', 'Attendance Status', 'Bus', 'Randstad', 'Address', 'AA Pattern', 'Notes', 'Shift Details'];
     const rows = filteredData.map(item => {
       const shiftSummary = item.shifts.map(s => {
           // Replace internal enum 'Always Available' with 'Agreed Availability' for display
@@ -345,10 +350,13 @@ export const AdminDataView: React.FC = () => {
       const aaShifts = item.shifts.filter(s => s.type === ShiftType.AA);
       const aaPattern = aaShifts.length ? Array.from(new Set(aaShifts.map(s => `${format(new Date(s.date), 'EEE')} ${s.time.split('(')[0]}`))).join(' & ') : 'None';
       
+      // Escape quotes in notes
+      const notes = item.details?.notes ? item.details.notes.replace(/"/g, '""') : '';
+
       return [
         `"${item.name}"`, `"${item.details?.pnNumber || ''}"`, `"${format(new Date(item.created_at), 'yyyy-MM-dd HH:mm')}"`,
         `"${item.details?.firstWorkingDay || ''}"`, `"${item.details?.firstDayStatus || 'PENDING'}"`, item.details?.usePicnicBus ? 'Yes' : 'No', item.details?.isRandstad ? 'Yes' : 'No',
-        `"${item.details?.address || ''}"`, `"${aaPattern}"`, `"${shiftSummary}"`
+        `"${item.details?.address || ''}"`, `"${aaPattern}"`, `"${notes}"`, `"${shiftSummary}"`
       ].join(',');
     });
     const blob = new Blob([[headers.join(','), ...rows].join('\n')], { type: 'text/csv;charset=utf-8;' });
@@ -706,6 +714,7 @@ export const AdminDataView: React.FC = () => {
                                                 <ShopperExpandedDetails 
                                                     shopper={item} 
                                                     onStatusUpdate={handleStatusUpdate}
+                                                    onUpdateShopper={handleUpdateShopper} // NEW CALLBACK
                                                 />
                                             </td>
                                         </tr>
@@ -788,6 +797,7 @@ export const AdminDataView: React.FC = () => {
                                      <ShopperExpandedDetails 
                                         shopper={item} 
                                         onStatusUpdate={handleStatusUpdate}
+                                        onUpdateShopper={handleUpdateShopper}
                                      />
                                  </div>
                              )}

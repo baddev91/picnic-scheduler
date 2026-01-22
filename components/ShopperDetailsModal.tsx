@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { X, Bus, Shirt, Heart, AlertCircle, User } from 'lucide-react';
 import { Button } from './Button';
@@ -34,18 +35,48 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
 
   const validateAndSubmit = () => {
       setError(null);
+      
+      // 1. Bus Check
       if (tempDetails.usePicnicBus === null) {
           setError("Please select how you will travel to work.");
           return;
       }
+      
+      // 2. Civil Status Check
       if (!tempDetails.civilStatus) {
           setError("Please select your Civil Status.");
           return;
       }
+      
+      // 3. Gender Check
       if (!tempDetails.gender) {
           setError("Please select your Gender.");
           return;
       }
+
+      // 4. Address Validation (Randstad Only)
+      if (tempDetails.isRandstad) {
+          const addr = (tempDetails.address || '').trim();
+          
+          if (!addr) {
+              setError("Address is required for Randstad candidates.");
+              return;
+          }
+
+          // Heuristic: 
+          // 1. Length > 8 (avoids simple postcodes like "1234 AB")
+          // 2. Has digit (House number)
+          // 3. Has space (Street vs Number vs City separator)
+          const hasNumber = /\d/.test(addr);
+          const hasSpace = addr.includes(' ');
+          const isLongEnough = addr.length > 8;
+
+          if (!hasNumber || !hasSpace || !isLongEnough) {
+              setError("Please enter a FULL Address (Street, House Number, City).");
+              return;
+          }
+      }
+
       handleDetailsSubmit();
   };
 
@@ -71,8 +102,8 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
                </label>
                
                {error && (
-                   <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-sm text-red-600 font-medium">
-                       <AlertCircle className="w-4 h-4" /> {error}
+                   <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-sm text-red-600 font-medium animate-pulse">
+                       <AlertCircle className="w-4 h-4 shrink-0" /> <span>{error}</span>
                    </div>
                )}
 
@@ -190,29 +221,34 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
                        id="randstad"
                        checked={tempDetails.isRandstad}
                        onChange={(e) => setTempDetails(prev => ({ ...prev, isRandstad: e.target.checked }))}
-                       className="w-5 h-5 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                       className="w-5 h-5 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
                     />
-                    <label htmlFor="randstad" className="font-bold text-gray-800">
+                    <label htmlFor="randstad" className="font-bold text-gray-800 cursor-pointer select-none">
                        Registered via Randstad?
                     </label>
                 </div>
                 
                 {tempDetails.isRandstad && (
-                    <div className="animate-in slide-in-from-top-2">
-                        <label className="text-xs text-gray-500 mb-1 block">Home Address (Required for Taxi)</label>
+                    <div className="animate-in slide-in-from-top-2 p-4 bg-orange-50/50 rounded-xl border border-orange-100">
+                        <label className="text-xs font-bold text-orange-700 uppercase tracking-wider mb-2 block">Home Address</label>
                         <input 
                             value={tempDetails.address}
                             onChange={(e) => setTempDetails(prev => ({ ...prev, address: e.target.value }))}
-                            placeholder="Street, Number, City"
-                            className="w-full p-3 bg-white border-2 border-orange-100 rounded-xl outline-none focus:border-orange-500"
+                            placeholder="Coolsingel 40, Rotterdam"
+                            className="w-full p-3 bg-white border-2 border-orange-100 rounded-xl outline-none focus:border-orange-500 focus:ring-4 focus:ring-orange-100 transition-all text-sm font-medium"
                         />
+                        <p className="text-[10px] text-orange-600 mt-2 flex items-start gap-1">
+                            <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
+                            Please enter the full address including street name, house number and city.
+                        </p>
                     </div>
                 )}
             </div>
          </div>
 
          <div className="p-4 border-t bg-gray-50">
-            <Button onClick={validateAndSubmit} fullWidth disabled={tempDetails.isRandstad && !tempDetails.address}>
+            {/* Removed the 'disabled' condition to allow validation feedback on click */}
+            <Button onClick={validateAndSubmit} fullWidth>
                Save Profile
             </Button>
          </div>
