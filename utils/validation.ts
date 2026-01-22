@@ -37,14 +37,19 @@ export const calculateMinStartDate = (nationality: string | undefined): Date => 
     // If no nationality selected (shouldn't happen in flow), default to standard
     if (!nationality) return getShopperMinDate();
 
-    // Check if EU
+    // 1. Special Rule: Ukraine -> 7 Working Days
+    if (nationality === 'Ukraine' || nationality.includes('Ukraine')) {
+        return addBusinessDays(startOfDay(new Date()), 7);
+    }
+
+    // 2. Check if EU/European (Standard Rule)
     const isEuropean = EUROPEAN_COUNTRIES.includes(nationality) || EUROPEAN_COUNTRIES.some(c => nationality.includes(c));
 
     if (isEuropean) {
         // Standard Rule: Today + 3 Days
         return getShopperMinDate();
     } else {
-        // Non-EU Rule: Today + 5 WORKING Days
+        // 3. Non-EU Rule: Today + 5 WORKING Days
         return addBusinessDays(startOfDay(new Date()), 5);
     }
 };
