@@ -228,7 +228,10 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
       }
 
       const existingDetails = selections[0].details;
-      const newShopperData = { name: shopperName, shifts: newShifts, details: existingDetails };
+      // RESET FWD: Ensure First Working Day is cleared when recreating the schedule base (AA)
+      const newDetails = { ...existingDetails, firstWorkingDay: undefined };
+
+      const newShopperData = { name: shopperName, shifts: newShifts, details: newDetails };
       
       setSelections([newShopperData]);
       setStep(ShopperStep.FWD_SELECTION);
@@ -247,8 +250,6 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
       const { date: dateStr, shift } = pendingFWD;
 
       // --- 1. LOCAL RULE CHECK: 11h REST VIOLATION ---
-      // We must check if the proposed FWD conflicts with ANY existing AA shifts that were generated in Step 1.
-      // Specifically: FWD (Afternoon) -> AA (Next Day Morning) is a violation.
       const currentShifts = selections[0].shifts;
       
       if (isRestViolation(dateStr, shift, currentShifts)) {
