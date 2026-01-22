@@ -46,6 +46,16 @@ export const getShopperAllowedRange = () => {
   return { start, end };
 };
 
+export const EUROPEAN_COUNTRIES = [
+    "Albania", "Andorra", "Austria", "Belarus", "Belgium", "Bosnia and Herzegovina", 
+    "Bulgaria", "Croatia", "Cyprus", "Czech Republic", "Denmark", "Estonia", "Finland", 
+    "France", "Germany", "Greece", "Hungary", "Iceland", "Ireland", "Italy", "Kosovo", 
+    "Latvia", "Liechtenstein", "Lithuania", "Luxembourg", "Malta", "Moldova", "Monaco", 
+    "Montenegro", "Netherlands", "North Macedonia", "Norway", "Poland", "Portugal", 
+    "Romania", "Russia", "San Marino", "Serbia", "Slovakia", "Slovenia", "Spain", 
+    "Sweden", "Switzerland", "Ukraine", "United Kingdom", "Vatican City"
+];
+
 export const DEFAULT_BUS_CONFIG: BusConfig = [
   {
     id: 'rotterdam_cs',

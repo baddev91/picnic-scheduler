@@ -19,6 +19,7 @@ interface UseCalendarLogicProps {
   currentShopperShifts: ShopperShift[];
   firstWorkingDay?: string;
   adminAvailability: AdminAvailabilityMap;
+  minDateOverride?: Date; // NEW PROP
 }
 
 export const useCalendarLogic = ({
@@ -27,14 +28,16 @@ export const useCalendarLogic = ({
   isFWDSelection,
   currentShopperShifts,
   firstWorkingDay,
-  adminAvailability
+  adminAvailability,
+  minDateOverride
 }: UseCalendarLogicProps) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
 
   // Constants / Memos
   const allowedRange = useMemo(() => getShopperAllowedRange(), []);
-  const minShopperDate = useMemo(() => getShopperMinDate(), []);
+  // Use override if present, else fallback to standard logic
+  const minShopperDate = useMemo(() => minDateOverride || getShopperMinDate(), [minDateOverride]);
   const today = startOfDay(new Date());
 
   const daysInMonth = useMemo(() => {
@@ -87,7 +90,7 @@ export const useCalendarLogic = ({
         
         if (isAfter(date, limitDate)) return true;
     } 
-    // 2. Otherwise use generic min date (Today+3) for earlier steps
+    // 2. Otherwise use generic min date (dynamic based on nationality or static)
     else {
         if (isBefore(date, minShopperDate)) return true;
     }
@@ -128,6 +131,11 @@ export const useCalendarLogic = ({
            const limitDate = endOfWeek(addWeeks(fwdDate, 1), { weekStartsOn: 1 });
            if (isBefore(limitDate, rangeEnd)) {
                rangeEnd = limitDate;
+           }
+       } else {
+           // If we are choosing FWD (Step 1 or 0), respect minShopperDate
+           if (isAfter(minShopperDate, rangeStart)) {
+               rangeStart = minShopperDate;
            }
        }
 

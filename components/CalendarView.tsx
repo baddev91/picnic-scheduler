@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { ShiftTime, ShiftType, ShopperShift, AdminAvailabilityMap } from '../types';
 import { useCalendarLogic } from '../hooks/useCalendarLogic';
@@ -16,6 +17,7 @@ interface CalendarViewProps {
   onAdminToggle?: (date: string, shift: ShiftTime, type: ShiftType) => void;
   onShopperToggle?: (date: string, shift: ShiftTime, type: ShiftType) => void;
   onSetFirstWorkingDay?: (date: string) => void;
+  minDate?: Date; // NEW: Allow external override for minimum date
 }
 
 export const CalendarView: React.FC<CalendarViewProps> = ({
@@ -29,6 +31,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   onAdminToggle,
   onShopperToggle,
   onSetFirstWorkingDay,
+  minDate
 }) => {
   const {
     currentDate,
@@ -50,7 +53,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     isFWDSelection,
     currentShopperShifts,
     firstWorkingDay,
-    adminAvailability
+    adminAvailability,
+    minDateOverride: minDate // Pass it down
   });
 
   return (

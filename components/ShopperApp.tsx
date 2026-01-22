@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { ShiftTime, ShiftType, ShopperData, AdminAvailabilityMap, ShopperDetails, ShopperStep, BusConfig, ShopperShift, AppMode } from '../types';
 import { SHIFT_TIMES, formatDateKey, getShopperAllowedRange, getShopperMinDate } from '../constants';
 import { Button } from './Button';
@@ -12,7 +12,7 @@ import { ShopperAAWizard } from './ShopperAAWizard';
 import { ShopperSummary } from './ShopperSummary';
 import { ShopperDetailsModal } from './ShopperDetailsModal';
 import { FWDConfirmationModal } from './FWDConfirmationModal';
-import { getSafeDateFromKey, isRestViolation, isConsecutiveDaysViolation, validateShopperRange } from '../utils/validation';
+import { getSafeDateFromKey, isRestViolation, isConsecutiveDaysViolation, validateShopperRange, calculateMinStartDate } from '../utils/validation';
 
 interface ShopperAppProps {
   shopperName: string;
@@ -443,6 +443,11 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
       setShowDetailsModal(true);
   };
 
+  // Dynamic Date Constraint Calculation
+  const computedMinDate = useMemo(() => {
+      return calculateMinStartDate(selections[0].details?.nationality);
+  }, [selections[0].details?.nationality]);
+
   // Render Logic
   const data = selections[0];
 
@@ -576,7 +581,17 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
                         </div>
                      </div>
                   </div>
-                  <CalendarView mode="SHOPPER" step={1} isFWDSelection={true} adminAvailability={adminAvailability} currentShopperShifts={data.shifts} firstWorkingDay={data.details?.firstWorkingDay} onShopperToggle={handleFWDSelection} fwdCounts={fwdCounts} />
+                  <CalendarView 
+                      mode="SHOPPER" 
+                      step={1} 
+                      isFWDSelection={true} 
+                      adminAvailability={adminAvailability} 
+                      currentShopperShifts={data.shifts} 
+                      firstWorkingDay={data.details?.firstWorkingDay} 
+                      onShopperToggle={handleFWDSelection} 
+                      fwdCounts={fwdCounts}
+                      minDate={computedMinDate} // Pass calculated min date
+                  />
               </div>
           )}
           {step === ShopperStep.STANDARD_SELECTION && (
@@ -596,7 +611,15 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
                         </div>
                      </div>
                   </div>
-                  <CalendarView mode="SHOPPER" step={2} adminAvailability={adminAvailability} currentShopperShifts={data.shifts} firstWorkingDay={data.details?.firstWorkingDay} onShopperToggle={handleStandardShiftToggle} />
+                  <CalendarView 
+                      mode="SHOPPER" 
+                      step={2} 
+                      adminAvailability={adminAvailability} 
+                      currentShopperShifts={data.shifts} 
+                      firstWorkingDay={data.details?.firstWorkingDay} 
+                      onShopperToggle={handleStandardShiftToggle}
+                      minDate={computedMinDate} // Pass calculated min date
+                  />
               </div>
           )}
       </div>

@@ -1,6 +1,7 @@
-import { addDays, isAfter, endOfWeek, addWeeks, format } from 'date-fns';
+
+import { addDays, isAfter, endOfWeek, addWeeks, format, isWeekend, startOfDay } from 'date-fns';
 import { ShiftTime, ShiftType, ShopperShift } from '../types';
-import { formatDateKey } from '../constants';
+import { formatDateKey, EUROPEAN_COUNTRIES, getShopperMinDate } from '../constants';
 
 // Helper to parse date key safely
 export const getSafeDateFromKey = (dateStr: string): Date => {
@@ -16,6 +17,39 @@ export const calculateGloveSize = (clothingSize: string): string => {
   };
   return map[clothingSize] || '8 (M)';
 };
+
+// --- START DATE LOGIC ---
+
+// Helper to add N business days to a date
+const addBusinessDays = (startDate: Date, daysToAdd: number): Date => {
+    let count = 0;
+    let currentDate = startDate;
+    while (count < daysToAdd) {
+        currentDate = addDays(currentDate, 1);
+        if (!isWeekend(currentDate)) {
+            count++;
+        }
+    }
+    return currentDate;
+};
+
+export const calculateMinStartDate = (nationality: string | undefined): Date => {
+    // If no nationality selected (shouldn't happen in flow), default to standard
+    if (!nationality) return getShopperMinDate();
+
+    // Check if EU
+    const isEuropean = EUROPEAN_COUNTRIES.includes(nationality) || EUROPEAN_COUNTRIES.some(c => nationality.includes(c));
+
+    if (isEuropean) {
+        // Standard Rule: Today + 3 Days
+        return getShopperMinDate();
+    } else {
+        // Non-EU Rule: Today + 5 WORKING Days
+        return addBusinessDays(startOfDay(new Date()), 5);
+    }
+};
+
+// --- VALIDATION RULES ---
 
 export const isRestViolation = (dateStr: string, newTime: ShiftTime, currentShifts: ShopperShift[]): boolean => {
   const earlyShifts = [ShiftTime.OPENING, ShiftTime.MORNING];
