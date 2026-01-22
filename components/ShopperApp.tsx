@@ -246,9 +246,20 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
       setIsCheckingFWD(true);
       const { date: dateStr, shift } = pendingFWD;
 
+      // --- 1. LOCAL RULE CHECK: 11h REST VIOLATION ---
+      // We must check if the proposed FWD conflicts with ANY existing AA shifts that were generated in Step 1.
+      // Specifically: FWD (Afternoon) -> AA (Next Day Morning) is a violation.
+      const currentShifts = selections[0].shifts;
+      
+      if (isRestViolation(dateStr, shift, currentShifts)) {
+          alert("Rest Rule Violation: The shift you selected is too close to your next AA shift (less than 11 hours break). Please select a different start time or day.");
+          setIsCheckingFWD(false);
+          setShowFWDConfirmModal(false);
+          return;
+      }
+
       try {
-          // --- BUG FIX: REALTIME DB CHECK ---
-          // 1. Get all shoppers who have selected this date as their FWD
+          // --- 2. REMOTE CHECK: CAPACITY ---
           const { data: potentialConflicts } = await supabase
               .from('shoppers')
               .select('id')
@@ -257,7 +268,6 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
           if (potentialConflicts && potentialConflicts.length > 0) {
               const conflictingIds = potentialConflicts.map(c => c.id);
               
-              // 2. Count how many of them have this exact shift time
               const { count } = await supabase
                   .from('shifts')
                   .select('*', { count: 'exact', head: true })
@@ -265,7 +275,6 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
                   .eq('date', dateStr)
                   .eq('time', shift);
 
-              // 3. If count >= 5, STOP.
               if (count !== null && count >= 5) {
                   alert("Oops! This slot was just filled by another user. Please select a different time or day.");
                   fetchFWDCounts(); // Refresh the UI counters
@@ -276,7 +285,6 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
           }
       } catch (err) {
           console.error("Availability check failed", err);
-          // In case of error, we proceed cautiously or alert. Proceeding for now to not block if offline.
       }
 
       // Proceed with local selection if check passed
