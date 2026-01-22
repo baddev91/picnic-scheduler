@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { CalendarRange, CheckCircle2, Circle, Lock, AlertCircle, Clock } from 'lucide-react';
 import { Button } from './Button';
 import { ShiftTime, ShiftType, WeeklyTemplate } from '../types';
@@ -32,6 +32,18 @@ export const ShopperAAWizard: React.FC<ShopperAAWizardProps> = ({
   
   // We still track total 'cards' open to enforce the max 2 limit for picking days
   const activeCardsCount = aaSelections.length;
+
+  // Animation State
+  const [animateHeader, setAnimateHeader] = useState(false);
+
+  // Trigger animation when count changes
+  useEffect(() => {
+      if (completedCount > 0) {
+          setAnimateHeader(true);
+          const timer = setTimeout(() => setAnimateHeader(false), 300);
+          return () => clearTimeout(timer);
+      }
+  }, [completedCount]);
 
   const isDayDisabled = (dayIndex: number) => {
       // 1. Check Cloud Template availability first
@@ -191,10 +203,16 @@ export const ShopperAAWizard: React.FC<ShopperAAWizardProps> = ({
                       <h2 className="text-xl font-black text-gray-900 tracking-tight">AA Pattern</h2>
                       <p className="text-xs text-gray-500 font-medium mt-0.5">Select exactly 2 days.</p>
                   </div>
-                  <div className={`px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 transition-all shadow-sm border ${
-                      completedCount === 2 ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-500 border-gray-200'
+                  
+                  {/* ANIMATED COUNTER BADGE */}
+                  <div className={`px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 transition-all duration-300 shadow-sm border ${
+                      animateHeader 
+                        ? 'scale-110 bg-red-100 text-red-800 border-red-300 ring-4 ring-red-100' // Pop Effect
+                        : completedCount === 2 
+                            ? 'bg-green-50 text-green-700 border-green-200' 
+                            : 'bg-gray-50 text-gray-500 border-gray-200'
                   }`}>
-                      <CalendarRange className="w-4 h-4" />
+                      <CalendarRange className={`w-4 h-4 ${animateHeader ? 'animate-pulse' : ''}`} />
                       {completedCount} / 2 Selected
                   </div>
               </div>
