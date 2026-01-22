@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, MapPin, Sheet, Copy, FileSpreadsheet, Calendar, Star, CheckCircle, XCircle, Clock, AlertTriangle, X, Check } from 'lucide-react';
+import { User, MapPin, Sheet, Copy, FileSpreadsheet, Calendar, Star, CheckCircle, XCircle, Clock, AlertTriangle, X, Check, Globe } from 'lucide-react';
 import { format } from 'date-fns';
 import { ShopperRecord, ShiftType } from '../../types';
 import { 
@@ -96,6 +96,13 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
                 <div className="space-y-3 text-sm text-gray-600 md:border-r md:pr-6">
                     <h4 className="font-bold text-gray-900 flex items-center gap-2"><User className="w-4 h-4" /> Personal Details</h4>
                     <div className="grid grid-cols-2 gap-2">
+                        {/* Nationality Display */}
+                        <div className="col-span-2 flex items-center gap-2 bg-white p-2 rounded border border-gray-100 shadow-sm mb-2">
+                             <Globe className="w-4 h-4 text-blue-500" />
+                             <span className="text-gray-500 text-xs uppercase font-bold tracking-wider">Nationality:</span>
+                             <strong className="text-gray-900">{shopper.details?.nationality || 'N/A'}</strong>
+                        </div>
+
                         <span>Clothing: <strong>{shopper.details?.clothingSize}</strong></span>
                         <span>Shoes: <strong>{shopper.details?.shoeSize}</strong></span>
                         <span>Gloves: <strong>{shopper.details?.gloveSize}</strong></span>

@@ -5,7 +5,7 @@ import { SHIFT_TIMES, formatDateKey, getShopperAllowedRange, getShopperMinDate }
 import { Button } from './Button';
 import { CalendarView } from './CalendarView';
 import { MobileInstructionModal } from './MobileInstructionModal';
-import { User, PlayCircle, CheckCircle, ArrowRight, Layers, CalendarCheck } from 'lucide-react';
+import { User, PlayCircle, CheckCircle, ArrowRight, Layers, CalendarCheck, Globe2, Flag } from 'lucide-react';
 import { addDays, getDay, endOfWeek, addWeeks, isBefore } from 'date-fns';
 import { supabase } from '../supabaseClient';
 import { ShopperAAWizard } from './ShopperAAWizard';
@@ -24,6 +24,36 @@ interface ShopperAppProps {
 
 const STORAGE_KEY = 'picnic_shopper_session';
 
+// Common nationalities for quick selection
+const TOP_NATIONALITIES = [
+    { code: 'NL', name: 'Netherlands', flag: '🇳🇱' },
+    { code: 'PL', name: 'Poland', flag: '🇵🇱' },
+    { code: 'TR', name: 'Turkey', flag: '🇹🇷' },
+    { code: 'RO', name: 'Romania', flag: '🇷🇴' },
+    { code: 'BG', name: 'Bulgaria', flag: '🇧🇬' },
+    { code: 'ES', name: 'Spain', flag: '🇪🇸' },
+    { code: 'IT', name: 'Italy', flag: '🇮🇹' },
+    { code: 'PT', name: 'Portugal', flag: '🇵🇹' },
+    { code: 'UA', name: 'Ukraine', flag: '🇺🇦' },
+];
+
+const ALL_COUNTRIES = [
+    "Afghanistan", "Albania", "Algeria", "Argentina", "Armenia", "Australia", "Austria", "Azerbaijan",
+    "Bangladesh", "Belarus", "Belgium", "Bosnia and Herzegovina", "Brazil", "Bulgaria",
+    "Canada", "China", "Colombia", "Croatia", "Cyprus", "Czech Republic",
+    "Denmark", "Egypt", "Estonia", "Ethiopia", "Finland", "France",
+    "Georgia", "Germany", "Ghana", "Greece", "Hungary", "India", "Indonesia", "Iran", "Iraq", "Ireland", "Israel", "Italy",
+    "Japan", "Jordan", "Kazakhstan", "Kenya", "Latvia", "Lebanon", "Lithuania", "Luxembourg",
+    "Malaysia", "Malta", "Mexico", "Moldova", "Morocco",
+    "Netherlands", "New Zealand", "Nigeria", "North Macedonia", "Norway",
+    "Pakistan", "Philippines", "Poland", "Portugal",
+    "Romania", "Russia",
+    "Saudi Arabia", "Serbia", "Singapore", "Slovakia", "Slovenia", "Somalia", "South Africa", "South Korea", "Spain", "Sri Lanka", "Sudan", "Sweden", "Switzerland", "Syria",
+    "Thailand", "Tunisia", "Turkey",
+    "Ukraine", "United Arab Emirates", "United Kingdom", "United States", "Uzbekistan",
+    "Venezuela", "Vietnam", "Yemen"
+];
+
 export const ShopperApp: React.FC<ShopperAppProps> = ({
   shopperName,
   adminAvailability,
@@ -35,9 +65,9 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
   const [step, setStep] = useState<ShopperStep>(() => {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
-          try { return JSON.parse(saved).step || ShopperStep.AA_SELECTION; } catch(e) {}
+          try { return JSON.parse(saved).step ?? ShopperStep.NATIONALITY_SELECTION; } catch(e) {}
       }
-      return ShopperStep.AA_SELECTION;
+      return ShopperStep.NATIONALITY_SELECTION;
   });
 
   const [selections, setSelections] = useState<ShopperData[]>(() => {
@@ -52,6 +82,7 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
           name: shopperName, 
           shifts: [], 
           details: { 
+              nationality: '', // Initialize empty
               usePicnicBus: null, civilStatus: '', gender: '', clothingSize: 'M', 
               shoeSize: '40', gloveSize: '8 (M)', isRandstad: false, address: '' 
           } 
@@ -111,8 +142,18 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
     fetchFWDCounts();
     // Scroll reset on step change
     setTimeout(() => { if (flowScrollContainerRef.current) flowScrollContainerRef.current.scrollTop = 0; window.scrollTo(0, 0); }, 50);
-    if (viewMode === 'FLOW') setShowMobileInstructions(true);
+    if (viewMode === 'FLOW' && step > 0) setShowMobileInstructions(true);
   }, [step, viewMode]);
+
+  // --- SAFETY CHECK: Force Nationality Selection if missing ---
+  useEffect(() => {
+      if (step > ShopperStep.NATIONALITY_SELECTION) {
+          const currentNat = selections[0].details?.nationality;
+          if (!currentNat) {
+              setStep(ShopperStep.NATIONALITY_SELECTION);
+          }
+      }
+  }, [step, selections]);
 
   // --- LOGIC: Calculate Total Shifts (FWD + AA + Standard) in the valid 2-week range ---
   const currentData = selections[0];
@@ -174,6 +215,12 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
       setFwdCounts(counts);
   };
 
+  const handleNationalitySubmit = (nationality: string) => {
+      const existing = selections[0];
+      setSelections([{ ...existing, details: { ...existing.details, nationality } as ShopperDetails }]);
+      setStep(ShopperStep.AA_SELECTION);
+  };
+
   const handleAAWizardSubmit = () => {
       // Validation: Must select exactly 2 days
       if (aaSelections.length !== 2) { 
@@ -228,7 +275,7 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
       }
 
       const existingDetails = selections[0].details;
-      // RESET FWD: Ensure First Working Day is cleared when recreating the schedule base (AA)
+      // Preserve nationality, reset FWD
       const newDetails = { ...existingDetails, firstWorkingDay: undefined };
 
       const newShopperData = { name: shopperName, shifts: newShifts, details: newDetails };
@@ -347,7 +394,14 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
   };
 
   const handleDetailsSubmit = () => {
-    const updated = { ...selections[0], details: { ...selections[0].details, ...tempDetails } };
+    // Preserve existing details (including nationality) and merge with tempDetails
+    const updated = { 
+        ...selections[0], 
+        details: { 
+            ...selections[0].details, 
+            ...tempDetails 
+        } 
+    };
     setSelections([updated]);
     setStep(ShopperStep.DETAILS); // Track internal step
     setShowDetailsModal(false);
@@ -379,6 +433,16 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
     } catch (error: any) { setSyncStatus('error'); alert(`Failed: ${error.message}`); } finally { setIsSyncing(false); }
   };
 
+  // Helper to safely open details modal with fresh state
+  const openDetailsModal = () => {
+      // CRITICAL: Refresh tempDetails with the most recent selections before opening
+      // This ensures 'nationality' and other fields saved in previous steps are present in the form state
+      if (selections[0].details) {
+          setTempDetails(selections[0].details);
+      }
+      setShowDetailsModal(true);
+  };
+
   // Render Logic
   const data = selections[0];
 
@@ -386,7 +450,11 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
       return (
           <ShopperSummary 
               shopper={data} isSyncing={isSyncing} syncStatus={syncStatus}
-              setShowDetailsModal={setShowDetailsModal} handleSubmitData={handleSubmitData}
+              setShowDetailsModal={(show) => {
+                  if (show) openDetailsModal();
+                  else setShowDetailsModal(false);
+              }} 
+              handleSubmitData={handleSubmitData}
               handleClearSession={onExit} setMode={(m) => { if (m === AppMode.SHOPPER_FLOW) setViewMode('FLOW'); }}
               busConfig={busConfig}
           />
@@ -412,21 +480,83 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
             </button>
             {shopperName}
           </h2>
-          <div className="flex items-center gap-2 text-xs font-bold mt-1">
-             <span className={`px-3 py-1 rounded-full transition-all ${getStepBadgeClass(0)}`}>1. AA Shifts</span>
-             <div className="w-4 h-0.5 bg-gray-200"></div>
-             <span className={`px-3 py-1 rounded-full transition-all ${getStepBadgeClass(1)}`}>2. Start Date</span>
-             <div className="w-4 h-0.5 bg-gray-200"></div>
-             <span className={`px-3 py-1 rounded-full transition-all ${getStepBadgeClass(2)}`}>3. Standard</span>
-          </div>
+          
+          {/* STEPPER NAV (Hidden in Step 0) */}
+          {step > 0 && (
+              <div className="flex items-center gap-2 text-xs font-bold mt-1 animate-in slide-in-from-top-1 fade-in">
+                 <span className={`px-3 py-1 rounded-full transition-all ${getStepBadgeClass(1)}`}>1. AA Shifts</span>
+                 <div className="w-4 h-0.5 bg-gray-200"></div>
+                 <span className={`px-3 py-1 rounded-full transition-all ${getStepBadgeClass(2)}`}>2. Start Date</span>
+                 <div className="w-4 h-0.5 bg-gray-200"></div>
+                 <span className={`px-3 py-1 rounded-full transition-all ${getStepBadgeClass(3)}`}>3. Standard</span>
+              </div>
+          )}
+          {step === 0 && (
+              <div className="flex items-center gap-2 text-xs font-bold mt-1 text-gray-400">
+                  Setup Profile
+              </div>
+          )}
         </div>
-        <div className="hidden md:flex gap-4 text-xs font-medium text-gray-500">
-             <span>Selected AA: <strong className="text-red-600">{aaSelections.length}</strong></span>
-             <span>Selected Standard: <strong className="text-green-600">{stdCount}</strong></span>
-        </div>
+        
+        {step > 0 && (
+            <div className="hidden md:flex gap-4 text-xs font-medium text-gray-500">
+                 <span>Selected AA: <strong className="text-red-600">{aaSelections.length}</strong></span>
+                 <span>Selected Standard: <strong className="text-green-600">{stdCount}</strong></span>
+            </div>
+        )}
       </div>
 
       <div ref={flowScrollContainerRef} className="flex-1 overflow-y-auto">
+          {/* STEP 0: NATIONALITY SELECTION */}
+          {step === ShopperStep.NATIONALITY_SELECTION && (
+              <div className="p-4 md:p-8 animate-in slide-in-from-right duration-300">
+                  <div className="max-w-2xl mx-auto space-y-8">
+                      <div className="text-center space-y-2">
+                          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                              <Globe2 className="w-8 h-8 text-blue-600" />
+                          </div>
+                          <h2 className="text-2xl font-black text-gray-900">Where are you from?</h2>
+                          <p className="text-gray-500">Please select your nationality to proceed.</p>
+                      </div>
+
+                      {/* QUICK PICK GRID */}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                          {TOP_NATIONALITIES.map((nation) => (
+                              <button
+                                  key={nation.code}
+                                  onClick={() => handleNationalitySubmit(nation.name)}
+                                  className="flex flex-col items-center justify-center p-6 bg-white border-2 border-gray-100 hover:border-blue-500 hover:bg-blue-50 hover:shadow-lg rounded-2xl transition-all group"
+                              >
+                                  <span className="text-4xl mb-2 filter drop-shadow-sm group-hover:scale-110 transition-transform duration-200">{nation.flag}</span>
+                                  <span className="font-bold text-gray-700 group-hover:text-blue-700">{nation.name}</span>
+                              </button>
+                          ))}
+                      </div>
+
+                      {/* DIVIDER */}
+                      <div className="relative">
+                          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200"></div></div>
+                          <div className="relative flex justify-center"><span className="bg-gray-50 px-2 text-xs text-gray-400 font-bold uppercase">Or select other</span></div>
+                      </div>
+
+                      {/* DROPDOWN */}
+                      <div className="bg-white p-4 rounded-xl border shadow-sm">
+                           <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">All Countries</label>
+                           <select 
+                              onChange={(e) => {
+                                  if (e.target.value) handleNationalitySubmit(e.target.value);
+                              }}
+                              className="w-full p-4 bg-gray-50 border-2 border-transparent rounded-xl font-bold text-gray-700 outline-none focus:border-blue-500 focus:bg-white transition-all appearance-none cursor-pointer"
+                              defaultValue=""
+                           >
+                               <option value="" disabled>Tap to select country...</option>
+                               {ALL_COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+                           </select>
+                      </div>
+                  </div>
+              </div>
+          )}
+
           {step === ShopperStep.AA_SELECTION && (
               <ShopperAAWizard 
                   savedCloudTemplate={savedCloudTemplate} 
@@ -495,7 +625,7 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
                       <Button variant="secondary" onClick={() => setStep(ShopperStep.FWD_SELECTION)} className="px-6 border-gray-200">
                           Back
                       </Button>
-                      <Button onClick={() => setShowDetailsModal(true)} className="flex-1 shadow-xl hover:shadow-2xl hover:-translate-y-0.5 transition-all bg-gray-900 hover:bg-black text-white py-3.5 rounded-xl flex items-center justify-center gap-2">
+                      <Button onClick={openDetailsModal} className="flex-1 shadow-xl hover:shadow-2xl hover:-translate-y-0.5 transition-all bg-gray-900 hover:bg-black text-white py-3.5 rounded-xl flex items-center justify-center gap-2">
                           <CalendarCheck className="w-5 h-5" /> Review & Finish <ArrowRight className="w-4 h-4" />
                       </Button>
                   </div>
@@ -507,9 +637,9 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
       <MobileInstructionModal 
           isOpen={showMobileInstructions} 
           onClose={() => setShowMobileInstructions(false)} 
-          step={step === 0 ? 'AA' : step === 1 ? 'FWD' : 'STANDARD'} 
-          title={step === 0 ? 'Set your 2 Fixed Days (AA)' : step === 1 ? 'When do you start?' : 'Select Your Shifts'} 
-          message={step === 0 
+          step={step === 1 ? 'AA' : step === 2 ? 'FWD' : 'STANDARD'} 
+          title={step === 1 ? 'Set your 2 Fixed Days (AA)' : step === 2 ? 'When do you start?' : 'Select Your Shifts'} 
+          message={step === 1 
               ? <div className="space-y-4 text-left">
                   <div>
                       <p className="font-bold text-gray-900">What are AA Shifts?</p>
@@ -532,7 +662,7 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
                       </p>
                   </div>
               </div>
-              : step === 1 ? "Please select the exact day you will have your first shift. It must be a Morning or Afternoon shift." 
+              : step === 2 ? "Please select the exact day you will have your first shift. It must be a Morning or Afternoon shift." 
               : <div className="space-y-4 text-left">
                   <div>
                       <p className="font-bold text-gray-900 text-lg">Fill in the gaps!</p>

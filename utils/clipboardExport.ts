@@ -164,7 +164,7 @@ const getHRRowValues = (shopper: ShopperRecord): string[] => {
       gender,                                       // Col G: Gender (Updated)
       normalizedStatus,                             // Col H: Marital status
       address,                                      // Col I: Address
-      '',                                           // Col J: Nationality
+      shopper.details?.nationality || '',           // Col J: Nationality (MAPPED)
       shopper.details?.clothingSize || '',          // Col K: Shirt Size
       shopper.details?.shoeSize || '',              // Col L: Shoes Size
       shopper.details?.usePicnicBus ? 'TRUE' : 'FALSE', // Col M: Picnic bus?

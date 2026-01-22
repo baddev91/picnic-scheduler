@@ -1,5 +1,4 @@
 
-
 export enum ShiftTime {
   OPENING = 'Opening (04:00 - 13:00)',
   MORNING = 'Morning (06:00 - 15:00)',
@@ -25,6 +24,7 @@ export interface ShopperShift {
 }
 
 export interface ShopperDetails {
+  nationality?: string; // New Field
   usePicnicBus: boolean | null; // Changed to allow null for explicit selection requirement
   civilStatus: string;
   gender?: string; // New field for Gender (Male, Female, N/D)
@@ -72,10 +72,11 @@ export enum AppMode {
 }
 
 export enum ShopperStep {
-  AA_SELECTION = 0,
-  FWD_SELECTION = 1, // New Step: First Working Day Selection
-  STANDARD_SELECTION = 2,
-  DETAILS = 3
+  NATIONALITY_SELECTION = 0, // New First Step
+  AA_SELECTION = 1,
+  FWD_SELECTION = 2, 
+  STANDARD_SELECTION = 3,
+  DETAILS = 4
 }
 
 export enum AdminWizardStep {
