@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { supabase } from '../supabaseClient';
-import { Download, Search, RefreshCw, SaveAll, Copy, FileSpreadsheet, Check, Sun, Sunset, Bell, ArrowUpCircle, Pencil, Trash2, ChevronDown, ChevronUp, CalendarRange, Clock, AlertCircle, Users, ArrowRight, Calendar } from 'lucide-react';
+import { Download, Search, RefreshCw, SaveAll, Copy, FileSpreadsheet, Check, Sun, Sunset, Bell, ArrowUpCircle, Pencil, Trash2, ChevronDown, ChevronUp, CalendarRange, Clock, AlertCircle, Users, ArrowRight, Calendar, Sunrise, Moon } from 'lucide-react';
 import { format, startOfWeek, parseISO, isValid, addWeeks, addDays } from 'date-fns';
 import { ShopperRecord, ShiftType } from '../types';
 import { AdminHeatmap } from './AdminHeatmap';
@@ -14,7 +14,7 @@ import {
     generateBulkHRSpreadsheetRow
 } from '../utils/clipboardExport';
 
-type ViewMode = 'SESSION' | 'START_DATE';
+type ViewMode = 'SESSION' | 'FWD_SHIFT';
 
 // Helper to determine session key based on 12:30 cutoff (Submission Time)
 const getSessionGroupKey = (createdAt: string) => {
@@ -29,20 +29,33 @@ const getSessionGroupKey = (createdAt: string) => {
     return `${dateStr}_${suffix}`;
 };
 
-// Helper to determine start week key (Start Date)
-const getStartDateGroupKey = (firstWorkingDay?: string) => {
-    if (!firstWorkingDay) return '9999-99-99_NO_DATE'; // Fallback for missing dates
+// Helper to determine FWD + Shift Key
+const getFWDGroupKey = (shopper: ShopperRecord) => {
+    const fwd = shopper.details?.firstWorkingDay;
+    if (!fwd) return '9999-99-99_NO_DATE';
     
-    try {
-        const date = parseISO(firstWorkingDay);
-        if (!isValid(date)) return '9999-99-99_INVALID';
+    // Find the shift object corresponding to the First Working Day
+    const fwdShift = shopper.shifts.find(s => s.date === fwd);
+    
+    if (!fwdShift) return `${fwd}_UNKNOWN_SHIFT`;
 
-        // Get the Monday of that week
-        const monday = startOfWeek(date, { weekStartsOn: 1 });
-        return format(monday, 'yyyy-MM-dd');
-    } catch (e) {
-        return '9999-99-99_ERROR';
-    }
+    // Extract shift name (e.g., "Morning", "Afternoon") and normalize
+    // We add a numeric prefix to ensure Morning sorts before Afternoon in standard string sort if needed
+    // Opening (04:00) -> 0
+    // Morning (06:00) -> 1
+    // Noon (12:55) -> 2
+    // Afternoon (14:55) -> 3
+    let sortIndex = 9;
+    const timeStr = fwdShift.time;
+    
+    if (timeStr.includes('Opening')) sortIndex = 0;
+    else if (timeStr.includes('Morning')) sortIndex = 1;
+    else if (timeStr.includes('Noon')) sortIndex = 2;
+    else if (timeStr.includes('Afternoon')) sortIndex = 3;
+
+    const simpleName = timeStr.split('(')[0].trim().toUpperCase().replace(' ', '_');
+    
+    return `${fwd}_${sortIndex}_${simpleName}`;
 };
 
 export const AdminDataView: React.FC = () => {
@@ -67,6 +80,9 @@ export const AdminDataView: React.FC = () => {
 
   // Copy Feedback State
   const [copyFeedback, setCopyFeedback] = useState<Record<string, boolean>>({});
+
+  // Refs for Scroll to Today Logic
+  const groupRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // Use a ref to track the ID of the shopper currently being edited
   // This allows fetchData to update the modal content without stale closures
@@ -155,7 +171,7 @@ export const AdminDataView: React.FC = () => {
       
       const itemsNotInGroup = data.filter(d => {
           if (viewMode === 'SESSION') return getSessionGroupKey(d.created_at) !== groupKey;
-          return getStartDateGroupKey(d.details?.firstWorkingDay) !== groupKey;
+          return getFWDGroupKey(d) !== groupKey;
       });
       setData([...itemsNotInGroup, ...newGroupItems]);
       dragItem.current.index = overIdx;
@@ -257,7 +273,12 @@ export const AdminDataView: React.FC = () => {
   const downloadCSV = () => {
     const headers = ['Name', 'PN Number', 'Registered At', 'First Working Day', 'Bus', 'Randstad', 'Address', 'AA Pattern', 'Shift Details'];
     const rows = filteredData.map(item => {
-      const shiftSummary = item.shifts.map(s => `${s.date} (${s.time.split('(')[0].trim()} - ${s.type})`).join('; ');
+      const shiftSummary = item.shifts.map(s => {
+          // Replace internal enum 'Always Available' with 'Agreed Availability' for display
+          const displayType = s.type === ShiftType.AA ? 'Agreed Availability' : s.type;
+          return `${s.date} (${s.time.split('(')[0].trim()} - ${displayType})`;
+      }).join('; ');
+      
       const aaShifts = item.shifts.filter(s => s.type === ShiftType.AA);
       const aaPattern = aaShifts.length ? Array.from(new Set(aaShifts.map(s => `${format(new Date(s.date), 'EEE')} ${s.time.split('(')[0]}`))).join(' & ') : 'None';
       
@@ -283,7 +304,7 @@ export const AdminDataView: React.FC = () => {
         if (viewMode === 'SESSION') {
             key = getSessionGroupKey(item.created_at);
         } else {
-            key = getStartDateGroupKey(item.details?.firstWorkingDay);
+            key = getFWDGroupKey(item);
         }
 
         if (!groups[key]) groups[key] = [];
@@ -291,6 +312,31 @@ export const AdminDataView: React.FC = () => {
     });
     return groups;
   }, [filteredData, viewMode]);
+
+  // --- AUTO SCROLL TO TODAY EFFECT ---
+  useEffect(() => {
+    if (viewMode === 'FWD_SHIFT') {
+        const todayStr = format(new Date(), 'yyyy-MM-dd');
+        // Get all keys available in the view
+        const keys = Object.keys(groupedData);
+        
+        // Find keys that are today or in the future
+        // Keys start with YYYY-MM-DD
+        const futureKeys = keys.filter(k => k.substring(0, 10) >= todayStr);
+        
+        // Sort them ascending (closest to today first) to find the nearest upcoming group
+        futureKeys.sort();
+        
+        // Pick the closest one
+        const targetKey = futureKeys[0];
+
+        if (targetKey && groupRefs.current[targetKey]) {
+            setTimeout(() => {
+                groupRefs.current[targetKey]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 300); // 300ms delay to ensure rendering is stable
+        }
+    }
+  }, [viewMode, groupedData]);
 
   const formatHeaderDisplay = (groupKey: string) => {
       if (viewMode === 'SESSION') {
@@ -307,20 +353,50 @@ export const AdminDataView: React.FC = () => {
               chipCount: isMorning ? 'bg-white text-orange-700 border-orange-200' : 'bg-white text-indigo-700 border-indigo-200'
           };
       } else {
-          // START_DATE View
+          // FWD_SHIFT View
+          // Format: YYYY-MM-DD_INDEX_SHIFTNAME
+          
           if (groupKey.includes('NO_DATE')) {
               return { title: 'No Start Date Set', subtitle: 'Pending setup', icon: <Clock className="w-5 h-5" />, colorClass: 'bg-gray-200 text-gray-600', bgClass: 'bg-gray-100', chipDateBase: 'bg-gray-100 text-gray-700 border-gray-200', chipCount: 'bg-white text-gray-500' };
           }
-          const dateDisplay = isValid(parseISO(groupKey)) ? format(parseISO(groupKey), 'MMM do') : groupKey;
+
+          const parts = groupKey.split('_');
+          const datePart = parts[0];
+          const shiftIndex = parts[1];
+          const shiftName = parts.slice(2).join(' '); // Handle names with underscores if any
+          
+          const dateDisplay = isValid(parseISO(datePart)) ? format(parseISO(datePart), 'EEE, MMM do') : datePart;
+          
+          let icon = <CalendarRange className="w-5 h-5" />;
+          let colorClass = 'bg-gray-100 text-gray-600';
+          let bgClass = 'bg-gray-50';
+          
+          if (shiftName.includes('MORNING')) {
+              icon = <Sun className="w-5 h-5" />;
+              colorClass = 'bg-yellow-100 text-yellow-700';
+              bgClass = 'bg-yellow-50/50';
+          } else if (shiftName.includes('AFTERNOON')) {
+              icon = <Sunset className="w-5 h-5" />;
+              colorClass = 'bg-indigo-100 text-indigo-700';
+              bgClass = 'bg-indigo-50/50';
+          } else if (shiftName.includes('OPENING')) {
+              icon = <Sunrise className="w-5 h-5" />;
+              colorClass = 'bg-orange-100 text-orange-700';
+              bgClass = 'bg-orange-50/50';
+          } else if (shiftName.includes('NOON')) {
+              icon = <Moon className="w-5 h-5" />;
+              colorClass = 'bg-blue-100 text-blue-700';
+              bgClass = 'bg-blue-50/50';
+          }
 
           return {
-              title: `Week of ${dateDisplay}`,
-              subtitle: `Starting Week Group`,
-              icon: <CalendarRange className="w-5 h-5" />,
-              colorClass: 'bg-emerald-100 text-emerald-600',
-              bgClass: 'bg-emerald-50/50',
-              chipDateBase: 'bg-emerald-100/50 text-emerald-900 border-emerald-200',
-              chipCount: 'bg-white text-emerald-700 border-emerald-200'
+              title: dateDisplay,
+              subtitle: `${shiftName} SHIFT`,
+              icon: icon,
+              colorClass: colorClass,
+              bgClass: bgClass,
+              chipDateBase: '', 
+              chipCount: ''
           };
       }
   };
@@ -396,10 +472,10 @@ export const AdminDataView: React.FC = () => {
                     By Session
                 </button>
                 <button 
-                    onClick={() => setViewMode('START_DATE')}
-                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'START_DATE' ? 'bg-white shadow-sm text-purple-600' : 'text-gray-500 hover:text-gray-700'}`}
+                    onClick={() => setViewMode('FWD_SHIFT')}
+                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'FWD_SHIFT' ? 'bg-white shadow-sm text-purple-600' : 'text-gray-500 hover:text-gray-700'}`}
                 >
-                    By Start Date
+                    By First Working Day
                 </button>
             </div>
         </div>
@@ -422,12 +498,16 @@ export const AdminDataView: React.FC = () => {
             const calendarKeys = Object.keys(calendarBuckets).sort();
 
             return (
-            <div key={fullGroupKey} className="bg-white rounded-xl shadow-sm border overflow-hidden">
+            <div 
+                key={fullGroupKey} 
+                ref={(el) => { groupRefs.current[fullGroupKey] = el; }}
+                className="bg-white rounded-xl shadow-sm border overflow-hidden"
+            >
                 <div className={`border-b px-4 md:px-6 py-4 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-6 ${headerInfo.bgClass}`}>
                     
                     {/* LEFT: TITLE & META */}
                     <div className="flex items-center gap-3 w-full xl:w-auto">
-                        <div className={`p-2 rounded-lg ${headerInfo.colorClass}`}>
+                        <div className={`p-2 rounded-lg shadow-sm ${headerInfo.colorClass}`}>
                              {headerInfo.icon}
                         </div>
                         <div className="min-w-0">

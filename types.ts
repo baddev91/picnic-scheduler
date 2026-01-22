@@ -1,4 +1,5 @@
 
+
 export enum ShiftTime {
   OPENING = 'Opening (04:00 - 13:00)',
   MORNING = 'Morning (06:00 - 15:00)',
@@ -7,7 +8,7 @@ export enum ShiftTime {
 }
 
 export enum ShiftType {
-  AA = 'Always Available',
+  AA = 'Always Available', // Kept as 'Always Available' for DB backward compatibility
   STANDARD = 'Standard',
 }
 

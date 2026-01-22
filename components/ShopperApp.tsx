@@ -309,7 +309,7 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
 
     if (type === ShiftType.STANDARD) {
       const isAlreadyAA = newShifts.some(s => s.date === dateStr && s.time === shift && s.type === ShiftType.AA);
-      if (isAlreadyAA) { alert("This shift is marked as Always Available."); return; }
+      if (isAlreadyAA) { alert("This shift is marked as Agreed Availability."); return; }
       
       const dayHasAA = newShifts.some(s => s.date === dateStr && s.type === ShiftType.AA);
       if (dayHasAA) { alert("Day already has an AA shift."); return; }
@@ -504,7 +504,7 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
               ? <div className="space-y-4 text-left">
                   <div>
                       <p className="font-bold text-gray-900">What are AA Shifts?</p>
-                      <p className="text-gray-600 text-sm mt-1 leading-relaxed">"AA" stands for <strong>Always Available</strong>. These are the 2 specific days <u>every week</u> where you guarantee you can work.</p>
+                      <p className="text-gray-600 text-sm mt-1 leading-relaxed">"AA" stands for <strong>Agreed Availability</strong>. These are the 2 specific days <u>every week</u> where you guarantee you can work.</p>
                   </div>
                   <div className="bg-red-50 p-4 rounded-xl border border-red-100">
                       <p className="text-xs font-bold text-red-800 uppercase tracking-wider mb-3">Allowed Combinations:</p>

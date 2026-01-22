@@ -169,7 +169,7 @@ export const DesktopDayPanel: React.FC<DesktopDayPanelProps> = ({
                           </div>
                           <div className="flex flex-col items-start">
                               <span>{shift.split('(')[0]}</span>
-                              <span className={`text-[10px] font-normal ${isSelectedAA ? 'text-red-100' : 'text-gray-400'}`}>Always Available</span>
+                              <span className={`text-[10px] font-normal ${isSelectedAA ? 'text-red-100' : 'text-gray-400'}`}>Agreed Availability</span>
                           </div>
                       </div>
                       {isSelectedAA && <div className="bg-white/20 p-1 rounded-full"><Check className="w-4 h-4" /></div>}
