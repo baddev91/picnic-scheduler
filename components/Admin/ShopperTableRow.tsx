@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { GripVertical, Pencil, Trash2 } from 'lucide-react';
+import { GripVertical, Pencil, Trash2, CheckCircle2, XCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { ShopperRecord, ShiftType } from '../../types';
 
@@ -64,6 +65,8 @@ export const ShopperTableRow: React.FC<ShopperTableRowProps> = ({
         );
     };
 
+    const status = shopper.details?.firstDayStatus;
+
     return (
         <tr 
             className={`transition-all duration-200 cursor-grab active:cursor-grabbing ${
@@ -90,7 +93,17 @@ export const ShopperTableRow: React.FC<ShopperTableRowProps> = ({
                 {shopper.name}
             </td>
             <td className="px-6 py-4 text-gray-500">
-                {shopper.details?.firstWorkingDay ? format(new Date(shopper.details.firstWorkingDay), 'EEE, MMM d') : '-'}
+                <div className="flex items-center gap-2">
+                    {shopper.details?.firstWorkingDay ? format(new Date(shopper.details.firstWorkingDay), 'EEE, MMM d') : '-'}
+                    
+                    {/* ATTENDANCE BADGE */}
+                    {status === 'SHOWED_UP' && (
+                        <span className="text-green-600 bg-green-50 rounded-full p-0.5" title="Showed Up"><CheckCircle2 className="w-4 h-4" /></span>
+                    )}
+                    {status === 'NO_SHOW' && (
+                        <span className="text-red-600 bg-red-50 rounded-full p-0.5" title="No Show"><XCircle className="w-4 h-4" /></span>
+                    )}
+                </div>
             </td>
             <td className="px-6 py-4 text-center">
                 <div className="flex justify-center gap-2">

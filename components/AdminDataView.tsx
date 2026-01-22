@@ -145,6 +145,24 @@ export const AdminDataView: React.FC = () => {
       setPendingShoppers([]);
   };
 
+  // --- ATTENDANCE STATUS UPDATE ---
+  const handleStatusUpdate = async (id: string, status: 'PENDING' | 'SHOWED_UP' | 'NO_SHOW') => {
+      // Optimistic Update
+      setData(prev => prev.map(s => {
+          if (s.id === id) {
+              return { ...s, details: { ...s.details, firstDayStatus: status } };
+          }
+          return s;
+      }));
+
+      // Supabase Update
+      const shopper = data.find(s => s.id === id);
+      if (shopper) {
+          const newDetails = { ...shopper.details, firstDayStatus: status };
+          await supabase.from('shoppers').update({ details: newDetails }).eq('id', id);
+      }
+  };
+
   // --- DRAG AND DROP ---
   const onDragStart = (e: React.DragEvent, index: number, group: string, id: string) => {
       dragItem.current = { index, group };
@@ -271,7 +289,7 @@ export const AdminDataView: React.FC = () => {
 
   // --- CSV Export ---
   const downloadCSV = () => {
-    const headers = ['Name', 'PN Number', 'Registered At', 'First Working Day', 'Bus', 'Randstad', 'Address', 'AA Pattern', 'Shift Details'];
+    const headers = ['Name', 'PN Number', 'Registered At', 'First Working Day', 'Attendance Status', 'Bus', 'Randstad', 'Address', 'AA Pattern', 'Shift Details'];
     const rows = filteredData.map(item => {
       const shiftSummary = item.shifts.map(s => {
           // Replace internal enum 'Always Available' with 'Agreed Availability' for display
@@ -284,7 +302,7 @@ export const AdminDataView: React.FC = () => {
       
       return [
         `"${item.name}"`, `"${item.details?.pnNumber || ''}"`, `"${format(new Date(item.created_at), 'yyyy-MM-dd HH:mm')}"`,
-        `"${item.details?.firstWorkingDay || ''}"`, item.details?.usePicnicBus ? 'Yes' : 'No', item.details?.isRandstad ? 'Yes' : 'No',
+        `"${item.details?.firstWorkingDay || ''}"`, `"${item.details?.firstDayStatus || 'PENDING'}"`, item.details?.usePicnicBus ? 'Yes' : 'No', item.details?.isRandstad ? 'Yes' : 'No',
         `"${item.details?.address || ''}"`, `"${aaPattern}"`, `"${shiftSummary}"`
       ].join(',');
     });
@@ -604,7 +622,10 @@ export const AdminDataView: React.FC = () => {
                                     {expandedRow === item.id && (
                                         <tr>
                                             <td colSpan={6}>
-                                                <ShopperExpandedDetails shopper={item} />
+                                                <ShopperExpandedDetails 
+                                                    shopper={item} 
+                                                    onStatusUpdate={handleStatusUpdate}
+                                                />
                                             </td>
                                         </tr>
                                     )}
@@ -669,7 +690,10 @@ export const AdminDataView: React.FC = () => {
 
                              {expandedRow === item.id && (
                                  <div className="border-t pt-3 mt-1">
-                                     <ShopperExpandedDetails shopper={item} />
+                                     <ShopperExpandedDetails 
+                                        shopper={item} 
+                                        onStatusUpdate={handleStatusUpdate}
+                                     />
                                  </div>
                              )}
                          </div>

@@ -1,6 +1,6 @@
 
-import React from 'react';
-import { User, MapPin, Sheet, Copy, FileSpreadsheet, Calendar, Star } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { User, MapPin, Sheet, Copy, FileSpreadsheet, Calendar, Star, CheckCircle, XCircle, Clock, AlertTriangle, X, Check } from 'lucide-react';
 import { format } from 'date-fns';
 import { ShopperRecord, ShiftType } from '../../types';
 import { 
@@ -11,9 +11,17 @@ import {
 
 interface ShopperExpandedDetailsProps {
     shopper: ShopperRecord;
+    onStatusUpdate?: (id: string, status: 'PENDING' | 'SHOWED_UP' | 'NO_SHOW') => void;
 }
 
-export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ shopper }) => {
+export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ shopper, onStatusUpdate }) => {
+    // Local state for confirmation flow
+    const [pendingStatus, setPendingStatus] = useState<'PENDING' | 'SHOWED_UP' | 'NO_SHOW' | null>(null);
+
+    // Reset pending status if shopper data updates externally
+    useEffect(() => {
+        setPendingStatus(null);
+    }, [shopper.details?.firstDayStatus]);
     
     // --- COPY HANDLERS (Local to the item) ---
     const handleCopyForSheet = (weekOffset: number) => {
@@ -51,10 +59,35 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
         }
     };
 
+    // --- STATUS FLOW HANDLERS ---
+    const initiateStatusChange = (newStatus: 'PENDING' | 'SHOWED_UP' | 'NO_SHOW') => {
+        // Current effective status (treat undefined as PENDING)
+        const currentStatus = shopper.details?.firstDayStatus || 'PENDING';
+        
+        // If trying to switch to what is already selected, ignore
+        if (newStatus === currentStatus) return;
+
+        // Set pending to show confirmation UI
+        setPendingStatus(newStatus);
+    };
+
+    const confirmStatusChange = () => {
+        if (pendingStatus && onStatusUpdate) {
+            onStatusUpdate(shopper.id, pendingStatus);
+            setPendingStatus(null);
+        }
+    };
+
+    const cancelStatusChange = () => {
+        setPendingStatus(null);
+    };
+
     const formatDateDisplay = (dateStr: string) => {
         if(!dateStr) return 'N/A';
         try { return format(new Date(dateStr), 'EEE, MMM do, yyyy'); } catch (e) { return dateStr; }
     };
+
+    const currentStatus = shopper.details?.firstDayStatus || 'PENDING';
 
     return (
         <div className="bg-gray-50/50 px-4 py-4 md:px-6">
@@ -119,7 +152,86 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
 
                 {/* RIGHT COL: Shifts Grid */}
                 <div className="col-span-2">
-                    <h4 className="font-bold text-gray-900 mb-3 flex items-center gap-2"><Calendar className="w-4 h-4" /> All Selected Shifts ({(shopper.shifts || []).length})</h4>
+                    
+                    {/* ATTENDANCE CHECK CONTROL */}
+                    {onStatusUpdate && (
+                        <div className="mb-6 p-4 bg-white rounded-xl border border-gray-200 shadow-sm relative overflow-hidden transition-all duration-300">
+                            
+                            {/* Title */}
+                            <h4 className="font-bold text-gray-800 text-sm mb-3 flex items-center gap-2">
+                                <CheckCircle className="w-4 h-4 text-purple-600" /> 
+                                Attendance Check (First Day)
+                            </h4>
+
+                            {/* Main Buttons (Hidden when pending confirmation) */}
+                            {!pendingStatus && (
+                                <div className="flex gap-2 animate-in fade-in">
+                                    <button 
+                                        onClick={() => initiateStatusChange('PENDING')}
+                                        className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all border ${
+                                            currentStatus === 'PENDING'
+                                            ? 'bg-gray-100 text-gray-700 border-gray-300 shadow-inner'
+                                            : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        <Clock className="w-3.5 h-3.5" /> Pending
+                                    </button>
+                                    <button 
+                                        onClick={() => initiateStatusChange('SHOWED_UP')}
+                                        className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all border ${
+                                            currentStatus === 'SHOWED_UP'
+                                            ? 'bg-green-100 text-green-700 border-green-300 shadow-inner ring-1 ring-green-200'
+                                            : 'bg-white text-green-600 border-gray-200 hover:bg-green-50 hover:border-green-200'
+                                        }`}
+                                    >
+                                        <CheckCircle className="w-3.5 h-3.5" /> Showed Up
+                                    </button>
+                                    <button 
+                                        onClick={() => initiateStatusChange('NO_SHOW')}
+                                        className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all border ${
+                                            currentStatus === 'NO_SHOW'
+                                            ? 'bg-red-100 text-red-700 border-red-300 shadow-inner ring-1 ring-red-200'
+                                            : 'bg-white text-red-600 border-gray-200 hover:bg-red-50 hover:border-red-200'
+                                        }`}
+                                    >
+                                        <XCircle className="w-3.5 h-3.5" /> No Show
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* CONFIRMATION OVERLAY */}
+                            {pendingStatus && (
+                                <div className="absolute inset-0 bg-white z-10 flex items-center justify-between px-4 animate-in slide-in-from-bottom-2">
+                                    <div className="flex items-center gap-2 text-xs font-bold text-gray-700">
+                                        <AlertTriangle className="w-4 h-4 text-orange-500" />
+                                        <span>
+                                            Change to <span className={`uppercase px-1.5 py-0.5 rounded ${
+                                                pendingStatus === 'SHOWED_UP' ? 'bg-green-100 text-green-700' :
+                                                pendingStatus === 'NO_SHOW' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'
+                                            }`}>{pendingStatus.replace('_', ' ')}</span>?
+                                        </span>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button 
+                                            onClick={cancelStatusChange}
+                                            className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-100 text-gray-500 transition-colors"
+                                            title="Cancel"
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                        <button 
+                                            onClick={confirmStatusChange}
+                                            className="px-3 py-1.5 rounded-lg bg-gray-900 text-white text-xs font-bold hover:bg-black transition-colors flex items-center gap-1 shadow-sm"
+                                        >
+                                            <Check className="w-3 h-3" /> Confirm
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    <h4 className="font-bold text-gray-900 mb-3 flex items-center gap-2 text-sm"><Calendar className="w-4 h-4" /> All Selected Shifts ({(shopper.shifts || []).length})</h4>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                         {(shopper.shifts || []).length > 0 ? (
                             [...(shopper.shifts || [])]

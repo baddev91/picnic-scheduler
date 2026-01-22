@@ -35,6 +35,7 @@ export interface ShopperDetails {
   address?: string; // Required if isRandstad is true
   firstWorkingDay?: string; // YYYY-MM-DD
   pnNumber?: string; // e.g. PN123456
+  firstDayStatus?: 'PENDING' | 'SHOWED_UP' | 'NO_SHOW'; // New Attendance Tracking
 }
 
 export interface ShopperData {
