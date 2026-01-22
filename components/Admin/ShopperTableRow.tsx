@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { GripVertical, Pencil, Trash2, CheckCircle2, XCircle } from 'lucide-react';
+import { GripVertical, Pencil, Trash2, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import { ShopperRecord, ShiftType } from '../../types';
 
@@ -18,6 +18,7 @@ interface ShopperTableRowProps {
     onDragEnd: () => void;
     onEdit: (shopper: ShopperRecord) => void;
     onDelete: (e: React.MouseEvent, id: string) => void;
+    issues?: string[]; // NEW PROP
 }
 
 export const ShopperTableRow: React.FC<ShopperTableRowProps> = ({
@@ -33,7 +34,8 @@ export const ShopperTableRow: React.FC<ShopperTableRowProps> = ({
     onDragEnter,
     onDragEnd,
     onEdit,
-    onDelete
+    onDelete,
+    issues // Receive Issues
 }) => {
     
     // Helper to visualize AA Pattern in the table
@@ -86,11 +88,27 @@ export const ShopperTableRow: React.FC<ShopperTableRowProps> = ({
             <td className="px-2 text-center text-gray-300" onClick={(e) => e.stopPropagation()}>
                 <GripVertical className={`w-4 h-4 mx-auto ${draggingId === shopper.id ? 'text-blue-500' : ''}`} />
             </td>
-            <td className="px-6 py-4 font-medium text-gray-900 flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center text-gray-600 font-bold text-xs">
+            <td className="px-6 py-4 font-medium text-gray-900 flex items-center gap-3 relative">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center text-gray-600 font-bold text-xs shrink-0">
                     {shopper.name.substring(0,2).toUpperCase()}
                 </div>
                 {shopper.name}
+                
+                {/* ISSUE INDICATOR */}
+                {issues && issues.length > 0 && (
+                    <div className="group relative ml-2">
+                        <AlertTriangle className="w-4 h-4 text-red-500 cursor-help" />
+                        {/* Tooltip */}
+                        <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 w-64 bg-gray-900 text-white text-xs rounded-lg p-3 z-50 hidden group-hover:block shadow-xl">
+                            <strong className="block mb-1 text-red-300 uppercase tracking-wider">Compliance Issues</strong>
+                            <ul className="list-disc pl-3 space-y-1">
+                                {issues.map((err, i) => <li key={i}>{err}</li>)}
+                            </ul>
+                            {/* Arrow */}
+                            <div className="absolute right-full top-1/2 -translate-y-1/2 border-y-4 border-y-transparent border-r-4 border-r-gray-900"></div>
+                        </div>
+                    </div>
+                )}
             </td>
             <td className="px-6 py-4 text-gray-500">
                 <div className="flex items-center gap-2">

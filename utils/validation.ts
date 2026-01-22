@@ -1,5 +1,5 @@
 
-import { addDays, isAfter, endOfWeek, addWeeks, format, isWeekend, startOfDay } from 'date-fns';
+import { addDays, isAfter, endOfWeek, addWeeks, format, isWeekend, startOfDay, differenceInHours, parseISO, getDay } from 'date-fns';
 import { ShiftTime, ShiftType, ShopperShift } from '../types';
 import { formatDateKey, EUROPEAN_COUNTRIES, getShopperMinDate } from '../constants';
 
@@ -103,4 +103,65 @@ export const validateShopperRange = (proposedShifts: ShopperShift[], firstWorkin
        };
    }
    return { valid: true };
+};
+
+// --- BATCH VALIDATION (ADMIN CHECK) ---
+export const validateShopperSchedule = (shifts: ShopperShift[]): string[] => {
+    const issues: string[] = [];
+    if (!shifts || shifts.length === 0) return ["No shifts assigned."];
+
+    // 1. AA Pattern Check
+    // Requirement: At least 2 distinct days of the week (e.g. Mon + Sat, or Sat + Sun)
+    const aaShifts = shifts.filter(s => s.type === ShiftType.AA);
+    const uniqueDaysOfWeek = new Set(aaShifts.map(s => getDay(parseISO(s.date))));
+    
+    if (uniqueDaysOfWeek.size < 2) {
+        issues.push(`Invalid AA Pattern: Found ${uniqueDaysOfWeek.size} distinct weekday(s), expected at least 2.`);
+    }
+
+    // Sort shifts by date
+    const sortedShifts = [...shifts].sort((a, b) => a.date.localeCompare(b.date));
+
+    // 2. Consecutive Days Check
+    let consecutiveStreak = 1;
+    for (let i = 1; i < sortedShifts.length; i++) {
+        const prev = getSafeDateFromKey(sortedShifts[i-1].date);
+        const curr = getSafeDateFromKey(sortedShifts[i].date);
+        
+        if (differenceInHours(curr, prev) < 26) { // Approx 1 day diff
+             consecutiveStreak++;
+        } else {
+             consecutiveStreak = 1;
+        }
+
+        if (consecutiveStreak > 5) {
+            // Avoid duplicate error messages
+            if (!issues.some(i => i.includes('Consecutive'))) {
+                issues.push("Exceeds 5 consecutive working days.");
+            }
+        }
+    }
+
+    // 3. Rest Rule Check (11 hours)
+    // Early: Opening (04:00), Morning (06:00)
+    // Late: Noon (ends ~22:00), Afternoon (ends ~00:00)
+    const earlyShifts = [ShiftTime.OPENING, ShiftTime.MORNING];
+    const lateShifts = [ShiftTime.NOON, ShiftTime.AFTERNOON];
+
+    for (let i = 0; i < sortedShifts.length - 1; i++) {
+        const current = sortedShifts[i];
+        const next = sortedShifts[i+1];
+        
+        const currentDate = getSafeDateFromKey(current.date);
+        const nextDate = getSafeDateFromKey(next.date);
+
+        // Check only if they are consecutive days
+        if (differenceInHours(nextDate, currentDate) < 26) {
+            if (lateShifts.includes(current.time) && earlyShifts.includes(next.time)) {
+                issues.push(`Rest Violation: ${current.date} (${current.time.split('(')[0]}) -> ${next.date} (${next.time.split('(')[0]}).`);
+            }
+        }
+    }
+
+    return issues;
 };

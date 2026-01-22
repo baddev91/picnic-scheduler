@@ -1,13 +1,14 @@
 
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { supabase } from '../supabaseClient';
-import { Download, Search, RefreshCw, SaveAll, Copy, FileSpreadsheet, Check, Sun, Sunset, Bell, ArrowUpCircle, Pencil, Trash2, ChevronDown, ChevronUp, CalendarRange, Clock, AlertCircle, Users, ArrowRight, Calendar, Sunrise, Moon } from 'lucide-react';
+import { Download, Search, RefreshCw, SaveAll, Copy, FileSpreadsheet, Check, Sun, Sunset, Bell, ArrowUpCircle, Pencil, Trash2, ChevronDown, ChevronUp, CalendarRange, Clock, AlertCircle, Users, ArrowRight, Calendar, Sunrise, Moon, Stethoscope, Loader2, CheckCircle2, XCircle } from 'lucide-react';
 import { format, startOfWeek, parseISO, isValid, addWeeks, addDays } from 'date-fns';
 import { ShopperRecord, ShiftType } from '../types';
 import { AdminHeatmap } from './AdminHeatmap';
 import { EditShopperModal } from './EditShopperModal';
 import { ShopperTableRow } from './Admin/ShopperTableRow';
 import { ShopperExpandedDetails } from './Admin/ShopperExpandedDetails';
+import { validateShopperSchedule } from '../utils/validation';
 import { 
     generateSpreadsheetRow, 
     generateBulkHRSpreadsheetHTML,
@@ -81,6 +82,11 @@ export const AdminDataView: React.FC = () => {
   // Copy Feedback State
   const [copyFeedback, setCopyFeedback] = useState<Record<string, boolean>>({});
 
+  // Compliance Check State
+  const [complianceIssues, setComplianceIssues] = useState<Record<string, string[]>>({});
+  const [checkStatus, setCheckStatus] = useState<'IDLE' | 'CHECKING' | 'SUCCESS' | 'ISSUES'>('IDLE');
+  const [issueCount, setIssueCount] = useState(0);
+
   // Refs for Scroll to Today Logic
   const groupRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
@@ -103,6 +109,10 @@ export const AdminDataView: React.FC = () => {
         if (editingShopperIdRef.current) {
             const current = shoppers.find(s => s.id === editingShopperIdRef.current);
             if (current) setEditingShopper(current);
+        }
+        // If we previously ran compliance check, re-run it on new data
+        if (Object.keys(complianceIssues).length > 0) {
+            runComplianceCheck(shoppers, true); // Silent run
         }
     }
     setLoading(false);
@@ -143,6 +153,41 @@ export const AdminDataView: React.FC = () => {
   const handleMergePending = () => {
       setData(prev => [...pendingShoppers, ...prev]);
       setPendingShoppers([]);
+  };
+
+  // --- COMPLIANCE CHECKER ---
+  const runComplianceCheck = (dataSet = data, silent = false) => {
+      if (!silent) setCheckStatus('CHECKING');
+      
+      const newIssues: Record<string, string[]> = {};
+      
+      dataSet.forEach(shopper => {
+          const issues = validateShopperSchedule(shopper.shifts);
+          if (issues.length > 0) {
+              newIssues[shopper.id] = issues;
+          }
+      });
+      
+      const count = Object.keys(newIssues).length;
+      
+      // Artificial delay for UX "heft" if manual click
+      const delay = silent ? 0 : 600;
+
+      setTimeout(() => {
+          setComplianceIssues(newIssues);
+          setIssueCount(count);
+
+          if (!silent) {
+            setCheckStatus(count > 0 ? 'ISSUES' : 'SUCCESS');
+            // Auto hide success toast after 3s
+            if (count === 0) {
+                setTimeout(() => setCheckStatus('IDLE'), 3000);
+            } else {
+                 // For issues, keep it visible longer (5s)
+                setTimeout(() => setCheckStatus('IDLE'), 5000);
+            }
+          }
+      }, delay);
   };
 
   // --- ATTENDANCE STATUS UPDATE ---
@@ -451,6 +496,23 @@ export const AdminDataView: React.FC = () => {
   return (
     <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in relative">
       
+      {/* TOAST NOTIFICATION AREA (Fixed Bottom Center) */}
+      {(checkStatus === 'SUCCESS' || checkStatus === 'ISSUES') && (
+          <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-bottom-5 fade-in duration-300">
+               {checkStatus === 'SUCCESS' ? (
+                   <div className="bg-green-600 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 font-bold border-2 border-green-500">
+                       <CheckCircle2 className="w-5 h-5" />
+                       All Clear! No issues found.
+                   </div>
+               ) : (
+                   <div className="bg-red-600 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 font-bold border-2 border-red-500">
+                       <AlertCircle className="w-5 h-5" />
+                       Found {issueCount} Shopper{issueCount > 1 ? 's' : ''} with issues.
+                   </div>
+               )}
+          </div>
+      )}
+
       {/* REALTIME NOTIFICATION PILL */}
       {pendingShoppers.length > 0 && (
           <div className="sticky top-2 z-30 flex justify-center animate-in slide-in-from-top-4 duration-500">
@@ -499,7 +561,25 @@ export const AdminDataView: React.FC = () => {
         </div>
 
         <div className="flex gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
+            <button 
+                onClick={() => runComplianceCheck(data, false)}
+                disabled={checkStatus === 'CHECKING'}
+                className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 font-medium shadow-sm whitespace-nowrap shrink-0 group transition-all"
+                title="Check for Rest/Pattern violations"
+            >
+                {checkStatus === 'CHECKING' ? (
+                     <Loader2 className="w-4 h-4 text-purple-600 animate-spin" />
+                ) : (
+                     <Stethoscope className={`w-4 h-4 ${issueCount > 0 ? 'text-red-500' : 'text-gray-500'} group-hover:scale-110`} />
+                )}
+                
+                <span className="hidden md:inline text-xs font-bold">
+                    {checkStatus === 'CHECKING' ? 'Checking...' : 'Check Rules'}
+                </span>
+            </button>
+
             {isSavingOrder && <div className="flex items-center gap-2 text-xs font-bold text-green-600 bg-green-50 px-3 py-2 rounded-lg animate-pulse whitespace-nowrap"><SaveAll className="w-4 h-4" /> Saving Order...</div>}
+            
             <button onClick={fetchData} className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 transition-colors shrink-0"><RefreshCw className="w-5 h-5" /></button>
             <button onClick={downloadCSV} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium shadow-sm whitespace-nowrap shrink-0"><Download className="w-4 h-4" /> Export CSV</button>
         </div>
@@ -618,6 +698,7 @@ export const AdminDataView: React.FC = () => {
                                         draggingId={draggingId} deleteConfirmId={deleteConfirmId} searchTerm={searchTerm}
                                         onDragStart={onDragStart} onDragEnter={onDragEnter} onDragEnd={onDragEnd}
                                         onEdit={setEditingShopper} onDelete={handleDelete}
+                                        issues={complianceIssues[item.id]} // PASS ISSUES
                                     />
                                     {expandedRow === item.id && (
                                         <tr>
@@ -645,7 +726,10 @@ export const AdminDataView: React.FC = () => {
                                          {item.name.substring(0,2).toUpperCase()}
                                      </div>
                                      <div>
-                                         <h4 className="font-bold text-gray-900">{item.name}</h4>
+                                         <h4 className="font-bold text-gray-900 flex items-center gap-2">
+                                             {item.name}
+                                             {complianceIssues[item.id] && <AlertCircle className="w-4 h-4 text-red-500" />}
+                                         </h4>
                                          <div className="text-xs text-gray-500">
                                             FWD: {item.details?.firstWorkingDay ? format(new Date(item.details.firstWorkingDay), 'MMM d') : '-'}
                                          </div>
@@ -667,6 +751,17 @@ export const AdminDataView: React.FC = () => {
                                      </button>
                                  </div>
                              </div>
+                             
+                             {/* Mobile Issues Display */}
+                             {complianceIssues[item.id] && (
+                                 <div className="bg-red-50 p-2 rounded text-xs text-red-600 font-medium">
+                                     <ul className="list-disc pl-4 space-y-1">
+                                         {complianceIssues[item.id].map((issue, idx) => (
+                                             <li key={idx}>{issue}</li>
+                                         ))}
+                                     </ul>
+                                 </div>
+                             )}
                              
                              <div className="flex gap-2 text-[10px] font-bold">
                                  {item.details?.usePicnicBus && (
