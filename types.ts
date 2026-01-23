@@ -37,6 +37,11 @@ export interface ShopperDetails {
   pnNumber?: string; // e.g. PN123456
   firstDayStatus?: 'PENDING' | 'SHOWED_UP' | 'NO_SHOW'; // New Attendance Tracking
   notes?: string; // NEW: Admin Notes
+  
+  // FROZEN SPECIFIC FIELDS
+  isFrozenEligible?: boolean;
+  frozenNotes?: string;
+  frozenAddedToSystem?: boolean;
 }
 
 export interface ShopperData {
@@ -70,6 +75,9 @@ export enum AppMode {
   SHOPPER_SETUP = 'SHOPPER_SETUP',
   SHOPPER_FLOW = 'SHOPPER_FLOW',
   SUMMARY = 'SUMMARY',
+  // FROZEN MODES
+  FROZEN_LOGIN = 'FROZEN_LOGIN',
+  FROZEN_LIST = 'FROZEN_LIST'
 }
 
 export enum ShopperStep {

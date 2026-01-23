@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Settings2, KeyRound, RefreshCw, Save, Share2, CalendarRange, Table, Bus, ArrowRight, ShieldCheck, Lock, UserCog, Info, AlertTriangle, Clock, CalendarCheck, Zap, ChevronDown, ChevronUp, History } from 'lucide-react';
+import { Settings2, RefreshCw, Save, Share2, CalendarRange, Table, Bus, ArrowRight, ShieldCheck, UserCog, Info, AlertTriangle, Clock, CalendarCheck, Zap, ChevronDown, ChevronUp, History, Snowflake, AlertCircle } from 'lucide-react';
 import { Button } from './Button';
 import { AdminWizardStep, WeeklyTemplate } from '../types';
 import { MIN_DAYS_TO_START } from '../constants';
@@ -20,6 +20,9 @@ interface AdminDashboardProps {
   tempTemplate: WeeklyTemplate;
   adminPin: string;
   updateAdminPin: (pin: string) => void;
+  frozenPin: string;
+  updateFrozenPin: (pin: string) => void;
+  onGoToFrozen: () => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -36,10 +39,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   setTempTemplate,
   tempTemplate,
   adminPin,
-  updateAdminPin
+  updateAdminPin,
+  frozenPin,
+  updateFrozenPin,
+  onGoToFrozen
 }) => {
   const [newAdminPin, setNewAdminPin] = useState(adminPin);
+  const [newFrozenPin, setNewFrozenPin] = useState(frozenPin);
   const [showRules, setShowRules] = useState(false);
+  const [pinError, setPinError] = useState<string | null>(null);
 
   const handleEditPattern = () => {
     if (savedCloudTemplate) {
@@ -57,8 +65,35 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       saveShopperAuthSettings(adminShopperPinInput, newValue, true);
   };
 
+  // --- VALIDATION LOGIC ---
+  const handleUpdateAdminPin = () => {
+      if (newAdminPin === frozenPin) {
+          setPinError("Admin PIN cannot be the same as Frozen PIN.");
+          return;
+      }
+      if (newAdminPin.length < 4) {
+          setPinError("PIN too short.");
+          return;
+      }
+      setPinError(null);
+      updateAdminPin(newAdminPin);
+  };
+
+  const handleUpdateFrozenPin = () => {
+      if (newFrozenPin === adminPin) {
+          setPinError("Frozen PIN cannot be the same as Admin PIN.");
+          return;
+      }
+      if (newFrozenPin.length < 4) {
+          setPinError("PIN too short.");
+          return;
+      }
+      setPinError(null);
+      updateFrozenPin(newFrozenPin);
+  };
+
   return (
-      <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 pb-10">
+      <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
           
           {/* HEADER SECTION */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -66,125 +101,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <h1 className="text-3xl font-black text-gray-900 tracking-tight">Dashboard</h1>
                   <p className="text-gray-500 mt-1">Manage schedules, settings and view submissions.</p>
               </div>
-              <Button 
-                 variant="secondary" 
-                 onClick={() => setAdminWizardStep(AdminWizardStep.VIEW_LOGS)}
-                 className="flex items-center gap-2 border-gray-300 hover:border-black transition-colors"
-              >
-                  <History className="w-4 h-4" /> Audit Logs
-              </Button>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-6">
-              {/* SYSTEM CONFIG CARD (Shopper Auth) */}
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-                 <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2.5 bg-gray-900 text-white rounded-lg">
-                            <Settings2 className="w-5 h-5" />
-                        </div>
-                        <div>
-                            <h2 className="text-lg font-bold text-gray-900">Shopper Access</h2>
-                            <p className="text-xs text-gray-500">PIN for new hires</p>
-                        </div>
-                    </div>
-                    {/* Custom Toggle */}
-                    <button 
-                        onClick={toggleAuth}
-                        className={`relative w-14 h-7 rounded-full transition-colors duration-300 focus:outline-none ${isShopperAuthEnabled ? 'bg-green-500' : 'bg-gray-200'}`}
-                    >
-                        <span 
-                            className={`absolute top-1 left-1 bg-white w-5 h-5 rounded-full shadow-sm transform transition-transform duration-300 ${isShopperAuthEnabled ? 'translate-x-7' : 'translate-x-0'}`}
-                        />
-                    </button>
-                 </div>
-                 
-                 <div className="p-6 bg-gray-50/50">
-                    <div className="flex flex-col gap-4">
-                        <div className="w-full space-y-2">
-                            <div className="flex gap-2">
-                                <div className="relative w-full">
-                                    <input 
-                                        value={adminShopperPinInput} 
-                                        onChange={e => setAdminShopperPinInput(e.target.value.replace(/[^0-9]/g, '').slice(0,6))}
-                                        className={`w-full border-2 rounded-xl py-3 px-4 text-lg font-mono tracking-widest text-center outline-none transition-all ${
-                                            isShopperAuthEnabled 
-                                            ? 'border-gray-300 focus:border-red-500 focus:ring-4 focus:ring-red-50 bg-white text-gray-900' 
-                                            : 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
-                                        }`}
-                                        placeholder="000000"
-                                        disabled={!isShopperAuthEnabled}
-                                    />
-                                </div>
-                                
-                                <button 
-                                    onClick={generateRandomPin}
-                                    className="px-4 bg-white border-2 border-gray-200 hover:border-gray-400 hover:text-gray-900 rounded-xl text-gray-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                    title="Generate Random PIN"
-                                    disabled={!isShopperAuthEnabled}
-                                >
-                                    <RefreshCw className="w-5 h-5" />
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="flex gap-2">
-                             <Button 
-                                onClick={() => saveShopperAuthSettings(adminShopperPinInput, isShopperAuthEnabled, false)} 
-                                disabled={isShopperAuthEnabled && adminShopperPinInput.length !== 6}
-                                className="bg-black hover:bg-gray-800 text-white border-none flex-1 py-3"
-                            >
-                                <Save className="w-4 h-4 mr-2" /> Save
-                            </Button>
-                             <Button onClick={handleCopyMagicLink} variant="secondary" className="bg-white border-2 border-gray-200 text-gray-700 hover:border-black flex-1 py-3">
-                                 <Share2 className="w-4 h-4 mr-2" /> Link
-                             </Button>
-                        </div>
-                    </div>
-                 </div>
-              </div>
-
-              {/* ADMIN AUTH CONFIG CARD */}
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-                 <div className="p-6 border-b border-gray-100 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2.5 bg-purple-600 text-white rounded-lg">
-                            <UserCog className="w-5 h-5" />
-                        </div>
-                        <div>
-                            <h2 className="text-lg font-bold text-gray-900">Admin Access</h2>
-                            <p className="text-xs text-gray-500">Password for this panel</p>
-                        </div>
-                    </div>
-                 </div>
-                 
-                 <div className="p-6 bg-gray-50/50 h-full">
-                    <div className="flex flex-col gap-4">
-                        <div className="w-full space-y-2">
-                            <div className="relative w-full">
-                                <input 
-                                    type="text"
-                                    value={newAdminPin}
-                                    onChange={e => setNewAdminPin(e.target.value)}
-                                    className="w-full border-2 border-gray-300 rounded-xl py-3 px-4 text-lg font-mono tracking-widest text-center outline-none transition-all focus:border-purple-500 focus:ring-4 focus:ring-purple-50 bg-white text-gray-900"
-                                    placeholder="Enter new password"
-                                />
-                            </div>
-                        </div>
-
-                        <Button 
-                            onClick={() => updateAdminPin(newAdminPin)}
-                            disabled={!newAdminPin}
-                            className="bg-purple-600 hover:bg-purple-700 text-white border-none w-full py-3"
-                        >
-                            <Save className="w-4 h-4 mr-2" /> Update Admin Password
-                        </Button>
-                    </div>
-                 </div>
+              <div className="flex gap-2">
+                 <button 
+                    onClick={onGoToFrozen}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-50 text-cyan-700 font-bold hover:bg-cyan-100 transition-colors border border-cyan-200 text-xs shadow-sm"
+                 >
+                     <Snowflake className="w-3 h-3" /> Frozen List View
+                 </button>
+                 <Button 
+                    variant="secondary" 
+                    onClick={() => setAdminWizardStep(AdminWizardStep.VIEW_LOGS)}
+                    className="flex items-center gap-2 border-gray-300 hover:border-black transition-colors text-xs"
+                 >
+                     <History className="w-3 h-3" /> Audit Logs
+                 </Button>
               </div>
           </div>
 
-          {/* ACTIONS GRID */}
+          {/* ACTIONS GRID (Moved to Top) */}
           <div className="grid md:grid-cols-2 gap-6">
               
               {/* Primary Action: Edit Pattern */}
@@ -331,6 +265,90 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                      </div>
                  </div>
              )}
+          </div>
+
+          {/* COMPACT CONFIGURATION SECTION (Moved to Bottom) */}
+          <div className="space-y-3">
+              <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider px-1">Access Control & Configuration</h3>
+              
+              {pinError && (
+                  <div className="bg-red-50 text-red-600 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 animate-pulse">
+                      <AlertCircle className="w-4 h-4" /> {pinError}
+                  </div>
+              )}
+
+              <div className="grid md:grid-cols-3 gap-4">
+                  {/* 1. Shopper Access */}
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex flex-col justify-between gap-4">
+                      <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-gray-800 font-bold text-sm">
+                              <Settings2 className="w-4 h-4 text-gray-500" />
+                              Shopper Access
+                          </div>
+                          {/* Toggle */}
+                          <button 
+                              onClick={toggleAuth}
+                              className={`relative w-10 h-5 rounded-full transition-colors duration-300 focus:outline-none ${isShopperAuthEnabled ? 'bg-green-500' : 'bg-gray-200'}`}
+                          >
+                              <span className={`absolute top-1 left-1 bg-white w-3 h-3 rounded-full shadow-sm transform transition-transform duration-300 ${isShopperAuthEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                          </button>
+                      </div>
+                      
+                      <div className="flex gap-2">
+                          <div className="relative flex-1">
+                              <input 
+                                  value={adminShopperPinInput} 
+                                  onChange={e => setAdminShopperPinInput(e.target.value.replace(/[^0-9]/g, '').slice(0,6))}
+                                  className={`w-full border rounded-lg py-1.5 px-2 text-center text-sm font-mono outline-none ${isShopperAuthEnabled ? 'bg-white border-gray-300 text-gray-900' : 'bg-gray-100 text-gray-400 border-transparent'}`}
+                                  placeholder="PIN"
+                                  disabled={!isShopperAuthEnabled}
+                              />
+                              <button onClick={generateRandomPin} disabled={!isShopperAuthEnabled} className="absolute right-2 top-1.5 text-gray-400 hover:text-gray-600"><RefreshCw className="w-3 h-3" /></button>
+                          </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-2">
+                          <Button onClick={() => saveShopperAuthSettings(adminShopperPinInput, isShopperAuthEnabled, false)} disabled={!isShopperAuthEnabled} className="text-xs py-1.5 h-auto">Save</Button>
+                          <Button variant="secondary" onClick={handleCopyMagicLink} className="text-xs py-1.5 h-auto">Link</Button>
+                      </div>
+                  </div>
+
+                  {/* 2. Admin Access */}
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex flex-col justify-between gap-4">
+                      <div className="flex items-center gap-2 text-gray-800 font-bold text-sm">
+                          <UserCog className="w-4 h-4 text-purple-600" />
+                          Admin PIN
+                      </div>
+                      <input 
+                          type="text"
+                          value={newAdminPin}
+                          onChange={e => { setNewAdminPin(e.target.value); setPinError(null); }}
+                          className="w-full border rounded-lg py-1.5 px-2 text-center text-sm font-mono outline-none focus:ring-2 focus:ring-purple-100 focus:border-purple-300"
+                          placeholder="Admin PIN"
+                      />
+                      <Button onClick={handleUpdateAdminPin} disabled={!newAdminPin || newAdminPin === adminPin} className="text-xs py-1.5 h-auto bg-purple-600 hover:bg-purple-700">
+                          Update Admin
+                      </Button>
+                  </div>
+
+                  {/* 3. Frozen Access */}
+                  <div className="bg-cyan-50 rounded-xl shadow-sm border border-cyan-200 p-4 flex flex-col justify-between gap-4">
+                      <div className="flex items-center gap-2 text-cyan-900 font-bold text-sm">
+                          <Snowflake className="w-4 h-4 text-cyan-600" />
+                          Frozen List PIN
+                      </div>
+                      <input 
+                          type="text"
+                          value={newFrozenPin}
+                          onChange={e => { setNewFrozenPin(e.target.value); setPinError(null); }}
+                          className="w-full border border-cyan-200 rounded-lg py-1.5 px-2 text-center text-sm font-mono outline-none focus:ring-2 focus:ring-cyan-100 focus:border-cyan-300 bg-white"
+                          placeholder="Frozen PIN"
+                      />
+                      <Button onClick={handleUpdateFrozenPin} disabled={!newFrozenPin || newFrozenPin === frozenPin} className="text-xs py-1.5 h-auto bg-cyan-600 hover:bg-cyan-700 shadow-cyan-200">
+                          Update Frozen
+                      </Button>
+                  </div>
+              </div>
           </div>
       </div>
   );

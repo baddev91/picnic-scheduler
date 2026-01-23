@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, MapPin, Sheet, Copy, FileSpreadsheet, Calendar, Star, CheckCircle, XCircle, Clock, AlertTriangle, X, Check, Globe, FileText, Save } from 'lucide-react';
+import { User, MapPin, Sheet, Copy, FileSpreadsheet, Calendar, Star, CheckCircle, XCircle, Clock, AlertTriangle, X, Check, Globe, FileText, Save, Snowflake } from 'lucide-react';
 import { format } from 'date-fns';
 import { supabase } from '../../supabaseClient';
 import { ShopperRecord, ShiftType } from '../../types';
@@ -25,11 +25,17 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
     const [isSavingNotes, setIsSavingNotes] = useState(false);
     const [noteSaved, setNoteSaved] = useState(false);
 
+    // Frozen State
+    const [isFrozenEligible, setIsFrozenEligible] = useState(shopper.details?.isFrozenEligible || false);
+    const [pendingFrozenToggle, setPendingFrozenToggle] = useState(false);
+
     // Reset pending status if shopper data updates externally
     useEffect(() => {
         setPendingStatus(null);
+        setPendingFrozenToggle(false);
         setNotes(shopper.details?.notes || '');
-    }, [shopper.details?.firstDayStatus, shopper.id]);
+        setIsFrozenEligible(shopper.details?.isFrozenEligible || false);
+    }, [shopper.details?.firstDayStatus, shopper.id, shopper.details?.isFrozenEligible]);
     
     const hasNoteChanged = notes !== (shopper.details?.notes || '');
 
@@ -96,6 +102,27 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
         }
     };
 
+    // --- FROZEN TOGGLE ---
+    const handleConfirmFrozenToggle = async () => {
+        setPendingFrozenToggle(false);
+        const newVal = !isFrozenEligible;
+        setIsFrozenEligible(newVal); // Optimistic
+
+        const newDetails = { ...shopper.details, isFrozenEligible: newVal };
+        
+        const { error } = await supabase
+            .from('shoppers')
+            .update({ details: newDetails })
+            .eq('id', shopper.id);
+        
+        if (error) {
+            setIsFrozenEligible(!newVal); // Revert
+            alert("Error updating frozen status");
+        } else {
+            if (onUpdateShopper) onUpdateShopper({ ...shopper, details: newDetails });
+        }
+    };
+
     // --- STATUS FLOW HANDLERS ---
     const initiateStatusChange = (newStatus: 'PENDING' | 'SHOWED_UP' | 'NO_SHOW') => {
         // Current effective status (treat undefined as PENDING)
@@ -157,6 +184,56 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
                         </div>
                     )}
                     
+                    {/* FROZEN TOGGLE WITH CONFIRMATION */}
+                    <div className="mt-4 pt-4 border-t relative">
+                        {pendingFrozenToggle ? (
+                             <div className="flex items-center justify-between p-3 bg-white border border-yellow-300 rounded-xl shadow-sm animate-in fade-in">
+                                 <div className="text-xs font-bold text-gray-700 flex items-center gap-1">
+                                     <AlertTriangle className="w-3 h-3 text-yellow-500" />
+                                     {isFrozenEligible ? 'Remove from Frozen?' : 'Mark as Eligible?'}
+                                 </div>
+                                 <div className="flex gap-2">
+                                     <button 
+                                        onClick={() => setPendingFrozenToggle(false)}
+                                        className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-100 text-gray-500 transition-colors"
+                                     > 
+                                        <X className="w-3 h-3" /> 
+                                     </button>
+                                     <button 
+                                        onClick={handleConfirmFrozenToggle}
+                                        className="px-2 py-1.5 rounded-lg bg-gray-900 text-white text-xs font-bold hover:bg-black transition-colors flex items-center gap-1 shadow-sm"
+                                     > 
+                                        <Check className="w-3 h-3" /> Confirm
+                                     </button>
+                                 </div>
+                             </div>
+                        ) : (
+                            <button 
+                                onClick={() => setPendingFrozenToggle(true)}
+                                className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all group ${
+                                    isFrozenEligible 
+                                    ? 'bg-cyan-50 border-cyan-200 shadow-sm' 
+                                    : 'bg-white border-gray-200 hover:border-cyan-300'
+                                }`}
+                            >
+                                <div className="flex items-center gap-2">
+                                    <div className={`p-1.5 rounded-lg ${isFrozenEligible ? 'bg-cyan-100 text-cyan-600' : 'bg-gray-100 text-gray-400'}`}>
+                                        <Snowflake className="w-4 h-4" />
+                                    </div>
+                                    <div className="text-left">
+                                        <span className={`block text-xs font-bold uppercase ${isFrozenEligible ? 'text-cyan-800' : 'text-gray-500'}`}>
+                                            Frozen Dept.
+                                        </span>
+                                        <span className="text-[10px] text-gray-400">Mark as eligible</span>
+                                    </div>
+                                </div>
+                                <div className={`w-10 h-5 rounded-full relative transition-colors ${isFrozenEligible ? 'bg-cyan-500' : 'bg-gray-200'}`}>
+                                    <div className={`absolute top-1 left-1 w-3 h-3 bg-white rounded-full shadow-sm transition-transform ${isFrozenEligible ? 'translate-x-5' : 'translate-x-0'}`} />
+                                </div>
+                            </button>
+                        )}
+                    </div>
+
                     {/* EXPORT BUTTONS */}
                     <div className="mt-4 pt-4 border-t space-y-3">
                         <h5 className="font-bold text-gray-900 text-xs uppercase flex items-center gap-2"><Sheet className="w-3 h-3 text-green-600" /> Google Sheets Export</h5>

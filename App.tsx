@@ -17,6 +17,7 @@ import { ShopperSetup } from './components/ShopperSetup';
 import { AdminBusConfig } from './components/AdminBusConfig';
 import { ShopperApp } from './components/ShopperApp';
 import { AdminAuditLog } from './components/AdminAuditLog';
+import { FrozenList } from './components/FrozenList';
 
 const STORAGE_KEYS = {
   TEMPLATE: 'picnic_admin_template',
@@ -30,6 +31,7 @@ export default function App() {
   
   // Admin Auth Config
   const [adminPin, setAdminPin] = useState('7709'); 
+  const [frozenPin, setFrozenPin] = useState('0000'); // Default Frozen PIN
   
   // Shopper Auth Config
   const [shopperPinConfig, setShopperPinConfig] = useState<string | null>(null);
@@ -100,10 +102,25 @@ export default function App() {
       } catch (e) { console.error(e); }
   };
 
+  const updateFrozenPin = async (newPin: string) => {
+      try {
+          const { error } = await supabase.from('app_settings').upsert({ id: 'frozen_auth', value: { pin: newPin } });
+          if (error) {
+              alert("Error updating Frozen PIN");
+          } else {
+              setFrozenPin(newPin);
+              alert("Frozen List PIN updated successfully!");
+          }
+      } catch (e) { console.error(e); }
+  };
+
   const loadRemoteConfig = useCallback(async () => {
     try {
         const { data: authData } = await supabase.from('app_settings').select('value').eq('id', 'admin_auth').single();
         if (authData?.value?.pin) setAdminPin(authData.value.pin);
+
+        const { data: frozenAuthData } = await supabase.from('app_settings').select('value').eq('id', 'frozen_auth').single();
+        if (frozenAuthData?.value?.pin) setFrozenPin(frozenAuthData.value.pin);
 
         const { data: availData } = await supabase.from('app_settings').select('value').eq('id', 'admin_availability').single();
         if (availData?.value) {
@@ -156,7 +173,7 @@ export default function App() {
                 setTempNameInput(parsed.selections[0].name);
                 // If the URL didn't explicitly ask for admin, restore shopper mode
                 const params = new URLSearchParams(window.location.search);
-                if (params.get('mode') !== 'admin') {
+                if (!params.get('mode')) {
                     setMode(AppMode.SHOPPER_FLOW);
                     setIsShopperVerified(true); // Assuming if they have local data, they passed auth previously
                 }
@@ -253,8 +270,24 @@ export default function App() {
   };
 
   const handleCopyMagicLink = () => navigator.clipboard.writeText(`${window.location.origin}/?mode=shopper`).then(() => alert("Link Copied!"));
-  const handleLogin = (pwd: string) => { if (pwd === adminPin) { setIsAuthenticated(true); setAuthError(false); } else setAuthError(true); };
-
+  
+  // UNIFIED LOGIN HANDLER (Smart Login)
+  const handleLogin = (pwd: string) => { 
+      if (pwd === adminPin) { 
+          // 1. ADMIN ACCESS
+          setIsAuthenticated(true); 
+          setAuthError(false); 
+          setMode(AppMode.ADMIN);
+      } else if (pwd === frozenPin) {
+          // 2. FROZEN DEPT ACCESS
+          setIsAuthenticated(false); // Not an admin
+          setAuthError(false);
+          setMode(AppMode.FROZEN_LIST);
+      } else { 
+          setAuthError(true); 
+      }
+  };
+  
   // --- MAIN RENDER ---
   return (
     <div className="font-sans text-gray-900 selection:bg-purple-100 selection:text-purple-900">
@@ -270,7 +303,7 @@ export default function App() {
             />
         )}
         
-        {/* SHOPPER FLOW (Refactored into dedicated component) */}
+        {/* SHOPPER FLOW */}
         {(mode === AppMode.SHOPPER_FLOW || mode === AppMode.SUMMARY) && (
             <ShopperApp 
                 shopperName={tempNameInput}
@@ -281,9 +314,21 @@ export default function App() {
             />
         )}
         
-        {/* ADMIN LOGIN */}
+        {/* UNIFIED STAFF LOGIN SCREEN */}
         {mode === AppMode.ADMIN && !isAuthenticated && (
             <AdminLogin onLogin={handleLogin} onCancel={() => setMode(AppMode.SHOPPER_SETUP)} authError={authError} />
+        )}
+
+        {/* FROZEN LIST */}
+        {mode === AppMode.FROZEN_LIST && (
+            <FrozenList 
+                onLogout={() => {
+                    // If super admin, go back to dashboard. Else logout to home.
+                    if (isAuthenticated) setMode(AppMode.ADMIN);
+                    else setMode(AppMode.SHOPPER_SETUP);
+                }} 
+                isSuperAdmin={isAuthenticated}
+            />
         )}
         
         {/* ADMIN PANEL */}
@@ -316,6 +361,8 @@ export default function App() {
                           setWizardDayIndex={setWizardDayIndex} savedCloudTemplate={savedCloudTemplate}
                           setTempTemplate={setTempTemplate} tempTemplate={tempTemplate}
                           adminPin={adminPin} updateAdminPin={updateAdminPin}
+                          frozenPin={frozenPin} updateFrozenPin={updateFrozenPin} 
+                          onGoToFrozen={() => setMode(AppMode.FROZEN_LIST)} // DIRECT ACCESS for Super Admin
                       />
                   )}
                   {adminWizardStep === AdminWizardStep.WIZARD_DAYS && (
