@@ -334,9 +334,9 @@ export default function App() {
         {/* ADMIN PANEL */}
         {mode === AppMode.ADMIN && isAuthenticated && (
             <div className="min-h-screen bg-gray-100 pb-20 flex flex-col">
-              <div className="bg-white border-b sticky top-0 z-20 px-6 py-4 shadow-sm flex justify-between items-center shrink-0">
-                  <div className="flex items-center gap-3">
-                      <div className="p-2 bg-orange-100 rounded-lg text-orange-600"><Shield className="w-6 h-6" /></div>
+              <div className="bg-white border-b sticky top-0 z-20 px-4 sm:px-6 py-3 sm:py-4 shadow-sm flex flex-col sm:flex-row justify-between items-center gap-3 shrink-0">
+                  <div className="flex items-center gap-3 w-full sm:w-auto">
+                      <div className="p-2 bg-orange-100 rounded-lg text-orange-600 shrink-0"><Shield className="w-6 h-6" /></div>
                       <div>
                           <h2 className="text-lg font-bold text-gray-800 leading-none">Admin Panel</h2>
                           <span className="text-xs text-gray-400 font-medium">
@@ -346,12 +346,12 @@ export default function App() {
                           </span>
                       </div>
                   </div>
-                  <div className="flex gap-2">
-                      {adminWizardStep !== AdminWizardStep.DASHBOARD && <Button variant="secondary" onClick={() => setAdminWizardStep(AdminWizardStep.DASHBOARD)} className="text-sm">Back</Button>}
-                      <Button onClick={() => setMode(AppMode.SHOPPER_SETUP)} className="bg-gray-800 text-white hover:bg-gray-900 text-sm">Log Out</Button>
+                  <div className="flex gap-2 w-full sm:w-auto justify-end">
+                      {adminWizardStep !== AdminWizardStep.DASHBOARD && <Button variant="secondary" onClick={() => setAdminWizardStep(AdminWizardStep.DASHBOARD)} className="text-sm flex-1 sm:flex-none justify-center">Back</Button>}
+                      <Button onClick={() => setMode(AppMode.SHOPPER_SETUP)} className="bg-gray-800 text-white hover:bg-gray-900 text-sm flex-1 sm:flex-none justify-center">Log Out</Button>
                   </div>
               </div>
-              <div className="flex-1 p-6 overflow-y-auto">
+              <div className="flex-1 p-4 sm:p-6 overflow-y-auto">
                   {adminWizardStep === AdminWizardStep.DASHBOARD && (
                       <AdminDashboard 
                           isShopperAuthEnabled={isShopperAuthEnabled} setIsShopperAuthEnabled={setIsShopperAuthEnabled}

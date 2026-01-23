@@ -286,7 +286,7 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
 
                             {/* Main Buttons (Hidden when pending confirmation) */}
                             {!pendingStatus && (
-                                <div className="flex gap-2 animate-in fade-in">
+                                <div className="flex flex-col sm:flex-row gap-2 animate-in fade-in">
                                     <button 
                                         onClick={() => initiateStatusChange('PENDING')}
                                         className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all border ${
