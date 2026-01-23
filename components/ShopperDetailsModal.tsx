@@ -63,16 +63,12 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
               return;
           }
 
-          // Heuristic: 
-          // 1. Length > 8 (avoids simple postcodes like "1234 AB")
-          // 2. Has digit (House number)
-          // 3. Has space (Street vs Number vs City separator)
-          const hasNumber = /\d/.test(addr);
-          const hasSpace = addr.includes(' ');
-          const isLongEnough = addr.length > 8;
+          // Ultra-relaxed validation: Just check for minimal content length (3 chars)
+          // Removed digit check to allow house names or non-standard formats
+          const isLongEnough = addr.length >= 3;
 
-          if (!hasNumber || !hasSpace || !isLongEnough) {
-              setError("Please enter a FULL Address (Street, House Number, City).");
+          if (!isLongEnough) {
+              setError("Address is too short.");
               return;
           }
       }
@@ -102,8 +98,18 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
                </label>
                
                {error && (
-                   <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-sm text-red-600 font-medium animate-pulse">
-                       <AlertCircle className="w-4 h-4 shrink-0" /> <span>{error}</span>
+                   <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center justify-between gap-2 animate-pulse">
+                       <div className="flex items-center gap-2 text-sm text-red-600 font-medium">
+                           <AlertCircle className="w-4 h-4 shrink-0" /> <span>{error}</span>
+                       </div>
+                       {/* Subtle Bypass Button */}
+                       <button 
+                           onClick={handleDetailsSubmit}
+                           className="text-[10px] text-red-300 hover:text-red-500 underline whitespace-nowrap shrink-0"
+                           title="Force save without validation"
+                       >
+                           Skip check
+                       </button>
                    </div>
                )}
 
@@ -233,13 +239,16 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
                         <label className="text-xs font-bold text-orange-700 uppercase tracking-wider mb-2 block">Home Address</label>
                         <input 
                             value={tempDetails.address}
-                            onChange={(e) => setTempDetails(prev => ({ ...prev, address: e.target.value }))}
-                            placeholder="Coolsingel 40, Rotterdam"
+                            onChange={(e) => {
+                                setTempDetails(prev => ({ ...prev, address: e.target.value }));
+                                if (error) setError(null); // Clear error on type
+                            }}
+                            placeholder="Street + Number + City"
                             className="w-full p-3 bg-white border-2 border-orange-100 rounded-xl outline-none focus:border-orange-500 focus:ring-4 focus:ring-orange-100 transition-all text-sm font-medium"
                         />
                         <p className="text-[10px] text-orange-600 mt-2 flex items-start gap-1">
                             <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
-                            Please enter the full address including street name, house number and city.
+                            Please include your Street, <strong>House Number</strong> and City.
                         </p>
                     </div>
                 )}
@@ -247,7 +256,6 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
          </div>
 
          <div className="p-4 border-t bg-gray-50">
-            {/* Removed the 'disabled' condition to allow validation feedback on click */}
             <Button onClick={validateAndSubmit} fullWidth>
                Save Profile
             </Button>

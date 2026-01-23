@@ -5,13 +5,14 @@ import { SHIFT_TIMES, formatDateKey, getShopperAllowedRange, getShopperMinDate }
 import { Button } from './Button';
 import { CalendarView } from './CalendarView';
 import { MobileInstructionModal } from './MobileInstructionModal';
-import { User, PlayCircle, CheckCircle, ArrowRight, Layers, CalendarCheck, Globe2, Flag } from 'lucide-react';
+import { User, PlayCircle, CheckCircle, ArrowRight, Layers, CalendarCheck, Globe2, Flag, Eye } from 'lucide-react';
 import { addDays, getDay, endOfWeek, addWeeks, isBefore } from 'date-fns';
 import { supabase } from '../supabaseClient';
 import { ShopperAAWizard } from './ShopperAAWizard';
 import { ShopperSummary } from './ShopperSummary';
 import { ShopperDetailsModal } from './ShopperDetailsModal';
 import { FWDConfirmationModal } from './FWDConfirmationModal';
+import { AvailabilityCheatSheet } from './AvailabilityCheatSheet';
 import { getSafeDateFromKey, isRestViolation, isConsecutiveDaysViolation, validateShopperRange, calculateMinStartDate } from '../utils/validation';
 
 interface ShopperAppProps {
@@ -120,6 +121,9 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
       }
       return 'FLOW';
   });
+
+  // NEW: State for Availability Cheat Sheet
+  const [showCheatSheet, setShowCheatSheet] = useState(false);
 
   // Animation State for Counter
   const [countAnim, setCountAnim] = useState(false);
@@ -504,9 +508,21 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
         </div>
         
         {step > 0 && (
-            <div className="hidden md:flex gap-4 text-xs font-medium text-gray-500">
-                 <span>Selected AA: <strong className="text-red-600">{aaSelections.length}</strong></span>
-                 <span>Selected Standard: <strong className="text-green-600">{stdCount}</strong></span>
+            <div className="flex gap-3">
+                {/* NEW: AVAILABILITY CHEAT SHEET BUTTON */}
+                <button 
+                    onClick={() => setShowCheatSheet(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 font-bold rounded-xl border border-blue-100 hover:bg-blue-100 transition-all shadow-sm active:scale-95"
+                >
+                    <Eye className="w-4 h-4" />
+                    <span className="hidden md:inline">Check Availability</span>
+                    <span className="md:hidden">Check</span>
+                </button>
+
+                <div className="hidden md:flex gap-4 text-xs font-medium text-gray-500 items-center border-l pl-4">
+                     <span>Selected AA: <strong className="text-red-600">{aaSelections.length}</strong></span>
+                     <span>Selected Standard: <strong className="text-green-600">{stdCount}</strong></span>
+                </div>
             </div>
         )}
       </div>
@@ -712,6 +728,12 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
           showDetailsModal={showDetailsModal} setShowDetailsModal={setShowDetailsModal}
           tempDetails={tempDetails} setTempDetails={setTempDetails}
           handleDetailsSubmit={handleDetailsSubmit}
+      />
+
+      <AvailabilityCheatSheet 
+          isOpen={showCheatSheet}
+          onClose={() => setShowCheatSheet(false)}
+          adminAvailability={adminAvailability}
       />
     </div>
   );
