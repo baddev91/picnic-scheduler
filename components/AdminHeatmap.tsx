@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
 import { Activity, ChevronDown, ChevronUp, BarChart3, Bus, TrendingUp, ChevronLeft, ChevronRight, Calendar, Users } from 'lucide-react';
-import { format, eachDayOfInterval, addDays, endOfWeek, addWeeks, isSameDay } from 'date-fns';
+import { format, eachDayOfInterval, addDays, endOfWeek, addWeeks, isSameDay, differenceInCalendarDays, min, max } from 'date-fns';
 import parseISO from 'date-fns/parseISO';
 import startOfDay from 'date-fns/startOfDay';
 import startOfWeek from 'date-fns/startOfWeek';
@@ -28,11 +28,30 @@ export const AdminHeatmap: React.FC<AdminHeatmapProps> = ({ data }) => {
 
       let totalShifts = 0;
       let busUsers = 0;
+      let sumWeeklyAverages = 0;
       const shiftTypeCounts: Record<string, number> = {};
 
       data.forEach(shopper => {
-          totalShifts += shopper.shifts.length;
+          const count = shopper.shifts.length;
+          totalShifts += count;
           if (shopper.details?.usePicnicBus) busUsers++;
+
+          // Updated Weekly Average Calculation: Based on Day Span
+          if (count > 0) {
+              const dates = shopper.shifts.map(s => parseISO(s.date));
+              const earliest = min(dates);
+              const latest = max(dates);
+              
+              // Calculate span in exact days + 1 (inclusive)
+              const daysSpan = differenceInCalendarDays(latest, earliest) + 1;
+              
+              // Convert days to weeks (float). 
+              // We enforce a minimum of 1 week (7 days) denominator to normalize short-term data.
+              // This prevents a shopper with 2 shifts in 2 days from showing a projected "7 shifts/week".
+              const weeksSpan = Math.max(1, daysSpan / 7);
+              
+              sumWeeklyAverages += (count / weeksSpan);
+          }
 
           shopper.shifts.forEach(shift => {
               const timeLabel = shift.time.split('(')[0].trim();
@@ -40,7 +59,7 @@ export const AdminHeatmap: React.FC<AdminHeatmapProps> = ({ data }) => {
           });
       });
 
-      const avgShifts = (totalShifts / totalShoppers).toFixed(1);
+      const avgShifts = (sumWeeklyAverages / totalShoppers).toFixed(1);
       const busRate = Math.round((busUsers / totalShoppers) * 100);
 
       let maxCount = 0;
@@ -135,7 +154,7 @@ export const AdminHeatmap: React.FC<AdminHeatmapProps> = ({ data }) => {
                             <BarChart3 className="w-5 h-5 md:w-6 md:h-6" />
                         </div>
                         <div className="min-w-0">
-                            <p className="text-[10px] md:text-xs font-bold text-gray-400 uppercase tracking-wider truncate">Avg. Shifts</p>
+                            <p className="text-[10px] md:text-xs font-bold text-gray-400 uppercase tracking-wider truncate">Avg. Shifts / Wk</p>
                             <p className="text-xl md:text-2xl font-black text-gray-900">{metrics?.avgShifts || '0'}</p>
                         </div>
                     </div>
