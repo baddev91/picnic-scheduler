@@ -6,7 +6,7 @@ import { Button } from './Button';
 import { CalendarView } from './CalendarView';
 import { MobileInstructionModal } from './MobileInstructionModal';
 import { User, PlayCircle, CheckCircle, ArrowRight, Layers, CalendarCheck, Globe2 } from 'lucide-react';
-import { addDays, getDay, endOfWeek, addWeeks, isBefore } from 'date-fns';
+import { addDays, getDay, endOfWeek, addWeeks, isBefore, parseISO } from 'date-fns';
 import { supabase } from '../supabaseClient';
 import { ShopperAAWizard } from './ShopperAAWizard';
 import { ShopperSummary } from './ShopperSummary';
@@ -419,7 +419,47 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
           newShifts.push(proposedShift);
       }
     }
-    setSelections([{ ...prevData, shifts: newShifts }]);
+
+    // --- RE-EVALUATE AA SHIFTS FOR OPENING ELIGIBILITY ---
+    // Now that the standard shift list has changed, we must re-calculate shift indices
+    // If an AA shift was forced to Morning, but now (due to added standard shifts) it is shift #3+,
+    // we should restore it to Opening if that was the original AA choice.
+    
+    // 1. Sort all proposed shifts by date
+    newShifts.sort((a, b) => a.date.localeCompare(b.date));
+
+    // 2. Identify indices relative to First Working Day
+    // Filter to only include relevant shifts for the count (>= FWD)
+    const workingShifts = newShifts.filter(s => s.date >= fwd);
+    
+    // 3. Map and update AA shifts based on original intent (aaSelections)
+    const finalShifts = newShifts.map((s) => {
+        // Only touch AA shifts that are within the working period
+        if (s.type === ShiftType.AA && s.date >= fwd) {
+            
+            // Find what the user originally selected in the Wizard
+            const dayIndex = getDay(parseISO(s.date));
+            const originalIntent = aaSelections.find(aa => aa.dayIndex === dayIndex);
+
+            // Calculate the 0-based index of this shift in the working sequence
+            const shiftIndex = workingShifts.findIndex(ws => ws.date === s.date);
+
+            // LOGIC:
+            // If original intent was OPENING
+            if (originalIntent && originalIntent.time === ShiftTime.OPENING) {
+                if (shiftIndex < 2) {
+                    // Must be Morning
+                    return { ...s, time: ShiftTime.MORNING };
+                } else {
+                    // Eligible for Opening -> Restore Original
+                    return { ...s, time: ShiftTime.OPENING };
+                }
+            }
+        }
+        return s;
+    });
+
+    setSelections([{ ...prevData, shifts: finalShifts }]);
   };
 
   const handleDetailsSubmit = () => {
