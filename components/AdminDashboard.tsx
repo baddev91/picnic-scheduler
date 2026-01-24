@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Settings2, RefreshCw, Save, Share2, CalendarRange, Table, Bus, ArrowRight, ShieldCheck, UserCog, Info, AlertTriangle, Clock, CalendarCheck, Zap, ChevronDown, ChevronUp, History, Snowflake, AlertCircle } from 'lucide-react';
+import { Settings2, RefreshCw, Save, Share2, CalendarRange, Table, Bus, ArrowRight, ShieldCheck, UserCog, Info, AlertTriangle, Clock, CalendarCheck, Zap, ChevronDown, ChevronUp, History, Snowflake, AlertCircle, ShieldAlert } from 'lucide-react';
 import { Button } from './Button';
 import { AdminWizardStep, WeeklyTemplate } from '../types';
 import { MIN_DAYS_TO_START } from '../constants';
@@ -114,6 +114,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     className="flex items-center gap-2 border-gray-300 hover:border-black transition-colors text-xs"
                  >
                      <History className="w-3 h-3" /> Audit Logs
+                 </Button>
+                 {/* NEW SECURITY LOGS BUTTON */}
+                 <Button 
+                    variant="secondary" 
+                    onClick={() => setAdminWizardStep(AdminWizardStep.VIEW_ACCESS_LOGS)}
+                    className="flex items-center gap-2 border-gray-300 hover:border-red-500 hover:text-red-600 transition-colors text-xs bg-red-50/50"
+                 >
+                     <ShieldAlert className="w-3 h-3" /> Security
                  </Button>
               </div>
           </div>

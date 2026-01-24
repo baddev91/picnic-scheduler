@@ -69,6 +69,14 @@ export interface AuditLogRecord {
   changed_at: string; // Timestamp
 }
 
+export interface AccessLogEntry {
+  id: number;
+  created_at: string;
+  status: 'SUCCESS' | 'FAILURE' | 'LOCKOUT';
+  target_role: 'ADMIN' | 'FROZEN' | 'UNKNOWN';
+  device_info: string;
+}
+
 export enum AppMode {
   HOME = 'HOME',
   ADMIN = 'ADMIN',
@@ -94,7 +102,8 @@ export enum AdminWizardStep {
   WIZARD_APPLY = 'WIZARD_APPLY', // Selecting duration
   VIEW_SUBMISSIONS = 'VIEW_SUBMISSIONS', // New Data Dashboard
   BUS_CONFIG = 'BUS_CONFIG', // New Bus Schedule Manager
-  VIEW_LOGS = 'VIEW_LOGS' // New Audit Log Viewer
+  VIEW_LOGS = 'VIEW_LOGS', // New Audit Log Viewer
+  VIEW_ACCESS_LOGS = 'VIEW_ACCESS_LOGS' // NEW: Login Attempts Viewer
 }
 
 // --- BUS CONFIGURATION TYPES ---

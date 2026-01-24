@@ -17,17 +17,20 @@ import { ShopperSetup } from './components/ShopperSetup';
 import { AdminBusConfig } from './components/AdminBusConfig';
 import { ShopperApp } from './components/ShopperApp';
 import { AdminAuditLog } from './components/AdminAuditLog';
+import { AccessLogViewer } from './components/AccessLogViewer'; // NEW
 import { FrozenList } from './components/FrozenList';
 
 const STORAGE_KEYS = {
   TEMPLATE: 'picnic_admin_template',
   SHOPPER_SESSION: 'picnic_shopper_session',
+  LOGIN_ATTEMPTS: 'picnic_login_attempts', // NEW KEY
 };
 
 export default function App() {
   // Auth State
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authError, setAuthError] = useState(false);
+  const [lockoutTime, setLockoutTime] = useState<number | null>(null);
   
   // Admin Auth Config
   const [adminPin, setAdminPin] = useState('7709'); 
@@ -132,7 +135,7 @@ export default function App() {
         const { data: templateData } = await supabase.from('app_settings').select('value').eq('id', 'weekly_template').single();
         if (templateData?.value) {
             let parsed = templateData.value;
-            if (typeof parsed === 'string') { try { parsed = JSON.parse(parsed); } catch(e) {} }
+            if (typeof parsed === 'string') { try { parsed = JSON.parse(parsed); } catch (e) {} }
             setSavedCloudTemplate(parsed);
             setTempTemplate(parsed);
         } else {
@@ -154,7 +157,7 @@ export default function App() {
         const { data: busData } = await supabase.from('app_settings').select('value').eq('id', 'bus_config').single();
         if (busData?.value) {
              let parsed = busData.value;
-             if (typeof parsed === 'string') { try { parsed = JSON.parse(parsed); } catch(e) {} }
+             if (typeof parsed === 'string') { try { parsed = JSON.parse(parsed); } catch (e) {} }
              setBusConfig(parsed);
         }
 
@@ -168,14 +171,12 @@ export default function App() {
     if (savedSession) {
         try {
             const parsed = JSON.parse(savedSession);
-            // Verify if data seems valid and has a name
             if (parsed.selections?.[0]?.name) {
                 setTempNameInput(parsed.selections[0].name);
-                // If the URL didn't explicitly ask for admin, restore shopper mode
                 const params = new URLSearchParams(window.location.search);
                 if (!params.get('mode')) {
                     setMode(AppMode.SHOPPER_FLOW);
-                    setIsShopperVerified(true); // Assuming if they have local data, they passed auth previously
+                    setIsShopperVerified(true);
                 }
             }
         } catch(e) {
@@ -183,6 +184,19 @@ export default function App() {
             localStorage.removeItem(STORAGE_KEYS.SHOPPER_SESSION);
         }
     }
+
+    // CHECK FOR LOCKOUT ON MOUNT
+    const attemptsData = localStorage.getItem(STORAGE_KEYS.LOGIN_ATTEMPTS);
+    if (attemptsData) {
+        const { lockoutUntil } = JSON.parse(attemptsData);
+        if (lockoutUntil && Date.now() < lockoutUntil) {
+            setLockoutTime(lockoutUntil);
+        } else if (lockoutUntil) {
+            // Lockout expired, clear it
+            localStorage.removeItem(STORAGE_KEYS.LOGIN_ATTEMPTS);
+        }
+    }
+
   }, []);
 
   useEffect(() => {
@@ -223,10 +237,7 @@ export default function App() {
   };
 
   const handleClearSession = () => {
-    // Clear Local Storage
     localStorage.removeItem(STORAGE_KEYS.SHOPPER_SESSION);
-    
-    // Reset State
     setIsShopperVerified(false); 
     setShowShopperAuth(false); 
     setTempNameInput(''); 
@@ -256,9 +267,7 @@ export default function App() {
   };
 
   const applyTemplate = () => {
-      // Calculate next Monday manually
       const startDate = addWeeks(startOfWeek(new Date(), { weekStartsOn: 1 }), 1);
-      
       const newAvailability = { ...adminAvailability };
       for (let i = 0; i < applyWeeks * 7; i++) {
          const date = addDays(startDate, i);
@@ -271,20 +280,66 @@ export default function App() {
 
   const handleCopyMagicLink = () => navigator.clipboard.writeText(`${window.location.origin}/?mode=shopper`).then(() => alert("Link Copied!"));
   
-  // UNIFIED LOGIN HANDLER (Smart Login)
-  const handleLogin = (pwd: string) => { 
-      if (pwd === adminPin) { 
-          // 1. ADMIN ACCESS
-          setIsAuthenticated(true); 
+  // --- SECURE LOGIN HANDLER WITH LOGGING ---
+  const logAccessAttempt = async (status: 'SUCCESS' | 'FAILURE' | 'LOCKOUT', role: 'ADMIN' | 'FROZEN' | 'UNKNOWN') => {
+      try {
+          const info = navigator.userAgent; // Basic client info
+          await supabase.from('access_logs').insert([{
+              status,
+              target_role: role,
+              device_info: info
+          }]);
+      } catch(e) {
+          console.error("Logging failed", e);
+      }
+  };
+
+  const handleLogin = async (pwd: string) => { 
+      // 1. Check Lockout State (Redundant check for security)
+      if (lockoutTime && Date.now() < lockoutTime) {
+          return; // Still locked
+      } else if (lockoutTime && Date.now() >= lockoutTime) {
+          setLockoutTime(null);
+          localStorage.removeItem(STORAGE_KEYS.LOGIN_ATTEMPTS);
+      }
+
+      let targetRole: 'ADMIN' | 'FROZEN' | 'UNKNOWN' = 'UNKNOWN';
+      if (pwd === adminPin) targetRole = 'ADMIN';
+      else if (pwd === frozenPin) targetRole = 'FROZEN';
+
+      if (targetRole !== 'UNKNOWN') { 
+          // SUCCESS CASE
+          localStorage.removeItem(STORAGE_KEYS.LOGIN_ATTEMPTS);
+          setLockoutTime(null);
           setAuthError(false); 
-          setMode(AppMode.ADMIN);
-      } else if (pwd === frozenPin) {
-          // 2. FROZEN DEPT ACCESS
-          setIsAuthenticated(false); // Not an admin
-          setAuthError(false);
-          setMode(AppMode.FROZEN_LIST);
+          await logAccessAttempt('SUCCESS', targetRole);
+
+          if (targetRole === 'ADMIN') {
+              setIsAuthenticated(true);
+              setMode(AppMode.ADMIN);
+          } else {
+              setIsAuthenticated(false);
+              setMode(AppMode.FROZEN_LIST);
+          }
       } else { 
+          // FAILURE CASE
           setAuthError(true); 
+          
+          // Get current attempts
+          const storage = JSON.parse(localStorage.getItem(STORAGE_KEYS.LOGIN_ATTEMPTS) || '{"count": 0}');
+          const newCount = storage.count + 1;
+
+          if (newCount >= 3) {
+              // TRIGGER LOCKOUT
+              const lockoutUntil = Date.now() + (30 * 60 * 1000); // 30 Minutes
+              setLockoutTime(lockoutUntil);
+              localStorage.setItem(STORAGE_KEYS.LOGIN_ATTEMPTS, JSON.stringify({ count: newCount, lockoutUntil }));
+              await logAccessAttempt('LOCKOUT', 'UNKNOWN');
+          } else {
+              // INCREMENT COUNTER
+              localStorage.setItem(STORAGE_KEYS.LOGIN_ATTEMPTS, JSON.stringify({ count: newCount, lockoutUntil: null }));
+              await logAccessAttempt('FAILURE', 'UNKNOWN');
+          }
       }
   };
   
@@ -316,14 +371,18 @@ export default function App() {
         
         {/* UNIFIED STAFF LOGIN SCREEN */}
         {mode === AppMode.ADMIN && !isAuthenticated && (
-            <AdminLogin onLogin={handleLogin} onCancel={() => setMode(AppMode.SHOPPER_SETUP)} authError={authError} />
+            <AdminLogin 
+                onLogin={handleLogin} 
+                onCancel={() => setMode(AppMode.SHOPPER_SETUP)} 
+                authError={authError} 
+                lockoutTime={lockoutTime} // Pass lockout state
+            />
         )}
 
         {/* FROZEN LIST */}
         {mode === AppMode.FROZEN_LIST && (
             <FrozenList 
                 onLogout={() => {
-                    // If super admin, go back to dashboard. Else logout to home.
                     if (isAuthenticated) setMode(AppMode.ADMIN);
                     else setMode(AppMode.SHOPPER_SETUP);
                 }} 
@@ -342,7 +401,8 @@ export default function App() {
                           <span className="text-xs text-gray-400 font-medium">
                               {adminWizardStep === AdminWizardStep.VIEW_SUBMISSIONS ? 'Data Viewer' : 
                                adminWizardStep === AdminWizardStep.BUS_CONFIG ? 'Bus Manager' : 
-                               adminWizardStep === AdminWizardStep.VIEW_LOGS ? 'Audit Logs' : 'Wizard Mode'}
+                               adminWizardStep === AdminWizardStep.VIEW_LOGS ? 'Audit Logs' : 
+                               adminWizardStep === AdminWizardStep.VIEW_ACCESS_LOGS ? 'Security Logs' : 'Wizard Mode'}
                           </span>
                       </div>
                   </div>
@@ -362,7 +422,7 @@ export default function App() {
                           setTempTemplate={setTempTemplate} tempTemplate={tempTemplate}
                           adminPin={adminPin} updateAdminPin={updateAdminPin}
                           frozenPin={frozenPin} updateFrozenPin={updateFrozenPin} 
-                          onGoToFrozen={() => setMode(AppMode.FROZEN_LIST)} // DIRECT ACCESS for Super Admin
+                          onGoToFrozen={() => setMode(AppMode.FROZEN_LIST)}
                       />
                   )}
                   {adminWizardStep === AdminWizardStep.WIZARD_DAYS && (
@@ -390,6 +450,9 @@ export default function App() {
                   )}
                   {adminWizardStep === AdminWizardStep.VIEW_LOGS && (
                       <AdminAuditLog onBack={() => setAdminWizardStep(AdminWizardStep.DASHBOARD)} />
+                  )}
+                  {adminWizardStep === AdminWizardStep.VIEW_ACCESS_LOGS && (
+                      <AccessLogViewer onBack={() => setAdminWizardStep(AdminWizardStep.DASHBOARD)} />
                   )}
               </div>
             </div>
