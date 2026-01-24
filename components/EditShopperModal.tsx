@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, Pencil, User, MapPin, Save, Calendar, AlertCircle, Trash2, Plus, Hash, Check } from 'lucide-react';
+import { X, Pencil, User, MapPin, Save, Calendar, AlertCircle, Trash2, Plus, Hash, Check, Star } from 'lucide-react';
 import { format } from 'date-fns';
 import { supabase } from '../supabaseClient';
 import { Button } from './Button';
@@ -42,6 +42,43 @@ export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onC
     setNewShiftType(ShiftType.STANDARD);
   };
 
+  // --- AUTO SYNC FWD HELPER ---
+  const syncFWDWithShifts = async (currentShifts: any[]) => {
+      if (!currentShifts || currentShifts.length === 0) return;
+
+      // Find the earliest shift date
+      const sorted = [...currentShifts].sort((a, b) => a.date.localeCompare(b.date));
+      const earliestDate = sorted[0].date;
+
+      // FIX: Compare against the SAVED database state (shopper.details), not just local state.
+      // This ensures that if the DB is out of sync with the actual shifts, we force an update.
+      const savedFWD = shopper.details?.firstWorkingDay;
+
+      if (earliestDate !== savedFWD) {
+          try {
+              const newDetails = { ...details, firstWorkingDay: earliestDate };
+              
+              // 1. Update Database
+              const { error } = await supabase
+                  .from('shoppers')
+                  .update({ details: newDetails })
+                  .eq('id', shopper.id);
+              
+              if (error) throw error;
+
+              // 2. Update Local State (so UI turns yellow immediately)
+              setDetails(newDetails);
+
+              // 3. Propagate to Parent (so Admin Table updates immediately)
+              onUpdate({ ...shopper, details: newDetails, shifts: currentShifts });
+              
+              console.log(`Auto-synced First Working Day: ${savedFWD} -> ${earliestDate}`);
+          } catch (err) {
+              console.error("Failed to auto-sync FWD", err);
+          }
+      }
+  };
+
   const handleSaveDetails = async () => {
     try {
         const { name, ...restDetails } = details;
@@ -78,7 +115,9 @@ export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onC
         const { error } = await supabase.from('shifts').upsert(updates);
         if (error) throw error;
 
-        // Force a server-side refresh to ensure data consistency
+        // Perform FWD Sync (This now reliably updates DB FWD)
+        await syncFWDWithShifts(shifts);
+
         if (onRefresh) onRefresh();
         else onUpdate({ ...shopper, shifts: shifts });
         
@@ -97,6 +136,10 @@ export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onC
         
         const updatedShifts = shifts.filter(s => s.id !== shiftId);
         setShifts(updatedShifts);
+        
+        // Perform FWD Sync
+        await syncFWDWithShifts(updatedShifts);
+
         onUpdate({ ...shopper, shifts: updatedShifts });
     } catch (e: any) {
         alert("Error removing shift: " + e.message);
@@ -115,13 +158,15 @@ export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onC
         const { data: newShift, error } = await supabase.from('shifts').insert([payload]).select().single();
         if (error) throw error;
         
-        // IMMEDIATE SYNC: Update parent data to ensure consistency with DB
+        const updatedShifts = [...shifts, newShift];
+        setShifts(updatedShifts);
+        
+        // Perform FWD Sync
+        await syncFWDWithShifts(updatedShifts);
+
         if (onRefresh) {
             onRefresh(); 
         } else {
-            // Fallback for older implementations
-            const updatedShifts = [...shifts, newShift];
-            setShifts(updatedShifts);
             onUpdate({ ...shopper, shifts: updatedShifts });
         }
         
@@ -311,17 +356,38 @@ export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onC
                                       }
                                   }
 
-                                  const rowBg = shift.type === ShiftType.AA ? 'bg-red-50/30 border-red-100' : 'bg-white border-gray-100';
+                                  // Dynamic Check for First Working Day (using potentially updated details state)
+                                  const isFWD = details.firstWorkingDay === shift.date;
+
+                                  let rowBg = 'bg-white border-gray-100';
+                                  if (isFWD) {
+                                      rowBg = 'bg-yellow-50 border-yellow-300 ring-1 ring-yellow-200 shadow-sm';
+                                  } else if (shift.type === ShiftType.AA) {
+                                      rowBg = 'bg-red-50/30 border-red-100';
+                                  }
+                                  
                                   const rowHover = 'hover:border-gray-300';
 
                                   return (
-                                    <div key={shift.id || idx} className={`p-3 rounded-lg border transition-all ${rowBg} ${rowHover} flex flex-col md:grid md:grid-cols-12 md:gap-2 md:items-center`}>
+                                    <div key={shift.id || idx} className={`p-3 rounded-lg border transition-all ${rowBg} ${rowHover} flex flex-col md:grid md:grid-cols-12 md:gap-2 md:items-center relative`}>
                                         
+                                        {isFWD && (
+                                            <div className="absolute top-2 right-2 text-yellow-500 animate-in fade-in zoom-in md:hidden">
+                                                <Star className="w-4 h-4 fill-yellow-500" />
+                                            </div>
+                                        )}
+
                                         {/* Date Field */}
-                                        <div className="md:col-span-3 mb-2 md:mb-0">
+                                        <div className="md:col-span-3 mb-2 md:mb-0 relative">
                                             {dayName && (
                                                 <div className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider mb-0.5 md:hidden">
                                                     {dayName}
+                                                </div>
+                                            )}
+                                            {/* FWD Star for Desktop */}
+                                            {isFWD && (
+                                                <div className="absolute -left-5 top-1.5 hidden md:block text-yellow-500" title="First Working Day">
+                                                    <Star className="w-3.5 h-3.5 fill-yellow-500" />
                                                 </div>
                                             )}
                                             <input 

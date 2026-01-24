@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { GripVertical, Pencil, Trash2, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { ShopperRecord, ShiftType } from '../../types';
 
 interface ShopperTableRowProps {
@@ -43,22 +43,33 @@ export const ShopperTableRow: React.FC<ShopperTableRowProps> = ({
         const aaShifts = shifts.filter(s => s.type === ShiftType.AA);
         if (aaShifts.length === 0) return <span className="text-gray-300">-</span>;
         
-        const uniquePatterns = new Set<string>();
-        aaShifts.forEach((s: any) => {
+        // Use a Map to ensure unique Weekdays. 
+        // Key: DayName (e.g. "Sun"), Value: The display string (e.g. "Sun Morning")
+        // We iterate chronologically, so the latest pattern for a day overwrites previous ones if they differ
+        const uniqueDaysMap = new Map<string, string>();
+        
+        // Sort by date ensures consistent processing
+        const sortedAA = [...aaShifts].sort((a, b) => a.date.localeCompare(b.date));
+
+        sortedAA.forEach((s: any) => {
             try {
-                const dayName = format(new Date(s.date), 'EEE');
+                const dateObj = parseISO(s.date);
+                const dayName = format(dateObj, 'EEE'); // e.g. "Sun"
                 const timeShort = s.time.split('(')[0].trim();
-                uniquePatterns.add(`${dayName} ${timeShort}`);
+                
+                // We key by 'dayName' so "Sun Morning" and "Sun Opening" don't coexist. 
+                // Only one entry per day of week.
+                uniqueDaysMap.set(dayName, `${dayName} ${timeShort}`);
             } catch(e) {}
         });
         
-        const patternString = Array.from(uniquePatterns).join(' & ');
-        if (patternString === 'None') return <span className="text-gray-300">-</span>;
+        const patterns = Array.from(uniqueDaysMap.values());
         
-        const parts = patternString.split(' & ');
+        if (patterns.length === 0) return <span className="text-gray-300">-</span>;
+        
         return (
             <div className="flex flex-col gap-1 items-start">
-                {parts.map(p => (
+                {patterns.map(p => (
                     <span key={p} className="text-[10px] font-bold text-red-700 bg-red-50 border border-red-100 px-2 py-0.5 rounded whitespace-nowrap">
                         {p}
                     </span>
