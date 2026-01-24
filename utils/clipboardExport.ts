@@ -167,7 +167,7 @@ const getHRRowValues = (shopper: ShopperRecord): string[] => {
       shopper.details?.nationality || '',           // Col J: Nationality (MAPPED)
       shopper.details?.clothingSize || '',          // Col K: Shirt Size
       shopper.details?.shoeSize || '',              // Col L: Shoes Size
-      shopper.details?.usePicnicBus ? 'TRUE' : 'FALSE', // Col M: Picnic bus?
+      shopper.details?.usePicnicBus ? 'TRUE' : 'FALSE', // Col M: Picnic bus? (TRUE = Checked, FALSE = Unchecked)
       '',                                           // Col N: Re-hire?
       '',                                           // Col O: Onboard sheet?
       '',                                           // Col P: Score cards?

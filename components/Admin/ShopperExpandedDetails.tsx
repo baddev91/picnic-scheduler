@@ -6,8 +6,7 @@ import { supabase } from '../../supabaseClient';
 import { ShopperRecord, ShiftType } from '../../types';
 import { 
     generateSpreadsheetRow, 
-    generateHRSpreadsheetRow, 
-    generateHRSpreadsheetHTML 
+    generateHRSpreadsheetRow
 } from '../../utils/clipboardExport';
 
 interface ShopperExpandedDetailsProps {
@@ -54,21 +53,7 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
     const handleCopyLSInflow = async () => {
         try {
             const text = generateHRSpreadsheetRow(shopper);
-            const html = generateHRSpreadsheetHTML(shopper);
-  
-            if (navigator.clipboard && typeof navigator.clipboard.write === 'function') {
-               try {
-                   const textBlob = new Blob([text], { type: 'text/plain' });
-                   const htmlBlob = new Blob([html], { type: 'text/html' });
-                   await navigator.clipboard.write([
-                       new ClipboardItem({ 'text/plain': textBlob, 'text/html': htmlBlob })
-                   ]);
-               } catch (err) {
-                   await navigator.clipboard.writeText(text);
-               }
-            } else {
-               await navigator.clipboard.writeText(text);
-            }
+            await navigator.clipboard.writeText(text);
             alert(`Copied LS Inflow Data for ${shopper.name}!\n\nReady to paste.`);
         } catch(e: any) {
             alert("Clipboard error: " + e.message);

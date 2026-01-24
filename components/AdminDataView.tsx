@@ -11,7 +11,6 @@ import { ShopperExpandedDetails } from './Admin/ShopperExpandedDetails';
 import { validateShopperSchedule } from '../utils/validation';
 import { 
     generateSpreadsheetRow, 
-    generateBulkHRSpreadsheetHTML,
     generateBulkHRSpreadsheetRow
 } from '../utils/clipboardExport';
 
@@ -297,13 +296,9 @@ export const AdminDataView: React.FC = () => {
 
   const handleBulkCopyLSInflow = async (shoppers: ShopperRecord[], feedbackKey: string) => {
       try {
+          // Use PLAIN TEXT to allow spreadsheets to auto-detect booleans (1/0)
           const text = generateBulkHRSpreadsheetRow(shoppers);
-          const html = generateBulkHRSpreadsheetHTML(shoppers);
-          if (navigator.clipboard && typeof navigator.clipboard.write === 'function') {
-             try {
-                 await navigator.clipboard.write([new ClipboardItem({ 'text/plain': new Blob([text], { type: 'text/plain' }), 'text/html': new Blob([html], { type: 'text/html' }) })]);
-             } catch (err) { await navigator.clipboard.writeText(text); }
-          } else { await navigator.clipboard.writeText(text); }
+          await navigator.clipboard.writeText(text);
           triggerFeedback(feedbackKey);
       } catch (e: any) { alert("Bulk copy failed: " + e.message); }
   };
