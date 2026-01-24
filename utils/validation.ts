@@ -83,7 +83,32 @@ export const isConsecutiveDaysViolation = (dateStr: string, currentShifts: Shopp
     let consecutiveAfter = 0;
     checkDate = addDays(targetDate, 1);
     while (shiftDates.has(formatDateKey(checkDate))) { consecutiveAfter++; checkDate = addDays(checkDate, 1); }
+    
+    // Total consecutive days including the new one must NOT exceed 5
+    // So 6 days in a row is the violation threshold
     return (consecutiveBefore + 1 + consecutiveAfter) > 5;
+};
+
+export const isOpeningShiftViolation = (dateStr: string, time: ShiftTime, currentShifts: ShopperShift[], firstWorkingDay?: string): boolean => {
+    // Only applies to OPENING shifts
+    if (time !== ShiftTime.OPENING) return false;
+
+    // Filter shifts to only include those on or after the First Working Day (if known)
+    // This prevents pre-start AA shifts from inflating the shift count
+    let relevantShifts = currentShifts;
+    if (firstWorkingDay) {
+        relevantShifts = currentShifts.filter(s => s.date >= firstWorkingDay);
+    }
+
+    // We need to simulate the array with the new shift included to sort them chronologically
+    const uniqueDates = Array.from(new Set([...relevantShifts.map(s => s.date), dateStr]));
+    uniqueDates.sort(); // Standard string sort works for YYYY-MM-DD
+
+    const shiftIndex = uniqueDates.indexOf(dateStr);
+
+    // If index is 0 (1st shift) or 1 (2nd shift), OPENING is forbidden.
+    // Allowed from 3rd shift (index 2) onwards.
+    return shiftIndex < 2;
 };
 
 export const validateShopperRange = (proposedShifts: ShopperShift[], firstWorkingDay: string | undefined): { valid: boolean, message?: string } => {
@@ -162,6 +187,14 @@ export const validateShopperSchedule = (shifts: ShopperShift[]): string[] => {
             }
         }
     }
+    
+    // 4. Opening Shift Rule Check
+    // "OPENING" allowed only from the 3rd shift onwards (index >= 2)
+    sortedShifts.forEach((s, index) => {
+        if (s.time === ShiftTime.OPENING && index < 2) {
+            issues.push(`Opening Rule Violation: Shift on ${s.date} is too early (Shift #${index+1}). Must work 2 shifts before taking Opening.`);
+        }
+    });
 
     return issues;
 };

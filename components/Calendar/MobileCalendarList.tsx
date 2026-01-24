@@ -4,7 +4,7 @@ import { format, isWeekend } from 'date-fns';
 import { Lock, Star, Sun, Moon, Sunrise, Ban, AlertCircle, Clock, CalendarX, Plus, CheckCircle2, Info } from 'lucide-react';
 import { ShiftTime, ShiftType, ShopperShift } from '../../types';
 import { SHIFT_TIMES, formatDateKey } from '../../constants';
-import { isRestViolation, isConsecutiveDaysViolation } from '../../utils/validation';
+import { isRestViolation, isConsecutiveDaysViolation, isOpeningShiftViolation } from '../../utils/validation';
 
 interface MobileCalendarListProps {
   daysToList: Date[];
@@ -17,6 +17,7 @@ interface MobileCalendarListProps {
   isDateDisabledForShopper: (date: Date) => boolean;
   isTypeAvailable: (dateKey: string, time: ShiftTime, type: ShiftType) => boolean;
   onShopperToggle?: (date: string, shift: ShiftTime, type: ShiftType) => void;
+  firstWorkingDay?: string; // Added Prop
 }
 
 export const MobileCalendarList: React.FC<MobileCalendarListProps> = ({
@@ -29,7 +30,8 @@ export const MobileCalendarList: React.FC<MobileCalendarListProps> = ({
   getShopperDayStatus,
   isDateDisabledForShopper,
   isTypeAvailable,
-  onShopperToggle
+  onShopperToggle,
+  firstWorkingDay
 }) => {
   
   // Helper for icons
@@ -97,6 +99,9 @@ export const MobileCalendarList: React.FC<MobileCalendarListProps> = ({
                         } else if (isConsecutiveDaysViolation(dateKey, currentShopperShifts)) {
                             isActionDisabled = true;
                             disabledReason = { text: 'Max 5 Days', colorClass: 'text-gray-500', icon: <CalendarX className="w-3 h-3" /> };
+                        } else if (isOpeningShiftViolation(dateKey, shift, currentShopperShifts, firstWorkingDay)) { // Passed firstWorkingDay
+                            isActionDisabled = true;
+                            disabledReason = { text: 'Needs 2 prior shifts', colorClass: 'text-orange-600', icon: <AlertCircle className="w-3 h-3" /> };
                         }
                     }
                 }
@@ -127,15 +132,15 @@ export const MobileCalendarList: React.FC<MobileCalendarListProps> = ({
          // This saves space by collapsing disabled rows.
          const useCompactMode = !hasSelectableOptions && mode === 'SHOPPER';
 
-         // Header Styles
+         // Header Styles (Cleaned up - Removed Green Selection Tint)
          let headerBgClass = isWeekend(day) ? 'bg-red-50/40' : 'bg-gray-50/60';
          let borderColor = 'border-gray-200';
          let cardShadow = 'shadow-sm';
 
          if (dayHasSelection) {
-             borderColor = 'border-green-300';
-             headerBgClass = 'bg-gradient-to-r from-green-50/80 to-emerald-50/30';
-             cardShadow = 'shadow-md shadow-green-100';
+             // Subtle active state instead of strong green
+             borderColor = 'border-gray-300';
+             cardShadow = 'shadow-md';
          }
 
          return (
@@ -164,10 +169,10 @@ export const MobileCalendarList: React.FC<MobileCalendarListProps> = ({
                     </div>
                  </div>
                  
-                 {/* Right Side Pill */}
+                 {/* Right Side Pill (Still colored for clarity, but small) */}
                  {dayHasSelection && (
-                      <div className="flex items-center gap-1.5 text-[10px] font-black text-green-700 bg-white px-2.5 py-1 rounded-full border border-green-200 shadow-sm">
-                          <CheckCircle2 className="w-3 h-3 fill-green-100" />
+                      <div className="flex items-center gap-1.5 text-[10px] font-black text-gray-600 bg-white px-2.5 py-1 rounded-full border border-gray-200 shadow-sm">
+                          <CheckCircle2 className="w-3 h-3 fill-gray-100" />
                           {selections.map(s => s.label).join(', ')}
                       </div>
                  )}
@@ -238,8 +243,6 @@ export const MobileCalendarList: React.FC<MobileCalendarListProps> = ({
                                 textClass = `text-${theme}-900`;
                                 subTextClass = `text-${theme}-700`;
                             } else if (data.isActionDisabled) {
-                                // Should be rare here since we grouped strict disabled days into compact mode,
-                                // but individual shifts might still be disabled on an otherwise active day.
                                 btnClass = "bg-gray-50 border-gray-100 border-dashed opacity-60";
                                 iconClass = "bg-gray-100 text-gray-300";
                                 textClass = "text-gray-400";

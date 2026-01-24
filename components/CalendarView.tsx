@@ -72,6 +72,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
               isDateDisabledForShopper={isDateDisabledForShopper}
               isTypeAvailable={isTypeAvailable}
               onShopperToggle={onShopperToggle}
+              firstWorkingDay={firstWorkingDay} // Added prop
             />
         </div>
 

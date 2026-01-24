@@ -89,9 +89,8 @@ export const DesktopCalendarGrid: React.FC<DesktopCalendarGridProps> = ({
           } else if (isLockedForStandard) {
              cellBgClass = 'bg-gray-50/80 cursor-default';
           } else if (isAvailableForStandard) {
-             // ENHANCED VISIBILITY FOR CLICKABLE DAYS
-             // White background + Emerald Border + Shadow to suggest "Click me to fill"
-             cellBgClass = 'bg-white ring-inset ring-2 ring-emerald-100/70 hover:ring-emerald-300 shadow-sm cursor-pointer hover:bg-emerald-50/30 transition-all z-10';
+             // CLEAN WHITE LOOK FOR AVAILABLE DAYS (Removed green tint)
+             cellBgClass = 'bg-white hover:bg-gray-50 cursor-pointer shadow-sm ring-1 ring-gray-100 transition-all z-10';
           } else {
              // Default available (e.g. Admin or Step 1)
              cellBgClass = 'bg-white hover:bg-blue-50 cursor-pointer';
@@ -161,7 +160,7 @@ export const DesktopCalendarGrid: React.FC<DesktopCalendarGridProps> = ({
 
                 {/* Available Indicator Hint (Only on hover/desktop for Step 3) */}
                 {isAvailableForStandard && !status.stdShift && (
-                    <div className="mt-auto text-center hidden md:flex items-center justify-center opacity-0 hover:opacity-100 text-emerald-400 transition-opacity">
+                    <div className="mt-auto text-center hidden md:flex items-center justify-center opacity-0 hover:opacity-100 text-gray-300 transition-opacity">
                         <Plus className="w-5 h-5" />
                     </div>
                 )}

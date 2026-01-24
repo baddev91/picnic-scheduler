@@ -255,11 +255,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                              </li>
                              <li className="flex items-start gap-2">
                                  <AlertTriangle className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
-                                 <span>Max <strong>5 Consecutive</strong> working days.</span>
+                                 <span>Max <strong>5 Consecutive</strong> days (FWD+AA+Std).</span>
                              </li>
                              <li className="flex items-start gap-2">
                                  <Info className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
-                                 <span>Single shift per day allowed.</span>
+                                 <span><strong>OPENING Shift:</strong> Allowed only after completing 2 shifts.</span>
                              </li>
                          </ul>
                      </div>

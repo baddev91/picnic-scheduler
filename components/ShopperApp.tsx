@@ -12,7 +12,7 @@ import { ShopperAAWizard } from './ShopperAAWizard';
 import { ShopperSummary } from './ShopperSummary';
 import { ShopperDetailsModal } from './ShopperDetailsModal';
 import { FWDConfirmationModal } from './FWDConfirmationModal';
-import { getSafeDateFromKey, isRestViolation, isConsecutiveDaysViolation, validateShopperRange, calculateMinStartDate } from '../utils/validation';
+import { getSafeDateFromKey, isRestViolation, isConsecutiveDaysViolation, isOpeningShiftViolation, validateShopperRange, calculateMinStartDate } from '../utils/validation';
 
 interface ShopperAppProps {
   shopperName: string;
@@ -340,15 +340,36 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
       const previousFWD = existing.details?.firstWorkingDay;
       const wasAA = existing.shifts.some(s => s.date === dateStr && s.time === shift && s.type === ShiftType.AA);
       
-      const newShifts = existing.shifts.filter(s => {
+      // Filter existing shifts
+      const shiftsBuffer = existing.shifts.filter(s => {
           if (s.date === dateStr) return false;
           if (previousFWD && s.date === previousFWD && s.type === ShiftType.STANDARD) return false;
-          if (s.type === ShiftType.STANDARD && s.date < dateStr) return false;
+          if (s.date < dateStr) return false;
           return true;
       });
       
-      newShifts.push({ date: dateStr, time: shift, type: wasAA ? ShiftType.AA : ShiftType.STANDARD });
-      setSelections([{ ...existing, shifts: newShifts, details: { ...existing.details, firstWorkingDay: dateStr } as ShopperDetails }]);
+      // Add the FWD
+      shiftsBuffer.push({ date: dateStr, time: shift, type: wasAA ? ShiftType.AA : ShiftType.STANDARD });
+      
+      // --- CRITICAL FIX: AUTOMATIC OPENING SHIFT CORRECTION ---
+      // Sort shifts chronologically to determine 1st and 2nd shift position
+      shiftsBuffer.sort((a, b) => a.date.localeCompare(b.date));
+
+      // Map over shifts and force "Morning" if it's the 1st or 2nd shift and current time is "Opening"
+      // This handles cases where an AA shift falls on the 2nd day and was set to Opening
+      const correctedShifts = shiftsBuffer.map((s, index) => {
+          if (index < 2 && s.time === ShiftTime.OPENING) {
+              return { ...s, time: ShiftTime.MORNING };
+          }
+          return s;
+      });
+
+      setSelections([{ 
+          ...existing, 
+          shifts: correctedShifts, 
+          details: { ...existing.details, firstWorkingDay: dateStr } as ShopperDetails 
+      }]);
+      
       setStep(ShopperStep.STANDARD_SELECTION);
       setShowFWDConfirmModal(false);
       setPendingFWD(null);
@@ -383,6 +404,14 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
           if (isBefore(getSafeDateFromKey(dateStr), getSafeDateFromKey(fwd))) { alert("Cannot select before First Day."); return; }
           if (isRestViolation(dateStr, shift, testShifts)) { alert("Rest Violation (11h rule)."); return; }
           if (isConsecutiveDaysViolation(dateStr, testShifts)) { alert("Max 5 consecutive days."); return; }
+          
+          // NEW RULE: OPENING Shift Check
+          // Pass 'fwd' to ensure validation only considers shifts from start date onwards
+          if (isOpeningShiftViolation(dateStr, shift, testShifts, fwd)) {
+              alert("You can only select an OPENING shift after you have worked at least 2 shifts.");
+              return;
+          }
+
           const rangeCheck = validateShopperRange(testShifts, fwd);
           if (!rangeCheck.valid) { alert(rangeCheck.message); return; }
 
@@ -479,9 +508,13 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
 
   // Helper for Badge
   const getStepBadgeClass = (s: number) => {
-      if (step === s) return "bg-gray-900 text-white shadow-md scale-105";
-      if (step > s) return "bg-green-100 text-green-700";
-      return "bg-gray-100 text-gray-400";
+      if (step === s) return "bg-gray-900 text-white shadow-md scale-105 cursor-default ring-2 ring-gray-100";
+      if (step > s) return "bg-green-100 text-green-700 hover:bg-green-200 hover:scale-105 cursor-pointer active:scale-95";
+      return "bg-gray-100 text-gray-400 cursor-default";
+  };
+
+  const handleStepClick = (targetStep: number) => {
+      if (targetStep < step) setStep(targetStep);
   };
 
   return (
@@ -500,11 +533,29 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
           {/* STEPPER NAV (Hidden in Step 0) */}
           {step > 0 && (
               <div className="flex items-center gap-2 text-xs font-bold mt-1 animate-in slide-in-from-top-1 fade-in">
-                 <span className={`px-3 py-1 rounded-full transition-all ${getStepBadgeClass(1)}`}>1. AA Shifts</span>
+                 <button 
+                    onClick={() => handleStepClick(1)} 
+                    disabled={step <= 1}
+                    className={`px-3 py-1 rounded-full transition-all ${getStepBadgeClass(1)}`}
+                 >
+                    1. AA Shifts
+                 </button>
                  <div className="w-4 h-0.5 bg-gray-200"></div>
-                 <span className={`px-3 py-1 rounded-full transition-all ${getStepBadgeClass(2)}`}>2. Start Date</span>
+                 <button 
+                    onClick={() => handleStepClick(2)} 
+                    disabled={step <= 2}
+                    className={`px-3 py-1 rounded-full transition-all ${getStepBadgeClass(2)}`}
+                 >
+                    2. Start Date
+                 </button>
                  <div className="w-4 h-0.5 bg-gray-200"></div>
-                 <span className={`px-3 py-1 rounded-full transition-all ${getStepBadgeClass(3)}`}>3. Standard</span>
+                 <button 
+                    onClick={() => handleStepClick(3)} 
+                    disabled={step <= 3}
+                    className={`px-3 py-1 rounded-full transition-all ${getStepBadgeClass(3)}`}
+                 >
+                    3. Standard
+                 </button>
               </div>
           )}
           {step === 0 && (

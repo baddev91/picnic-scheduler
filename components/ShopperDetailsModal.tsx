@@ -230,7 +230,7 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
                        className="w-5 h-5 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
                     />
                     <label htmlFor="randstad" className="font-bold text-gray-800 cursor-pointer select-none">
-                       Registered via Randstad?
+                       Registered via Randstad Employment Agency?
                     </label>
                 </div>
                 

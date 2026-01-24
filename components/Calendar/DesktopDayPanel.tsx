@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import { X, Lock, Check, Star, Sun, Moon, Sunrise, Ban, AlertCircle, Clock, CalendarX, AlertTriangle, Coffee } from 'lucide-react';
 import { ShiftTime, ShiftType, ShopperShift } from '../../types';
 import { SHIFT_TIMES, formatDateKey } from '../../constants';
-import { isRestViolation, isConsecutiveDaysViolation } from '../../utils/validation';
+import { isRestViolation, isConsecutiveDaysViolation, isOpeningShiftViolation } from '../../utils/validation';
 
 interface DesktopDayPanelProps {
   selectedDay: Date | null;
@@ -148,6 +148,10 @@ export const DesktopDayPanel: React.FC<DesktopDayPanelProps> = ({
                               isActionDisabled = true;
                               // NEUTRAL GREY for 5 days
                               disabledReason = { text: 'Max 5 Days', icon: <CalendarX className="w-3 h-3" />, colorClass: 'bg-gray-100 text-gray-400', borderClass: 'border-gray-200' };
+                          } else if (isOpeningShiftViolation(dateKey, shift, currentShopperShifts, firstWorkingDay)) { // Passed FWD
+                              isActionDisabled = true;
+                              // ORANGE for Opening Violation
+                              disabledReason = { text: 'Needs 2 prior shifts', icon: <AlertCircle className="w-3 h-3" />, colorClass: 'bg-orange-100 text-orange-700', borderClass: 'border-orange-200' };
                           }
                       }
                   }
