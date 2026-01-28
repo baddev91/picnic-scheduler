@@ -97,20 +97,20 @@ export const AAConfirmationModal: React.FC<AAConfirmationModalProps> = ({
             </div>
         </div>
 
-        {/* Footer Actions - Fixed */}
-        <div className="shrink-0 p-4 bg-gray-50 border-t flex flex-col sm:flex-row gap-3 z-10">
+        {/* Footer Actions - Fixed - Side by Side */}
+        <div className="shrink-0 p-4 bg-gray-50 border-t flex flex-row gap-3 z-10">
             <Button 
                 onClick={onClose} 
                 variant="secondary" 
-                className="flex-1 py-3 border-gray-200 text-gray-600 hover:bg-white"
+                className="flex-1 py-3 border-gray-200 text-gray-600 hover:bg-white text-xs sm:text-sm"
             >
-                <Edit2 className="w-4 h-4 mr-2" /> Change Days
+                <Edit2 className="w-4 h-4 mr-1.5" /> Change
             </Button>
             <Button 
                 onClick={onConfirm} 
-                className="flex-[2] py-3 bg-red-600 hover:bg-red-700 shadow-lg shadow-red-200 text-white"
+                className="flex-[2] py-3 bg-red-600 hover:bg-red-700 shadow-lg shadow-red-200 text-white text-xs sm:text-sm"
             >
-                Yes, I Confirm <ArrowRight className="w-4 h-4 ml-2" />
+                Confirm <ArrowRight className="w-4 h-4 ml-1.5" />
             </Button>
         </div>
       </div>
