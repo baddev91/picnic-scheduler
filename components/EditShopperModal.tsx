@@ -24,12 +24,16 @@ export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onC
   const [newShiftTime, setNewShiftTime] = useState<ShiftTime>(SHIFT_TIMES[0]);
   const [newShiftType, setNewShiftType] = useState<ShiftType>(ShiftType.STANDARD);
   const [hasUnsavedShiftChanges, setHasUnsavedShiftChanges] = useState(false);
+  
+  // Feedback State
+  const [showSuccessFeedback, setShowSuccessFeedback] = useState(false);
 
   useEffect(() => {
     if (shopper) {
         setDetails({ ...shopper.details, name: shopper.name });
         setShifts(JSON.parse(JSON.stringify(shopper.shifts)));
         setHasUnsavedShiftChanges(false);
+        setShowSuccessFeedback(false);
         resetShiftForm();
     }
   }, [shopper]);
@@ -90,7 +94,11 @@ export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onC
         if (error) throw error;
         
         onUpdate({ ...shopper, name, details: restDetails });
-        alert("Details updated successfully");
+        
+        // Visual Feedback
+        setShowSuccessFeedback(true);
+        setTimeout(() => setShowSuccessFeedback(false), 2000);
+        
     } catch (e: any) {
         alert("Error saving details: " + e.message);
     }
@@ -303,15 +311,54 @@ export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onC
                                 />
                                 <span className="text-sm font-medium text-gray-700">Uses Picnic Bus</span>
                             </label>
+
+                            {/* Randstad Checkbox */}
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input 
+                                    type="checkbox"
+                                    checked={details.isRandstad || false}
+                                    onChange={e => setDetails({...details, isRandstad: e.target.checked})}
+                                    className="rounded text-blue-600 focus:ring-blue-500"
+                                />
+                                <span className="text-sm font-medium text-gray-700">Randstad Agency</span>
+                            </label>
                         </div>
+
+                        {/* Conditional Address Field */}
+                        {details.isRandstad && (
+                            <div className="space-y-1 mt-2 p-2 bg-blue-50 rounded-lg border border-blue-100 animate-in fade-in slide-in-from-top-1">
+                                <label className="text-xs font-semibold text-blue-700 flex items-center gap-1">
+                                    <MapPin className="w-3 h-3" /> Address
+                                </label>
+                                <input 
+                                    value={details.address || ''}
+                                    onChange={e => setDetails({...details, address: e.target.value})}
+                                    placeholder="Full Address..."
+                                    className="w-full p-2 rounded border border-blue-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                                />
+                            </div>
+                        )}
                         
                         <div className="pt-4 mt-2">
                             <Button 
                                 onClick={handleSaveDetails} 
                                 fullWidth 
-                                className="bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white border-none shadow-md hover:shadow-lg transform transition-all duration-200 py-2.5 text-xs font-bold uppercase tracking-wide"
+                                disabled={showSuccessFeedback}
+                                className={`transform transition-all duration-300 py-2.5 text-xs font-bold uppercase tracking-wide border-none shadow-md ${
+                                    showSuccessFeedback 
+                                    ? 'bg-green-600 hover:bg-green-700 text-white scale-95' 
+                                    : 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 hover:shadow-lg text-white'
+                                }`}
                             >
-                                <Save className="w-4 h-4 mr-2" /> Save Personal Info
+                                {showSuccessFeedback ? (
+                                    <div className="flex items-center justify-center gap-2 animate-in fade-in zoom-in">
+                                        <Check className="w-4 h-4" /> Saved!
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center justify-center gap-2">
+                                        <Save className="w-4 h-4" /> Save Personal Info
+                                    </div>
+                                )}
                             </Button>
                         </div>
                     </div>

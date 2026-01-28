@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, MapPin, Sheet, Copy, FileSpreadsheet, Calendar, Star, CheckCircle, XCircle, Clock, AlertTriangle, X, Check, Globe, FileText, Save, Snowflake } from 'lucide-react';
+import { User, MapPin, Sheet, Copy, FileSpreadsheet, Calendar, Star, CheckCircle, XCircle, Clock, AlertTriangle, X, Check, Globe, FileText, Save, Snowflake, Building2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { supabase } from '../../supabaseClient';
 import { ShopperRecord, ShiftType } from '../../types';
@@ -152,11 +152,14 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
                              <strong className="text-gray-900">{shopper.details?.nationality || 'N/A'}</strong>
                         </div>
 
+                        <span>Agency: <strong className={shopper.details?.isRandstad ? 'text-blue-600' : 'text-gray-900'}>{shopper.details?.isRandstad ? 'Randstad' : 'Picnic'}</strong></span>
+                        <span>Gender: <strong>{shopper.details?.gender || 'N/D'}</strong></span>
+                        
                         <span>Clothing: <strong>{shopper.details?.clothingSize}</strong></span>
                         <span>Shoes: <strong>{shopper.details?.shoeSize}</strong></span>
                         <span>Gloves: <strong>{shopper.details?.gloveSize}</strong></span>
                         <span>Status: <strong>{shopper.details?.civilStatus}</strong></span>
-                        <span>Gender: <strong>{shopper.details?.gender || 'N/D'}</strong></span>
+                        
                         {shopper.details?.pnNumber && (
                             <span className="col-span-2 font-mono text-xs bg-gray-100 px-2 py-1 rounded w-fit mt-1">
                                 PN: <strong>{shopper.details.pnNumber}</strong>
@@ -165,7 +168,10 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
                     </div>
                     {shopper.details?.isRandstad && (
                         <div className="mt-2 pt-2 border-t">
-                            <div className="flex items-start gap-2 text-xs"><MapPin className="w-3 h-3 mt-0.5 shrink-0" />{shopper.details?.address || 'No address provided'}</div>
+                            <div className="flex items-start gap-2 text-xs font-medium text-blue-800 bg-blue-50 p-2 rounded">
+                                <MapPin className="w-3 h-3 mt-0.5 shrink-0 text-blue-500" />
+                                {shopper.details?.address || 'No address provided'}
+                            </div>
                         </div>
                     )}
                     

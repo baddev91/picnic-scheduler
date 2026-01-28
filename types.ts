@@ -37,6 +37,7 @@ export interface ShopperDetails {
   pnNumber?: string; // e.g. PN123456
   firstDayStatus?: 'PENDING' | 'SHOWED_UP' | 'NO_SHOW'; // New Attendance Tracking
   notes?: string; // NEW: Admin Notes
+  ignoreCompliance?: boolean; // NEW: Flag to ignore compliance checks
   
   // FROZEN SPECIFIC FIELDS
   isFrozenEligible?: boolean;
