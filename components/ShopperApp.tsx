@@ -12,6 +12,7 @@ import { ShopperAAWizard } from './ShopperAAWizard';
 import { ShopperSummary } from './ShopperSummary';
 import { ShopperDetailsModal } from './ShopperDetailsModal';
 import { FWDConfirmationModal } from './FWDConfirmationModal';
+import { AAConfirmationModal } from './AAConfirmationModal'; // NEW IMPORT
 import { getSafeDateFromKey, isRestViolation, isConsecutiveDaysViolation, isOpeningShiftViolation, validateShopperRange, calculateMinStartDate } from '../utils/validation';
 
 interface ShopperAppProps {
@@ -101,7 +102,10 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
   const [fwdCounts, setFwdCounts] = useState<Record<string, number>>({});
   const [showFWDConfirmModal, setShowFWDConfirmModal] = useState(false);
   const [pendingFWD, setPendingFWD] = useState<{ date: string; shift: ShiftTime } | null>(null);
-  const [isCheckingFWD, setIsCheckingFWD] = useState(false); // New Loading State
+  const [isCheckingFWD, setIsCheckingFWD] = useState(false);
+  
+  // New State for AA Confirmation Modal
+  const [showAAConfirmModal, setShowAAConfirmModal] = useState(false);
   
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [tempDetails, setTempDetails] = useState<ShopperDetails>(selections[0].details!);
@@ -110,7 +114,6 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
   const [syncStatus, setSyncStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [showMobileInstructions, setShowMobileInstructions] = useState(false);
   const [viewMode, setViewMode] = useState<'FLOW' | 'SUMMARY'>(() => {
-      // Logic: If user was in details step (3), show summary
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
          try {
@@ -121,15 +124,13 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
       return 'FLOW';
   });
 
-  // Animation State for Counter
   const [countAnim, setCountAnim] = useState(false);
-
   const flowScrollContainerRef = useRef<HTMLDivElement>(null);
 
   // --- AUTO SAVE EFFECT ---
   useEffect(() => {
     const sessionData = {
-        name: selections[0].name, // Top level for App.tsx to verify
+        name: selections[0].name,
         step,
         selections,
         aaSelections
@@ -140,12 +141,11 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
   // Effects
   useEffect(() => {
     fetchFWDCounts();
-    // Scroll reset on step change
     setTimeout(() => { if (flowScrollContainerRef.current) flowScrollContainerRef.current.scrollTop = 0; window.scrollTo(0, 0); }, 50);
     if (viewMode === 'FLOW' && step > 0) setShowMobileInstructions(true);
   }, [step, viewMode]);
 
-  // --- SAFETY CHECK: Force Nationality Selection if missing ---
+  // --- SAFETY CHECK ---
   useEffect(() => {
       if (step > ShopperStep.NATIONALITY_SELECTION) {
           const currentNat = selections[0].details?.nationality;
@@ -155,28 +155,23 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
       }
   }, [step, selections]);
 
-  // --- LOGIC: Calculate Total Shifts (FWD + AA + Standard) in the valid 2-week range ---
+  // --- LOGIC: Calculate Total Shifts ---
   const currentData = selections[0];
   const fwdDateStr = currentData.details?.firstWorkingDay;
   let totalShiftCount = 0;
 
   if (fwdDateStr) {
       const fwdDate = getSafeDateFromKey(fwdDateStr);
-      // Range: FWD -> Sunday of the *next* week (Total 2 working weeks roughly)
       const limitDateKey = formatDateKey(endOfWeek(addWeeks(fwdDate, 1), { weekStartsOn: 1 }));
-      
       totalShiftCount = currentData.shifts.filter(s => 
           s.date >= fwdDateStr && s.date <= limitDateKey
       ).length;
   } else {
-      // If FWD is not set yet, just show current selection count (likely just AA generated ones)
       totalShiftCount = currentData.shifts.length;
   }
 
-  const aaCount = currentData.shifts.filter(s => s.type === ShiftType.AA).length;
-  const stdCount = currentData.shifts.filter(s => s.type === ShiftType.STANDARD).length; // Kept for header debug only
+  const stdCount = currentData.shifts.filter(s => s.type === ShiftType.STANDARD).length;
 
-  // Trigger animation when TOTAL shift count changes
   useEffect(() => {
       if (step === ShopperStep.STANDARD_SELECTION) {
           setCountAnim(true);
@@ -185,7 +180,6 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
       }
   }, [totalShiftCount, step]);
 
-  // Logic
   const fetchFWDCounts = async () => {
       const { data: shoppers } = await supabase.from('shoppers').select('id, details');
       if (!shoppers) return;
@@ -221,6 +215,9 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
       setStep(ShopperStep.AA_SELECTION);
   };
 
+  // --- AA LOGIC SPLIT START ---
+  
+  // 1. Validation Only
   const handleAAWizardSubmit = () => {
       // Validation: Must select exactly 2 days
       if (aaSelections.length !== 2) { 
@@ -243,12 +240,49 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
           return;
       }
       
-      // Implicitly check weekend requirement (since total is 2 and max weekday is 1, at least 1 MUST be weekend)
       if (weekends.length === 0) {
            alert("You must select at least 1 Weekend day.");
            return;
       }
 
+      // Rest Rule Check
+      const checkRest = (d1: number, t1: ShiftTime, d2: number, t2: ShiftTime) => {
+          const late = [ShiftTime.NOON, ShiftTime.AFTERNOON];
+          const early = [ShiftTime.OPENING, ShiftTime.MORNING];
+          if (late.includes(t1) && early.includes(t2)) return true;
+          return false;
+      };
+
+      const selMap = new Map<number, ShiftTime>();
+      aaSelections.forEach(s => {
+          if (s.time) selMap.set(s.dayIndex, s.time);
+      });
+      
+      if (selMap.has(6) && selMap.has(0)) {
+          if (checkRest(6, selMap.get(6)!, 0, selMap.get(0)!)) {
+               alert("Rest Rule Violation: You cannot work Late Saturday and Early Sunday. Please adjust your time selection.");
+               return;
+          }
+      }
+      if (selMap.has(0) && selMap.has(1)) {
+          if (checkRest(0, selMap.get(0)!, 1, selMap.get(1)!)) {
+               alert("Rest Rule Violation: You cannot work Late Sunday and Early Monday. Please adjust your time selection.");
+               return;
+          }
+      }
+      if (selMap.has(5) && selMap.has(6)) {
+          if (checkRest(5, selMap.get(5)!, 6, selMap.get(6)!)) {
+               alert("Rest Rule Violation: You cannot work Late Friday and Early Saturday. Please adjust your time selection.");
+               return;
+          }
+      }
+
+      // If all Valid, Show Confirmation Modal
+      setShowAAConfirmModal(true);
+  };
+
+  // 2. Finalize after confirmation
+  const finalizeAASubmission = () => {
       const range = getShopperAllowedRange();
       const newShifts: ShopperShift[] = [];
       let currentDate = range.start;
@@ -282,7 +316,9 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
       
       setSelections([newShopperData]);
       setStep(ShopperStep.FWD_SELECTION);
+      setShowAAConfirmModal(false);
   };
+  // --- AA LOGIC SPLIT END ---
 
   const handleFWDSelection = (dateStr: string, shift: ShiftTime) => {
       if (shift === ShiftTime.OPENING || shift === ShiftTime.NOON) { alert("Invalid First Day Shift."); return; }
@@ -296,7 +332,6 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
       setIsCheckingFWD(true);
       const { date: dateStr, shift } = pendingFWD;
 
-      // --- 1. LOCAL RULE CHECK: 11h REST VIOLATION ---
       const currentShifts = selections[0].shifts;
       
       if (isRestViolation(dateStr, shift, currentShifts)) {
@@ -307,7 +342,6 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
       }
 
       try {
-          // --- 2. REMOTE CHECK: CAPACITY ---
           const { data: potentialConflicts } = await supabase
               .from('shoppers')
               .select('id')
@@ -325,7 +359,7 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
 
               if (count !== null && count >= 5) {
                   alert("Oops! This slot was just filled by another user. Please select a different time or day.");
-                  fetchFWDCounts(); // Refresh the UI counters
+                  fetchFWDCounts();
                   setIsCheckingFWD(false);
                   setShowFWDConfirmModal(false);
                   return;
@@ -335,12 +369,10 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
           console.error("Availability check failed", err);
       }
 
-      // Proceed with local selection if check passed
       const existing = selections[0];
       const previousFWD = existing.details?.firstWorkingDay;
       const wasAA = existing.shifts.some(s => s.date === dateStr && s.time === shift && s.type === ShiftType.AA);
       
-      // Filter existing shifts
       const shiftsBuffer = existing.shifts.filter(s => {
           if (s.date === dateStr) return false;
           if (previousFWD && s.date === previousFWD && s.type === ShiftType.STANDARD) return false;
@@ -348,15 +380,10 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
           return true;
       });
       
-      // Add the FWD
       shiftsBuffer.push({ date: dateStr, time: shift, type: wasAA ? ShiftType.AA : ShiftType.STANDARD });
       
-      // --- CRITICAL FIX: AUTOMATIC OPENING SHIFT CORRECTION ---
-      // Sort shifts chronologically to determine 1st and 2nd shift position
+      // Automatic opening shift correction
       shiftsBuffer.sort((a, b) => a.date.localeCompare(b.date));
-
-      // Map over shifts and force "Morning" if it's the 1st or 2nd shift and current time is "Opening"
-      // This handles cases where an AA shift falls on the 2nd day and was set to Opening
       const correctedShifts = shiftsBuffer.map((s, index) => {
           if (index < 2 && s.time === ShiftTime.OPENING) {
               return { ...s, time: ShiftTime.MORNING };
@@ -404,9 +431,6 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
           if (isBefore(getSafeDateFromKey(dateStr), getSafeDateFromKey(fwd))) { alert("Cannot select before First Day."); return; }
           if (isRestViolation(dateStr, shift, testShifts)) { alert("Rest Violation (11h rule)."); return; }
           if (isConsecutiveDaysViolation(dateStr, testShifts)) { alert("Max 5 consecutive days."); return; }
-          
-          // NEW RULE: OPENING Shift Check
-          // Pass 'fwd' to ensure validation only considers shifts from start date onwards
           if (isOpeningShiftViolation(dateStr, shift, testShifts, fwd)) {
               alert("You can only select an OPENING shift after you have worked at least 2 shifts.");
               return;
@@ -420,38 +444,19 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
       }
     }
 
-    // --- RE-EVALUATE AA SHIFTS FOR OPENING ELIGIBILITY ---
-    // Now that the standard shift list has changed, we must re-calculate shift indices
-    // If an AA shift was forced to Morning, but now (due to added standard shifts) it is shift #3+,
-    // we should restore it to Opening if that was the original AA choice.
-    
-    // 1. Sort all proposed shifts by date
     newShifts.sort((a, b) => a.date.localeCompare(b.date));
-
-    // 2. Identify indices relative to First Working Day
-    // Filter to only include relevant shifts for the count (>= FWD)
     const workingShifts = newShifts.filter(s => s.date >= fwd);
     
-    // 3. Map and update AA shifts based on original intent (aaSelections)
     const finalShifts = newShifts.map((s) => {
-        // Only touch AA shifts that are within the working period
         if (s.type === ShiftType.AA && s.date >= fwd) {
-            
-            // Find what the user originally selected in the Wizard
             const dayIndex = getDay(parseISO(s.date));
             const originalIntent = aaSelections.find(aa => aa.dayIndex === dayIndex);
-
-            // Calculate the 0-based index of this shift in the working sequence
             const shiftIndex = workingShifts.findIndex(ws => ws.date === s.date);
 
-            // LOGIC:
-            // If original intent was OPENING
             if (originalIntent && originalIntent.time === ShiftTime.OPENING) {
                 if (shiftIndex < 2) {
-                    // Must be Morning
                     return { ...s, time: ShiftTime.MORNING };
                 } else {
-                    // Eligible for Opening -> Restore Original
                     return { ...s, time: ShiftTime.OPENING };
                 }
             }
@@ -463,7 +468,6 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
   };
 
   const handleDetailsSubmit = () => {
-    // Preserve existing details (including nationality) and merge with tempDetails
     const updated = { 
         ...selections[0], 
         details: { 
@@ -472,7 +476,7 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
         } 
     };
     setSelections([updated]);
-    setStep(ShopperStep.DETAILS); // Track internal step
+    setStep(ShopperStep.DETAILS);
     setShowDetailsModal(false);
     setViewMode('SUMMARY');
   };
@@ -495,29 +499,21 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
             if (shiftsError) throw new Error(shiftsError.message);
         }
         setSyncStatus('success');
-        
-        // --- CLEAR LOCAL SESSION ON SUCCESS ---
         localStorage.removeItem(STORAGE_KEY);
-        
     } catch (error: any) { setSyncStatus('error'); alert(`Failed: ${error.message}`); } finally { setIsSyncing(false); }
   };
 
-  // Helper to safely open details modal with fresh state
   const openDetailsModal = () => {
-      // CRITICAL: Refresh tempDetails with the most recent selections before opening
-      // This ensures 'nationality' and other fields saved in previous steps are present in the form state
       if (selections[0].details) {
           setTempDetails(selections[0].details);
       }
       setShowDetailsModal(true);
   };
 
-  // Dynamic Date Constraint Calculation
   const computedMinDate = useMemo(() => {
       return calculateMinStartDate(selections[0].details?.nationality);
   }, [selections[0].details?.nationality]);
 
-  // Render Logic
   const data = selections[0];
 
   if (viewMode === 'SUMMARY') {
@@ -533,9 +529,6 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
               setMode={(m) => { 
                   if (m === AppMode.SHOPPER_FLOW) {
                       setViewMode('FLOW');
-                      // Fix for White Screen on Edit: 
-                      // If we are currently at DETAILS step (which has no UI in Flow mode),
-                      // revert to STANDARD_SELECTION so the user sees the calendar.
                       if (step === ShopperStep.DETAILS) {
                           setStep(ShopperStep.STANDARD_SELECTION);
                       }
@@ -546,7 +539,6 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
       );
   }
 
-  // Helper for Badge
   const getStepBadgeClass = (s: number) => {
       if (step === s) return "bg-gray-900 text-white shadow-md scale-105 cursor-default ring-2 ring-gray-100";
       if (step > s) return "bg-green-100 text-green-700 hover:bg-green-200 hover:scale-105 cursor-pointer active:scale-95";
@@ -563,14 +555,12 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
       <div className="bg-white px-6 py-4 shadow-sm border-b sticky top-0 z-20 flex justify-between items-center shrink-0">
         <div>
           <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            {/* Hidden Exit Button on Icon */}
             <button onClick={onExit} className="hover:text-red-500 transition-colors outline-none cursor-default active:scale-95" title="Exit to Setup">
                 <User className="w-5 h-5 text-gray-400" />
             </button>
             {shopperName}
           </h2>
           
-          {/* STEPPER NAV (Hidden in Step 0) */}
           {step > 0 && (
               <div className="flex items-center gap-2 text-xs font-bold mt-1 animate-in slide-in-from-top-1 fade-in">
                  <button 
@@ -628,7 +618,6 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
                           <p className="text-gray-500">Please select your nationality to proceed.</p>
                       </div>
 
-                      {/* QUICK PICK GRID */}
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                           {TOP_NATIONALITIES.map((nation) => (
                               <button
@@ -642,13 +631,11 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
                           ))}
                       </div>
 
-                      {/* DIVIDER */}
                       <div className="relative">
                           <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200"></div></div>
                           <div className="relative flex justify-center"><span className="bg-gray-50 px-2 text-xs text-gray-400 font-bold uppercase">Or select other</span></div>
                       </div>
 
-                      {/* DROPDOWN */}
                       <div className="bg-white p-4 rounded-xl border shadow-sm">
                            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">All Countries</label>
                            <select 
@@ -694,7 +681,7 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
                       firstWorkingDay={data.details?.firstWorkingDay} 
                       onShopperToggle={handleFWDSelection} 
                       fwdCounts={fwdCounts}
-                      minDate={computedMinDate} // Pass calculated min date
+                      minDate={computedMinDate} 
                   />
               </div>
           )}
@@ -722,7 +709,7 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
                       currentShopperShifts={data.shifts} 
                       firstWorkingDay={data.details?.firstWorkingDay} 
                       onShopperToggle={handleStandardShiftToggle}
-                      minDate={computedMinDate} // Pass calculated min date
+                      minDate={computedMinDate} 
                   />
               </div>
           )}
@@ -731,7 +718,6 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
       {(step === ShopperStep.STANDARD_SELECTION || step === ShopperStep.DETAILS) && (
             <div className="bg-white px-4 py-3 border-t sticky bottom-0 z-20 shadow-[0_-5px_15px_rgba(0,0,0,0.06)]">
                <div className="max-w-5xl mx-auto space-y-3">
-                  {/* Dynamic Shift Counter UI */}
                   <div className="flex items-center justify-between px-2">
                        <div className="flex items-center gap-2 text-gray-400">
                            <Layers className="w-4 h-4" />
@@ -801,6 +787,14 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
                   </div>
                 </div>
           } 
+      />
+
+      {/* NEW AA Confirmation Modal */}
+      <AAConfirmationModal 
+          isOpen={showAAConfirmModal}
+          onClose={() => setShowAAConfirmModal(false)}
+          onConfirm={finalizeAASubmission}
+          selections={aaSelections}
       />
 
       <FWDConfirmationModal 

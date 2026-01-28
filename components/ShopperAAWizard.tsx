@@ -68,10 +68,39 @@ export const ShopperAAWizard: React.FC<ShopperAAWizardProps> = ({
   };
 
   const isShiftDisabled = (dayIndex: number, shift: ShiftTime) => {
-      if (!savedCloudTemplate || Object.keys(savedCloudTemplate).length === 0) return false;
-      const dayConfig = savedCloudTemplate[dayIndex];
-      if (!dayConfig) return true;
-      return !dayConfig[shift]?.includes(ShiftType.AA);
+      // 1. Check Admin Template
+      if (savedCloudTemplate && Object.keys(savedCloudTemplate).length > 0) {
+          const dayConfig = savedCloudTemplate[dayIndex];
+          if (!dayConfig || !dayConfig[shift]?.includes(ShiftType.AA)) return { disabled: true, reason: 'Unavailable' };
+      }
+
+      // 2. Check Rest Rule against OTHER selections
+      // We need to check if adjacent days create a violation (Late -> Early)
+      
+      const earlyShifts = [ShiftTime.OPENING, ShiftTime.MORNING];
+      const lateShifts = [ShiftTime.NOON, ShiftTime.AFTERNOON];
+      const isCurrentEarly = earlyShifts.includes(shift);
+      const isCurrentLate = lateShifts.includes(shift);
+
+      // Find "Yesterday"
+      const prevDayIndex = dayIndex === 0 ? 6 : dayIndex - 1;
+      const prevSelection = aaSelections.find(s => s.dayIndex === prevDayIndex);
+      
+      // Find "Tomorrow"
+      const nextDayIndex = dayIndex === 6 ? 0 : dayIndex + 1;
+      const nextSelection = aaSelections.find(s => s.dayIndex === nextDayIndex);
+
+      // Rule A: If Yesterday is selected and is LATE, Today cannot be EARLY
+      if (prevSelection && prevSelection.time && lateShifts.includes(prevSelection.time)) {
+          if (isCurrentEarly) return { disabled: true, reason: 'Rest Rule (11h)' };
+      }
+
+      // Rule B: If Tomorrow is selected and is EARLY, Today cannot be LATE
+      if (nextSelection && nextSelection.time && earlyShifts.includes(nextSelection.time)) {
+          if (isCurrentLate) return { disabled: true, reason: 'Rest Rule (11h)' };
+      }
+
+      return { disabled: false, reason: '' };
   };
 
   const handleToggleDay = (dayIndex: number) => {
@@ -145,7 +174,7 @@ export const ShopperAAWizard: React.FC<ShopperAAWizardProps> = ({
                       </p>
                       <div className="grid grid-cols-1 gap-2">
                           {SHIFT_TIMES.map(shift => {
-                              const shiftDisabled = isShiftDisabled(dayIndex, shift);
+                              const { disabled: shiftDisabled, reason } = isShiftDisabled(dayIndex, shift);
                               const isShiftChosen = selection.time === shift;
                               const shiftName = shift.split('(')[0].trim();
                               const shiftHours = shift.match(/\((.*?)\)/)?.[1] || '';
@@ -160,7 +189,7 @@ export const ShopperAAWizard: React.FC<ShopperAAWizardProps> = ({
                                           ${isShiftChosen 
                                               ? 'bg-red-500 text-white border-red-500 shadow-md shadow-red-200' 
                                               : shiftDisabled
-                                                  ? 'hidden' // Hide disabled AA shifts in wizard to reduce clutter
+                                                  ? 'bg-gray-50 border-gray-100 text-gray-400 cursor-not-allowed opacity-70'
                                                   : 'bg-white text-gray-600 border-gray-100 hover:border-red-300 hover:bg-red-50/50'
                                           }
                                       `}
@@ -175,7 +204,13 @@ export const ShopperAAWizard: React.FC<ShopperAAWizardProps> = ({
                                       </div>
                                       
                                       {isShiftChosen && <div className="bg-white/20 p-1 rounded-full"><CheckCircle2 className="w-3.5 h-3.5 text-white" /></div>}
-                                      {!isShiftChosen && <Circle className="w-3.5 h-3.5 text-gray-200 group-hover/btn:text-red-300" />}
+                                      {!isShiftChosen && !shiftDisabled && <Circle className="w-3.5 h-3.5 text-gray-200 group-hover/btn:text-red-300" />}
+                                      {!isShiftChosen && shiftDisabled && (
+                                          <div className="flex items-center gap-1 text-[9px] font-bold uppercase bg-gray-100 px-1.5 py-0.5 rounded text-gray-500 border border-gray-200">
+                                              <Lock className="w-2.5 h-2.5" />
+                                              {reason}
+                                          </div>
+                                      )}
                                   </button>
                               );
                           })}
