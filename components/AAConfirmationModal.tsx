@@ -36,10 +36,10 @@ export const AAConfirmationModal: React.FC<AAConfirmationModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-300">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-300 border border-gray-100">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md flex flex-col max-h-[85vh] overflow-hidden animate-in zoom-in-95 duration-300 border border-gray-100">
         
-        {/* Header with Animation */}
-        <div className="bg-gradient-to-br from-red-500 to-red-600 p-6 text-white text-center relative overflow-hidden">
+        {/* Header with Animation - Fixed */}
+        <div className="shrink-0 bg-gradient-to-br from-red-500 to-red-600 p-6 text-white text-center relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-full bg-white/10 opacity-30 pattern-grid-lg"></div>
             <div className="relative z-10 flex flex-col items-center">
                 <div className="bg-white/20 p-4 rounded-full mb-3 backdrop-blur-md shadow-inner">
@@ -50,7 +50,8 @@ export const AAConfirmationModal: React.FC<AAConfirmationModalProps> = ({
             </div>
         </div>
 
-        <div className="p-6 space-y-6">
+        {/* Content - Scrollable */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-white">
             
             {/* The Explanation */}
             <div className="text-center space-y-2">
@@ -96,8 +97,8 @@ export const AAConfirmationModal: React.FC<AAConfirmationModalProps> = ({
             </div>
         </div>
 
-        {/* Footer Actions */}
-        <div className="p-4 bg-gray-50 border-t flex flex-col sm:flex-row gap-3">
+        {/* Footer Actions - Fixed */}
+        <div className="shrink-0 p-4 bg-gray-50 border-t flex flex-col sm:flex-row gap-3 z-10">
             <Button 
                 onClick={onClose} 
                 variant="secondary" 
