@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, MapPin, Sheet, Copy, FileSpreadsheet, Calendar, Star, CheckCircle, XCircle, Clock, AlertTriangle, X, Check, Globe, FileText, Save, Snowflake, Building2, MessageSquare, TrendingUp, Zap, Target, Award, Flag } from 'lucide-react';
+import { User, MapPin, Sheet, Copy, FileSpreadsheet, Calendar, Star, CheckCircle, XCircle, Clock, AlertTriangle, X, Check, Globe, FileText, Save, Snowflake, Building2, MessageSquare, TrendingUp } from 'lucide-react';
 import { format } from 'date-fns';
 import { supabase } from '../../supabaseClient';
 import { ShopperRecord, ShiftType } from '../../types';
@@ -14,33 +14,6 @@ interface ShopperExpandedDetailsProps {
     onStatusUpdate?: (id: string, status: 'PENDING' | 'SHOWED_UP' | 'NO_SHOW') => void;
     onUpdateShopper?: (shopper: ShopperRecord) => void;
 }
-
-// Helper component for Talk Status Badges
-const TalkStatusBadge: React.FC<{ label: string; status?: string; icon: React.ReactNode }> = ({ label, status = 'TODO', icon }) => {
-    let colorClass = 'bg-gray-100 text-gray-500 border-gray-200';
-    let displayStatus = status;
-
-    if (status === 'DONE' || status === 'YES') {
-        colorClass = 'bg-green-50 text-green-700 border-green-200';
-        displayStatus = status === 'YES' ? 'YES' : 'DONE';
-    } else if (status === 'SKIPPED' || status === 'NO') {
-        colorClass = 'bg-gray-100 text-gray-400 border-gray-200 opacity-70';
-    } else if (status === 'HOLD') {
-        colorClass = 'bg-orange-50 text-orange-700 border-orange-200';
-    } else if (status === 'TODO') {
-        colorClass = 'bg-blue-50 text-blue-600 border-blue-100';
-    }
-
-    return (
-        <div className={`flex flex-col p-2 rounded-lg border ${colorClass} transition-all`}>
-            <div className="flex items-center gap-1.5 mb-1 opacity-80">
-                {React.cloneElement(icon as React.ReactElement, { className: "w-3 h-3" })}
-                <span className="text-[10px] font-bold uppercase tracking-wider">{label}</span>
-            </div>
-            <span className="text-xs font-black">{displayStatus}</span>
-        </div>
-    );
-};
 
 export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ shopper, onStatusUpdate, onUpdateShopper }) => {
     // Local state for confirmation flow
@@ -64,10 +37,6 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
     }, [shopper.details?.firstDayStatus, shopper.id, shopper.details?.isFrozenEligible]);
     
     const hasNoteChanged = notes !== (shopper.details?.notes || '');
-
-    // Data shortcuts
-    const tp = shopper.details?.talkProgress || {};
-    const perf = shopper.details?.performance || {};
 
     // --- COPY HANDLERS (Local to the item) ---
     const handleCopyForSheet = (weekOffset: number) => {
@@ -230,7 +199,7 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
                                 <div className="mb-2 p-2 rounded-full bg-gray-100 group-hover:bg-blue-100 text-gray-500 group-hover:text-blue-600 transition-colors">
                                     <FileSpreadsheet className="w-4 h-4" />
                                 </div>
-                                <span className="text-xs font-bold text-gray-700 group-hover:text-blue-800">Copy LS Inflow</span>
+                                <span className="text-xs font-bold text-gray-700 group-hover:text-green-800">Copy LS Inflow</span>
                             </button>
                         </div>
                     </div>
@@ -317,61 +286,6 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
                         </div>
                     )}
 
-                    {/* NEW: TALKS & PERFORMANCE DASHBOARD */}
-                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                        <div className="bg-gradient-to-r from-gray-50 to-white px-4 py-2 border-b border-gray-100 flex items-center gap-2">
-                            <TrendingUp className="w-4 h-4 text-purple-600" />
-                            <span className="text-xs font-bold text-gray-600 uppercase tracking-wider">Performance & Talks</span>
-                        </div>
-                        
-                        <div className="p-4 space-y-4">
-                            {/* Row 1: Key Metrics */}
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                {/* Speed AM */}
-                                <div className="bg-gray-50 p-2 rounded-lg border border-gray-100 flex flex-col items-center">
-                                    <span className="text-[9px] text-gray-400 font-bold uppercase mb-1">Picking Speed (AM)</span>
-                                    <span className="text-lg font-black text-gray-800 flex items-center gap-1">
-                                        {perf.speedAM || '-'} <Zap className="w-3 h-3 text-yellow-500" />
-                                    </span>
-                                </div>
-                                {/* Speed CH */}
-                                <div className="bg-gray-50 p-2 rounded-lg border border-gray-100 flex flex-col items-center">
-                                    <span className="text-[9px] text-gray-400 font-bold uppercase mb-1">Picking Speed (CH)</span>
-                                    <span className="text-lg font-black text-gray-800 flex items-center gap-1">
-                                        {perf.speedCH || '-'} <Zap className="w-3 h-3 text-blue-500" />
-                                    </span>
-                                </div>
-                                {/* Check In Today */}
-                                <div className={`p-2 rounded-lg border flex flex-col items-center justify-center transition-all ${tp.checkInToday ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-100'}`}>
-                                    <span className="text-[9px] font-bold uppercase mb-1 opacity-60">Checked In Today</span>
-                                    {tp.checkInToday ? (
-                                        <CheckCircle className="w-5 h-5 text-green-600" />
-                                    ) : (
-                                        <span className="text-xs font-bold text-gray-400">Pending</span>
-                                    )}
-                                </div>
-                                {/* Reps */}
-                                <div className="bg-gray-50 p-2 rounded-lg border border-gray-100 flex flex-col items-center">
-                                    <span className="text-[9px] text-gray-400 font-bold uppercase mb-1">Reps</span>
-                                    <span className="text-lg font-black text-gray-800 flex items-center gap-1">
-                                        {perf.reps || '-'} <Target className="w-3 h-3 text-red-500" />
-                                    </span>
-                                </div>
-                            </div>
-
-                            {/* Row 2: Talks Pipeline */}
-                            <div className="space-y-2">
-                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Talks Pipeline</span>
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                    <TalkStatusBadge label="Welcome" status={tp.welcomeTalk} icon={<MessageSquare />} />
-                                    <TalkStatusBadge label="Mid-Term" status={tp.midTermEval} icon={<Sheet />} />
-                                    <TalkStatusBadge label="Promotion" status={tp.promotionDecision} icon={<Award />} />
-                                    <TalkStatusBadge label="End Trial" status={tp.endOfTrialTalk} icon={<Flag />} />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
                     <div className="flex gap-6 flex-col lg:flex-row">
                         <div className="flex-1">
                             <h4 className="font-bold text-gray-900 mb-3 flex items-center gap-2 text-sm"><Calendar className="w-4 h-4" /> All Selected Shifts ({(shopper.shifts || []).length})</h4>
@@ -436,7 +350,7 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
                                             disabled={isSavingNotes}
                                             className={`w-full py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm ${
                                                 noteSaved 
-                                                ? 'bg-green-500 text-white' 
+                                                ? 'bg-green-50 text-white' 
                                                 : 'bg-gray-900 text-white hover:bg-black'
                                             }`}
                                         >
