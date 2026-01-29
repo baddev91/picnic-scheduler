@@ -2,14 +2,14 @@
 import { useState, useMemo } from 'react';
 import { 
   format, endOfMonth, eachDayOfInterval, addMonths, isWeekend, endOfWeek, isWithinInterval, 
-  isAfter, isBefore, addWeeks 
+  isAfter, isBefore, addWeeks, getDay 
 } from 'date-fns';
 import startOfWeek from 'date-fns/startOfWeek';
 import parseISO from 'date-fns/parseISO';
 import subMonths from 'date-fns/subMonths';
 import startOfMonth from 'date-fns/startOfMonth';
 import startOfDay from 'date-fns/startOfDay';
-import { ShiftTime, ShiftType, ShopperShift, AdminAvailabilityMap } from '../types';
+import { ShiftTime, ShiftType, ShopperShift, AdminAvailabilityMap, WeeklyTemplate } from '../types';
 import { formatDateKey, getShopperAllowedRange, getShopperMinDate } from '../constants';
 
 interface UseCalendarLogicProps {
@@ -19,7 +19,8 @@ interface UseCalendarLogicProps {
   currentShopperShifts: ShopperShift[];
   firstWorkingDay?: string;
   adminAvailability: AdminAvailabilityMap;
-  minDateOverride?: Date; // NEW PROP
+  weeklyTemplate?: WeeklyTemplate | null; // Added: Standard Pattern
+  minDateOverride?: Date;
 }
 
 export const useCalendarLogic = ({
@@ -29,6 +30,7 @@ export const useCalendarLogic = ({
   currentShopperShifts,
   firstWorkingDay,
   adminAvailability,
+  weeklyTemplate,
   minDateOverride
 }: UseCalendarLogicProps) => {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -68,10 +70,24 @@ export const useCalendarLogic = ({
   };
 
   const isTypeAvailable = (dateKey: string, time: ShiftTime, type: ShiftType) => {
-    if (!adminAvailability[dateKey]) return true;
-    const dayConfig = adminAvailability[dateKey];
-    if (!dayConfig || !dayConfig[time]) return true;
-    return dayConfig[time]?.includes(type) ?? true;
+    // 1. Check for Specific Date Override in Admin Map
+    if (adminAvailability[dateKey] && adminAvailability[dateKey][time]) {
+        return adminAvailability[dateKey][time]?.includes(type) ?? true;
+    }
+
+    // 2. Fallback to Standard Weekly Pattern if exists
+    if (weeklyTemplate) {
+        const dateObj = parseISO(dateKey);
+        const dayOfWeek = getDay(dateObj); // 0 (Sun) - 6 (Sat)
+        
+        // Check if day exists in template
+        if (weeklyTemplate[dayOfWeek] && weeklyTemplate[dayOfWeek][time]) {
+            return weeklyTemplate[dayOfWeek][time]?.includes(type) ?? true;
+        }
+    }
+
+    // 3. Default Open if no rules defined
+    return true;
   };
 
   const isDateDisabledForShopper = (date: Date) => {

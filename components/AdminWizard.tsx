@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { Trash2, Copy, CheckCircle, Ban, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Trash2, Copy, CheckCircle, Ban, ChevronLeft, ChevronRight, LayoutTemplate } from 'lucide-react';
 import { Button } from './Button';
 import { AdminWizardStep, ShiftTime, ShiftType, WeeklyTemplate } from '../types';
 import { SHIFT_TIMES } from '../constants';
@@ -45,7 +46,7 @@ export const AdminWizardDays: React.FC<AdminWizardDaysProps> = ({
       <div className="max-w-3xl mx-auto h-full flex flex-col">
           <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-2">
-                   <span className="text-xs font-bold uppercase text-gray-400">Step 1: Define Pattern</span>
+                   <span className="text-xs font-bold uppercase text-gray-400">Step 1: Define Standard Pattern</span>
               </div>
               <div className="flex gap-1">
                   {[1,2,3,4,5,6,0].map(d => (
@@ -58,7 +59,7 @@ export const AdminWizardDays: React.FC<AdminWizardDaysProps> = ({
               <div className={`p-6 border-b flex justify-between items-center ${isWeekendDay ? 'bg-red-50' : 'bg-gray-50'}`}>
                   <div>
                       <h2 className={`text-3xl font-extrabold ${isWeekendDay ? 'text-red-600' : 'text-gray-800'}`}>{dayName}</h2>
-                      <p className="text-gray-500 font-medium mt-1">Configure available shifts</p>
+                      <p className="text-gray-500 font-medium mt-1">Configure standard availability</p>
                   </div>
                   <div className="flex gap-2">
                      <button onClick={resetWizardTemplate} className="flex items-center gap-2 text-sm font-bold text-gray-500 bg-white px-3 py-2 rounded-lg shadow-sm hover:bg-gray-100 hover:text-red-500 transition-all border">
@@ -132,8 +133,6 @@ interface AdminWizardApplyProps {
 }
 
 export const AdminWizardApply: React.FC<AdminWizardApplyProps> = ({
-  applyWeeks,
-  setApplyWeeks,
   setAdminWizardStep,
   applyTemplate
 }) => {
@@ -141,42 +140,35 @@ export const AdminWizardApply: React.FC<AdminWizardApplyProps> = ({
       <div className="max-w-2xl mx-auto h-full flex flex-col justify-center animate-in zoom-in-95 duration-300">
           <div className="bg-white p-8 rounded-3xl shadow-2xl text-center space-y-8 border border-purple-100">
               <div className="w-20 h-20 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                  <CheckCircle className="w-10 h-10 text-purple-600" />
+                  <LayoutTemplate className="w-10 h-10 text-purple-600" />
               </div>
               
               <div>
                   <h2 className="text-3xl font-extrabold text-gray-900">Pattern Ready!</h2>
-                  <p className="text-gray-500 mt-2 text-lg">How far into the future should we generate this schedule?</p>
+                  <p className="text-gray-500 mt-2 text-lg">
+                      This will become the <strong className="text-purple-600">Standard Availability</strong> for all dates.
+                  </p>
               </div>
 
-              <div className="bg-gray-50 p-6 rounded-2xl max-w-sm mx-auto">
-                  <div className="flex justify-between items-end mb-2">
-                      <span className="text-gray-500 font-bold uppercase text-xs">Duration</span>
-                      <span className="text-3xl font-bold text-purple-600">{applyWeeks} <span className="text-base text-gray-400 font-medium">Weeks</span></span>
-                  </div>
-                  <input 
-                      type="range" 
-                      min="1" 
-                      max="12" 
-                      value={applyWeeks} 
-                      onChange={(e) => setApplyWeeks(Number(e.target.value))}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
-                  />
-                  <div className="flex justify-between mt-2 text-xs text-gray-400 font-medium">
-                      <span>1 Week</span>
-                      <span>12 Weeks</span>
-                  </div>
+              <div className="bg-blue-50 p-6 rounded-2xl max-w-sm mx-auto text-left border border-blue-100">
+                  <h4 className="text-blue-900 font-bold mb-2 text-sm flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4" /> How this works:
+                  </h4>
+                  <ul className="space-y-2 text-xs text-blue-800 opacity-90 list-disc pl-4">
+                      <li>This pattern applies to <strong>any date</strong> in the future.</li>
+                      <li>You don't need to re-apply it every week.</li>
+                      <li>You can still manually override specific dates on the calendar view.</li>
+                  </ul>
               </div>
 
               <div className="flex gap-4 pt-4">
                   <Button variant="secondary" onClick={() => setAdminWizardStep(AdminWizardStep.WIZARD_DAYS)} fullWidth>
                       Edit Pattern
                   </Button>
-                  <Button onClick={applyTemplate} fullWidth className="py-4 text-lg bg-gradient-to-r from-purple-600 to-indigo-600">
-                      Generate Schedule
+                  <Button onClick={applyTemplate} fullWidth className="py-4 text-lg bg-gradient-to-r from-purple-600 to-indigo-600 shadow-xl">
+                      Save as Standard
                   </Button>
               </div>
-              <p className="text-xs text-gray-400">Note: This will overwrite local settings starting from next Monday.</p>
           </div>
       </div>
   );

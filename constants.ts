@@ -97,3 +97,24 @@ export const DEFAULT_BUS_CONFIG: BusConfig = [
     }
   }
 ];
+
+// --- GOOGLE API CONFIGURAZIONE ---
+
+// 1. CLIENT ID
+// Vai su https://console.cloud.google.com/apis/credentials
+// Crea un "OAuth Client ID" (Web Application).
+// Aggiungi l'URL del tuo sito (es. http://localhost:5173 o il dominio di produzione) in "Authorized Javascript Origins".
+// Copia qui sotto il codice che finisce con ".apps.googleusercontent.com"
+export const GOOGLE_CLIENT_ID = '520487940784-73147tpo2ugt4svf1v7d5atp59u1gm1m.apps.googleusercontent.com'; 
+
+// 2. SPREADSHEET ID
+// Apri il tuo file Google Sheet nel browser.
+// L'ID è la stringa lunga nell'URL tra /d/ e /edit
+// Esempio: https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit
+// Copia solo "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
+export const GOOGLE_SPREADSHEET_ID = 'https://docs.google.com/spreadsheets/d/1qXTpVH_JQB1ru1W9NQEub4JgD4CdRqzFniXX6ODVyuc';
+
+// 3. NOME DEL FOGLIO
+// Guarda in basso a sinistra nel tuo file Excel/Sheet. Come si chiama la linguetta?
+// Se è in italiano spesso è "Foglio1", in inglese "Sheet1". DEVE ESSERE ESATTO.
+export const SHEET_TAB_NAME = 'Shift-Dashboard-proposal'; 

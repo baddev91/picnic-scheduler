@@ -23,6 +23,50 @@ export interface ShopperShift {
   type: ShiftType;
 }
 
+// --- NEW TALKS & PERFORMANCE TYPES ---
+
+export type TalkType = 'WELCOME' | 'MID_TERM' | 'PROMOTION' | 'END_TRIAL' | 'CHECK_IN' | 'OTHER';
+
+export interface TalkLogEntry {
+  id: string;
+  date: string; // ISO String
+  leadShopper: string; // Name of the person conducting the talk
+  type: TalkType;
+  notes: string;
+  tags?: string[]; // e.g. ["Critical", "Positive"]
+}
+
+export interface PerformanceMetrics {
+  activeWeeks?: number;
+  valuestream?: 'Inbound' | 'Outbound' | 'Captain' | 'Other';
+  
+  // Attendance
+  late?: number;
+  absence?: number;
+  absenceAA?: number; // Absence on AA shift
+  nsnc?: number; // No Show No Call
+  nswc?: number; // No Show With Call
+  
+  // Behavior
+  behaviorIssues?: number;
+  compliments?: number;
+  officialWarnings?: number;
+  
+  // Speed
+  speedAM?: number;
+  speedCH?: number;
+  reps?: number;
+  modules?: string; // Comma separated modules
+}
+
+export interface TalkProgress {
+  welcomeTalk?: 'TODO' | 'DONE' | 'SKIPPED';
+  midTermEval?: 'TODO' | 'DONE' | 'SKIPPED';
+  promotionDecision?: 'TODO' | 'YES' | 'NO' | 'HOLD';
+  endOfTrialTalk?: 'TODO' | 'DONE';
+  checkInToday?: boolean;
+}
+
 export interface ShopperDetails {
   nationality?: string; // New Field
   usePicnicBus: boolean | null; // Changed to allow null for explicit selection requirement
@@ -43,6 +87,11 @@ export interface ShopperDetails {
   isFrozenEligible?: boolean;
   frozenNotes?: string;
   frozenAddedToSystem?: boolean;
+
+  // NEW TALKS FIELDS
+  performance?: PerformanceMetrics;
+  talkProgress?: TalkProgress;
+  talkLogs?: TalkLogEntry[];
 }
 
 export interface ShopperData {
@@ -86,7 +135,9 @@ export enum AppMode {
   SUMMARY = 'SUMMARY',
   // FROZEN MODES
   FROZEN_LOGIN = 'FROZEN_LOGIN',
-  FROZEN_LIST = 'FROZEN_LIST'
+  FROZEN_LIST = 'FROZEN_LIST',
+  // TALKS MODE
+  TALKS_DASHBOARD = 'TALKS_DASHBOARD'
 }
 
 export enum ShopperStep {

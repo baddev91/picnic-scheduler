@@ -296,9 +296,20 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
           const selectionForDay = aaSelections.find(s => s.dayIndex === dayIndex);
 
           if (selectionForDay && selectionForDay.time) {
+              // UPDATED AVAILABILITY CHECK: Supports Global Template now (via ShopperApp prop)
+              // We pass savedCloudTemplate as prop to ShopperApp, so we can use it here
+              // BUT: adminAvailability is date-specific.
+              // Logic: If NO specific override for date, check Template.
               const checkAvailability = (t: ShiftTime) => {
-                  const config = adminAvailability[dateStr];
-                  return (!config || !config[t] || config[t]?.includes(ShiftType.AA));
+                  if (adminAvailability[dateStr]) {
+                      const config = adminAvailability[dateStr];
+                      return (!config[t] || config[t]?.includes(ShiftType.AA));
+                  }
+                  // Fallback to Template
+                  if (savedCloudTemplate && savedCloudTemplate[dayIndex]) {
+                      return savedCloudTemplate[dayIndex][t]?.includes(ShiftType.AA);
+                  }
+                  return true;
               };
               
               if (checkAvailability(selectionForDay.time)) {
@@ -677,6 +688,7 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
                       step={1} 
                       isFWDSelection={true} 
                       adminAvailability={adminAvailability} 
+                      weeklyTemplate={savedCloudTemplate} // Pass standard template
                       currentShopperShifts={data.shifts} 
                       firstWorkingDay={data.details?.firstWorkingDay} 
                       onShopperToggle={handleFWDSelection} 
@@ -706,6 +718,7 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
                       mode="SHOPPER" 
                       step={2} 
                       adminAvailability={adminAvailability} 
+                      weeklyTemplate={savedCloudTemplate} // Pass standard template
                       currentShopperShifts={data.shifts} 
                       firstWorkingDay={data.details?.firstWorkingDay} 
                       onShopperToggle={handleStandardShiftToggle}

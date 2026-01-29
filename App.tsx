@@ -19,6 +19,8 @@ import { ShopperApp } from './components/ShopperApp';
 import { AdminAuditLog } from './components/AdminAuditLog';
 import { AccessLogViewer } from './components/AccessLogViewer'; // NEW
 import { FrozenList } from './components/FrozenList';
+import { CalendarView } from './components/CalendarView'; // NEW IMPORT FOR ADMIN PREVIEW
+import { TalksDashboard } from './components/Talks/TalksDashboard'; // NEW IMPORT
 
 const STORAGE_KEYS = {
   TEMPLATE: 'picnic_admin_template',
@@ -267,15 +269,51 @@ export default function App() {
   };
 
   const applyTemplate = () => {
-      const startDate = addWeeks(startOfWeek(new Date(), { weekStartsOn: 1 }), 1);
-      const newAvailability = { ...adminAvailability };
-      for (let i = 0; i < applyWeeks * 7; i++) {
-         const date = addDays(startDate, i);
-         const template = tempTemplate[getDay(date)];
-         if (template) newAvailability[formatDateKey(date)] = template;
-      }
-      setAdminAvailability(newAvailability); saveConfigToSupabase(newAvailability); saveTemplateToSupabase(tempTemplate);
+      // UPDATED: No loop. Just save the template as standard.
+      // We clear the wizard state and notify user.
+      saveTemplateToSupabase(tempTemplate);
       setAdminWizardStep(AdminWizardStep.DASHBOARD);
+      alert("Standard Weekly Pattern updated successfully! This will now be the default availability for all dates.");
+  };
+
+  const handleAdminToggle = (date: string, shift: ShiftTime, type: ShiftType) => {
+      // Logic for manual overrides on the calendar (kept for backward compatibility with specific dates)
+      const currentMap = adminAvailability[date] || {};
+      const currentList = currentMap[shift] || [];
+      
+      let newList: ShiftType[] = [];
+      
+      // If key existed, use it. If not, check template to see what "was" there
+      if (currentMap[shift]) {
+          newList = currentList.includes(type) ? currentList.filter(t => t !== type) : [...currentList, type];
+      } else {
+          // No override exists. Get default from template to determine current state
+          const dayIndex = getDay(new Date(date));
+          const templateTypes = savedCloudTemplate?.[dayIndex]?.[shift];
+          
+          // If no template is defined, the default behavior in useCalendarLogic is "true" (Open).
+          // But if template IS defined, we use it. 
+          // If template is undefined, effectively both types are active? 
+          // Let's match useCalendarLogic: "Default Open if no rules defined".
+          
+          const effectiveCurrent = templateTypes || [ShiftType.AA, ShiftType.STANDARD]; 
+          
+          if (effectiveCurrent.includes(type)) {
+              newList = effectiveCurrent.filter(t => t !== type);
+          } else {
+              newList = [...effectiveCurrent, type];
+          }
+      }
+
+      const newMap = {
+          ...adminAvailability,
+          [date]: {
+              ...adminAvailability[date],
+              [shift]: newList
+          }
+      };
+      setAdminAvailability(newMap);
+      saveConfigToSupabase(newMap);
   };
 
   const handleCopyMagicLink = () => navigator.clipboard.writeText(`${window.location.origin}/?mode=shopper`).then(() => alert("Link Copied!"));
@@ -389,6 +427,13 @@ export default function App() {
                 isSuperAdmin={isAuthenticated}
             />
         )}
+
+        {/* NEW TALKS SECTION */}
+        {mode === AppMode.TALKS_DASHBOARD && (
+            <TalksDashboard 
+                onBack={() => setMode(AppMode.ADMIN)} 
+            />
+        )}
         
         {/* ADMIN PANEL */}
         {mode === AppMode.ADMIN && isAuthenticated && (
@@ -423,7 +468,19 @@ export default function App() {
                           adminPin={adminPin} updateAdminPin={updateAdminPin}
                           frozenPin={frozenPin} updateFrozenPin={updateFrozenPin} 
                           onGoToFrozen={() => setMode(AppMode.FROZEN_LIST)}
+                          onGoToTalks={() => setMode(AppMode.TALKS_DASHBOARD)} // CONNECTED
                       />
+                  )}
+                  {adminWizardStep === AdminWizardStep.DASHBOARD && (
+                      <div className="mt-8 border-t pt-8">
+                          <h3 className="text-lg font-bold text-gray-800 mb-4">Availability Preview</h3>
+                          <CalendarView 
+                              mode="ADMIN"
+                              adminAvailability={adminAvailability}
+                              weeklyTemplate={savedCloudTemplate} // Pass standard template
+                              onAdminToggle={handleAdminToggle}
+                          />
+                      </div>
                   )}
                   {adminWizardStep === AdminWizardStep.WIZARD_DAYS && (
                       <AdminWizardDays 

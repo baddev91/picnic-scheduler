@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Settings2, RefreshCw, Save, Share2, CalendarRange, Table, Bus, ArrowRight, ShieldCheck, UserCog, Info, AlertTriangle, Clock, CalendarCheck, Zap, ChevronDown, ChevronUp, History, Snowflake, AlertCircle, ShieldAlert, Lock } from 'lucide-react';
+import { Settings2, RefreshCw, Save, Share2, CalendarRange, Table, Bus, ArrowRight, ShieldCheck, UserCog, Info, AlertTriangle, Clock, CalendarCheck, Zap, ChevronDown, ChevronUp, History, Snowflake, AlertCircle, ShieldAlert, Lock, MessageSquare, Hammer, Construction } from 'lucide-react';
 import { Button } from './Button';
 import { AdminWizardStep, WeeklyTemplate } from '../types';
 import { MIN_DAYS_TO_START } from '../constants';
@@ -23,6 +23,7 @@ interface AdminDashboardProps {
   frozenPin: string;
   updateFrozenPin: (pin: string) => void;
   onGoToFrozen: () => void;
+  onGoToTalks: () => void; // NEW PROP
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -42,7 +43,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   updateAdminPin,
   frozenPin,
   updateFrozenPin,
-  onGoToFrozen
+  onGoToFrozen,
+  onGoToTalks
 }) => {
   const [newAdminPin, setNewAdminPin] = useState(adminPin);
   const [newFrozenPin, setNewFrozenPin] = useState(frozenPin);
@@ -126,71 +128,92 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
           </div>
 
-          {/* ACTIONS GRID (Moved to Top) */}
-          <div className="grid md:grid-cols-2 gap-6">
+          {/* NEW LAYOUT: SUBMISSIONS FOCUSED */}
+          <div className="space-y-6">
               
-              {/* Primary Action: Edit Pattern */}
+              {/* PRIMARY ACTION: SUBMISSIONS */}
               <button 
-                onClick={handleEditPattern}
-                className="group relative overflow-hidden bg-[#E31837] rounded-3xl p-8 text-left transition-all hover:shadow-xl hover:shadow-red-900/20 hover:-translate-y-1"
+                onClick={() => setAdminWizardStep(AdminWizardStep.VIEW_SUBMISSIONS)}
+                className="group relative w-full bg-white border-2 border-gray-100 hover:border-blue-500 rounded-3xl p-6 sm:p-8 text-left transition-all hover:shadow-xl overflow-hidden"
               >
-                  <div className="relative z-10 flex flex-col h-full">
-                      <div className="bg-white/10 w-12 h-12 rounded-2xl flex items-center justify-center mb-6 backdrop-blur-sm group-hover:scale-110 transition-transform">
-                          <CalendarRange className="w-6 h-6 text-white" />
+                  <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                      <div className="flex items-center gap-5">
+                          <div className="bg-blue-50 w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300 border border-blue-100 group-hover:bg-blue-600 group-hover:border-blue-600">
+                              <Table className="w-8 h-8 sm:w-10 sm:h-10 text-blue-600 group-hover:text-white transition-colors" />
+                          </div>
+                          <div>
+                              <h3 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight group-hover:text-blue-700 transition-colors">
+                                  View Submissions
+                              </h3>
+                              <p className="text-gray-500 text-sm sm:text-base font-medium mt-1 max-w-xl">
+                                  Access the main data table, manage shopper shifts, edit profiles, and export reports.
+                              </p>
+                          </div>
                       </div>
-                      <h3 className="text-2xl font-black text-white mb-2">Weekly Pattern</h3>
-                      <p className="text-red-100 text-sm font-medium mb-8 max-w-[80%]">
-                          Configure AA & Standard slots. This is your starting point.
-                      </p>
-                      
-                      <div className="mt-auto flex items-center text-white font-bold text-sm gap-2 group-hover:gap-4 transition-all">
-                          Open Wizard <ArrowRight className="w-4 h-4" />
+                      <div className="bg-gray-50 rounded-full p-3 group-hover:bg-blue-50 group-hover:text-blue-600 transition-all self-end md:self-center">
+                          <ArrowRight className="w-6 h-6 text-gray-400 group-hover:text-blue-600" />
                       </div>
                   </div>
-                  
-                  {/* Decorative Background Elements */}
-                  <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-16 -mt-16 blur-3xl group-hover:bg-white/10 transition-colors"></div>
-                  <div className="absolute bottom-0 right-0 w-32 h-32 bg-black/10 rounded-full -mr-8 -mb-8 blur-xl"></div>
+                  {/* Subtle Background Decoration */}
+                  <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-blue-50 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
               </button>
 
-              <div className="flex flex-col gap-6">
-                {/* View Submissions */}
-                <button 
-                    onClick={() => setAdminWizardStep(AdminWizardStep.VIEW_SUBMISSIONS)}
-                    className="group flex-1 bg-white border border-gray-200 p-6 rounded-3xl text-left hover:border-black transition-all hover:shadow-lg relative overflow-hidden"
-                >
-                    <div className="flex justify-between items-start">
-                        <div>
-                            <div className="bg-gray-100 group-hover:bg-black group-hover:text-white transition-colors w-10 h-10 rounded-xl flex items-center justify-center mb-3">
-                                <Table className="w-5 h-5" />
-                            </div>
-                            <h3 className="text-lg font-bold text-gray-900">View Submissions</h3>
-                            <p className="text-gray-500 text-xs mt-1">Manage submitted shopper data.</p>
-                        </div>
-                        <div className="bg-gray-50 rounded-full p-2 group-hover:bg-gray-100 transition-colors">
-                            <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-black" />
-                        </div>
-                    </div>
-                </button>
+              {/* SECONDARY ACTIONS GRID */}
+              <div className="grid md:grid-cols-3 gap-4">
+                  
+                  {/* 1. WEEKLY PATTERN (Smaller now) */}
+                  <button 
+                    onClick={handleEditPattern}
+                    className="flex flex-col justify-between h-full bg-white border border-gray-200 p-5 rounded-2xl text-left hover:border-red-500 hover:shadow-lg transition-all group relative overflow-hidden"
+                  >
+                      <div className="relative z-10">
+                          <div className="flex items-center gap-3 mb-3">
+                              <div className="p-2 bg-red-50 text-red-600 rounded-lg group-hover:bg-red-600 group-hover:text-white transition-colors">
+                                  <CalendarRange className="w-5 h-5" />
+                              </div>
+                              <h3 className="font-bold text-gray-900 group-hover:text-red-700 transition-colors">Weekly Pattern</h3>
+                          </div>
+                          <p className="text-xs text-gray-500 font-medium">Configure base availability rules.</p>
+                      </div>
+                  </button>
 
-                {/* Manage Bus */}
-                <button 
+                  {/* 2. SHOPPER TALKS (WIP Style) */}
+                  <button 
+                    onClick={onGoToTalks}
+                    className="flex flex-col justify-between h-full bg-gray-50 border border-gray-200 border-dashed p-5 rounded-2xl text-left hover:bg-white hover:border-orange-300 hover:border-solid hover:shadow-lg transition-all group relative"
+                  >
+                      <div className="absolute top-3 right-3 animate-pulse">
+                          <span className="bg-orange-100 text-orange-700 text-[9px] font-black uppercase px-2 py-1 rounded-md flex items-center gap-1 border border-orange-200">
+                              <Construction className="w-3 h-3" /> Under Construction
+                          </span>
+                      </div>
+                      <div>
+                          <div className="flex items-center gap-3 mb-3">
+                              <div className="p-2 bg-gray-200 text-gray-500 rounded-lg group-hover:bg-orange-100 group-hover:text-orange-600 transition-colors">
+                                  <MessageSquare className="w-5 h-5" />
+                              </div>
+                              <h3 className="font-bold text-gray-600 group-hover:text-orange-800 transition-colors">Shopper Talks</h3>
+                          </div>
+                          <p className="text-xs text-gray-400 font-medium group-hover:text-orange-600/70">Logs, Check-ins & Performance (Beta).</p>
+                      </div>
+                  </button>
+
+                  {/* 3. BUS SCHEDULE */}
+                  <button 
                     onClick={() => setAdminWizardStep(AdminWizardStep.BUS_CONFIG)}
-                    className="group flex-1 bg-white border border-gray-200 p-6 rounded-3xl text-left hover:border-black transition-all hover:shadow-lg relative overflow-hidden"
-                >
-                    <div className="flex justify-between items-start">
-                        <div>
-                            <div className="bg-gray-100 group-hover:bg-black group-hover:text-white transition-colors w-10 h-10 rounded-xl flex items-center justify-center mb-3">
-                                <Bus className="w-5 h-5" />
-                            </div>
-                            <h3 className="text-lg font-bold text-gray-900">Bus Schedule</h3>
-                            <p className="text-gray-500 text-xs mt-1">Update stops and times.</p>
-                        </div>
-                        <div className="bg-gray-50 rounded-full p-2 group-hover:bg-gray-100 transition-colors">
-                            <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-black" />
-                        </div>
-                    </div>
-                </button>
+                    className="flex flex-col justify-between h-full bg-white border border-gray-200 p-5 rounded-2xl text-left hover:border-purple-500 hover:shadow-lg transition-all group"
+                  >
+                      <div>
+                          <div className="flex items-center gap-3 mb-3">
+                              <div className="p-2 bg-purple-50 text-purple-600 rounded-lg group-hover:bg-purple-600 group-hover:text-white transition-colors">
+                                  <Bus className="w-5 h-5" />
+                              </div>
+                              <h3 className="font-bold text-gray-900 group-hover:text-purple-700 transition-colors">Bus Schedule</h3>
+                          </div>
+                          <p className="text-xs text-gray-500 font-medium">Manage stops & times.</p>
+                      </div>
+                  </button>
+
               </div>
           </div>
 

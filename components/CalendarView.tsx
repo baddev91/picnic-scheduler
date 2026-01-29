@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { ShiftTime, ShiftType, ShopperShift, AdminAvailabilityMap } from '../types';
+import { ShiftTime, ShiftType, ShopperShift, AdminAvailabilityMap, WeeklyTemplate } from '../types';
 import { useCalendarLogic } from '../hooks/useCalendarLogic';
 import { MobileCalendarList } from './Calendar/MobileCalendarList';
 import { DesktopCalendarGrid } from './Calendar/DesktopCalendarGrid';
@@ -11,6 +11,7 @@ interface CalendarViewProps {
   step?: number;
   isFWDSelection?: boolean;
   adminAvailability: AdminAvailabilityMap;
+  weeklyTemplate?: WeeklyTemplate | null; // Added
   currentShopperShifts?: ShopperShift[];
   firstWorkingDay?: string;
   fwdCounts?: Record<string, number>;
@@ -25,6 +26,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   step = 1,
   isFWDSelection = false,
   adminAvailability,
+  weeklyTemplate, // Added
   currentShopperShifts = [],
   firstWorkingDay,
   fwdCounts = {},
@@ -54,7 +56,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
     currentShopperShifts,
     firstWorkingDay,
     adminAvailability,
-    minDateOverride: minDate // Pass it down
+    weeklyTemplate, // Passed down
+    minDateOverride: minDate
   });
 
   return (
