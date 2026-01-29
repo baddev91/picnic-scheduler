@@ -82,14 +82,14 @@ export const useGoogleSheetSync = () => {
           const text = await response.text();
           const rows = parseCSV(text);
           
-          if (rows.length < 2) {
-              alert("CSV seems empty or invalid (less than 2 rows).");
+          if (rows.length < 5) {
+              alert("CSV seems too short (needs at least 5 rows to skip headers).");
               setIsSyncing(false);
               return;
           }
 
-          // Skip header row (index 0) and process
-          await updateSupabase(rows.slice(1));
+          // Skip first 4 header rows (Dashboard usually has headers in row 4, data starts row 5)
+          await updateSupabase(rows.slice(4));
 
       } catch (e: any) {
           console.error("CSV Sync Error:", e);
@@ -139,7 +139,9 @@ export const useGoogleSheetSync = () => {
   // --- METHOD B: API FETCH ---
   const fetchDataFromSheets = async (accessToken: string) => {
     try {
-      const range = `${SHEET_TAB_NAME}!A2:G`; // Read A to G, starting row 2
+      // UPDATED RANGE: A4 to AE to capture Picking Speed at AD
+      // Row 4 is Header, Data starts Row 5
+      const range = `${SHEET_TAB_NAME}!A4:AE`; 
       const url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SPREADSHEET_ID}/values/${range}`;
 
       const response = await fetch(url, {
@@ -162,7 +164,8 @@ export const useGoogleSheetSync = () => {
         return;
       }
 
-      await updateSupabase(rows);
+      // Skip row 0 (which is Row 4 in sheet = Headers)
+      await updateSupabase(rows.slice(1));
 
     } catch (error: any) {
       console.error("Sheet API Error:", error);
@@ -173,12 +176,13 @@ export const useGoogleSheetSync = () => {
 
   // 3. Match & Update Supabase OR Create New
   const updateSupabase = async (rows: any[]) => {
+    console.log("Raw Sheet Rows:", rows); // DEBUG FOR USER
+
     let updatedCount = 0;
     let createdCount = 0;
     const newShoppersToInsert: any[] = [];
 
-    // CRITICAL FIX: Fetch fresh DB data to ensure we don't duplicate existing users
-    // or fail to update users that were just created.
+    // CRITICAL FIX: Fetch fresh DB data
     const { data: dbShoppers, error: fetchError } = await supabase.from('shoppers').select('*');
     
     if (fetchError) {
@@ -189,16 +193,22 @@ export const useGoogleSheetSync = () => {
 
     const referenceShoppers = dbShoppers || [];
 
-    // Map rows to object structure
-    // Assumes structure: [Name, PN, ActiveWeeks, Absence, Late, Speed, Notes]
+    // --- DASHBOARD Z37 MAPPING ---
+    // Col B (Index 1) = PN
+    // Col C (Index 2) = Name
+    // Col G (Index 6) = Active Weeks
+    // Col N (Index 13) = Late
+    // Col O (Index 14) = Absence
+    // Col AD (Index 29) = Picking Speed AM
+    
     const sheetData = rows.map(row => ({
-      name: row[0] ? String(row[0]).trim() : '',
       pnNumber: row[1] ? String(row[1]).trim() : '',
-      activeWeeks: row[2] || '',
-      absence: row[3] || '',
-      late: row[4] || '',
-      speedAM: row[5] || '',
-      notes: row[6] || ''
+      name: row[2] ? String(row[2]).trim() : '',
+      activeWeeks: row[6] || '',
+      late: row[13] || '',
+      absence: row[14] || '',
+      speedAM: row[29] || '', // AD is index 29
+      notes: '' // Optional mapping
     }));
 
     for (const rowData of sheetData) {
@@ -219,19 +229,10 @@ export const useGoogleSheetSync = () => {
         const currentDetails = shopper.details || {};
         const currentPerformance = currentDetails.performance || {};
 
-        // Merge notes logic
-        let newNotes = currentDetails.notes;
-        if (rowData.notes) {
-             const noteText = String(rowData.notes).trim();
-             if (!currentDetails.notes?.includes(noteText)) {
-                 newNotes = `${currentDetails.notes || ''}\n[Sheet]: ${noteText}`.trim();
-             }
-        }
-
         const newDetails = {
           ...currentDetails,
           pnNumber: rowData.pnNumber || currentDetails.pnNumber,
-          notes: newNotes,
+          // We preserve existing notes as sheet notes aren't mapped in this view
           performance: {
             ...currentPerformance,
             ...performanceMetrics // Overwrite with non-undefined values
@@ -247,15 +248,14 @@ export const useGoogleSheetSync = () => {
 
       } else {
         // --- PREPARE FOR CREATION (If not found) ---
-        // We set 'isHiddenFromMainView' to true so they don't appear in the Scheduling Dashboard
         newShoppersToInsert.push({
             name: rowData.name,
             details: {
                 isHiddenFromMainView: true,
                 pnNumber: rowData.pnNumber,
-                notes: rowData.notes ? `[Sheet Imported]: ${rowData.notes}` : '',
+                notes: '',
                 performance: performanceMetrics,
-                // Default required fields to avoid UI crashes if viewed elsewhere
+                // Default required fields to avoid UI crashes
                 usePicnicBus: null, 
                 civilStatus: 'unknown', 
                 clothingSize: 'M', 
@@ -285,7 +285,9 @@ export const useGoogleSheetSync = () => {
     if (createdCount > 0) message += `✨ Created ${createdCount} new profiles (hidden from main view).\n`;
     
     if (updatedCount === 0 && createdCount === 0) {
-        alert(`⚠️ Sync completed but no changes were made.\nParsed ${sheetData.length} rows from sheet.\nFound ${sheetData.filter(r => r.name).length} valid names.`);
+        // DETAILED ERROR MESSAGE FOR DEBUGGING
+        const firstRowPreview = rows.length > 0 ? JSON.stringify(rows[0].slice(0, 3)) : "No rows";
+        alert(`⚠️ Sync completed but no matches found.\n\nDebug Info:\n- Parsed Rows: ${rows.length}\n- First Row Read: ${firstRowPreview}\n- Checked Name at Index 2 (Column C).\n\nCheck if your sheet range includes Column C.`);
     } else {
         alert(message);
         if (onCompleteRef) onCompleteRef();
