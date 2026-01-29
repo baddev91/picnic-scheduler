@@ -194,13 +194,6 @@ export const useGoogleSheetSync = () => {
     const referenceShoppers = dbShoppers || [];
 
     // --- DASHBOARD Z37 MAPPING ---
-    // Col B (Index 1) = PN
-    // Col C (Index 2) = Name
-    // Col G (Index 6) = Active Weeks
-    // Col N (Index 13) = Late
-    // Col O (Index 14) = Absence
-    // Col AD (Index 29) = Picking Speed AM
-    
     const sheetData = rows.map(row => ({
       pnNumber: row[1] ? String(row[1]).trim() : '',
       name: row[2] ? String(row[2]).trim() : '',
@@ -210,6 +203,10 @@ export const useGoogleSheetSync = () => {
       speedAM: row[29] || '', // AD is index 29
       notes: '' // Optional mapping
     }));
+
+    // OPTIONAL: Reset 'isOnSheet' for all users before marking current ones?
+    // For performance, we skip this reset and just mark the found ones as true.
+    // Ideally, you'd want to set everyone to false first, but that's a bulk op.
 
     for (const rowData of sheetData) {
       if (!rowData.name) continue;
@@ -232,10 +229,10 @@ export const useGoogleSheetSync = () => {
         const newDetails = {
           ...currentDetails,
           pnNumber: rowData.pnNumber || currentDetails.pnNumber,
-          // We preserve existing notes as sheet notes aren't mapped in this view
+          isOnSheet: true, // MARK AS ON SHEET
           performance: {
             ...currentPerformance,
-            ...performanceMetrics // Overwrite with non-undefined values
+            ...performanceMetrics 
           }
         };
 
@@ -252,6 +249,7 @@ export const useGoogleSheetSync = () => {
             name: rowData.name,
             details: {
                 isHiddenFromMainView: true,
+                isOnSheet: true, // MARK AS ON SHEET
                 pnNumber: rowData.pnNumber,
                 notes: '',
                 performance: performanceMetrics,
@@ -285,11 +283,11 @@ export const useGoogleSheetSync = () => {
     if (createdCount > 0) message += `✨ Created ${createdCount} new profiles (hidden from main view).\n`;
     
     if (updatedCount === 0 && createdCount === 0) {
-        // DETAILED ERROR MESSAGE FOR DEBUGGING
         const firstRowPreview = rows.length > 0 ? JSON.stringify(rows[0].slice(0, 3)) : "No rows";
         alert(`⚠️ Sync completed but no matches found.\n\nDebug Info:\n- Parsed Rows: ${rows.length}\n- First Row Read: ${firstRowPreview}\n- Checked Name at Index 2 (Column C).\n\nCheck if your sheet range includes Column C.`);
     } else {
-        alert(message);
+        // Only show alert if user didn't provide a custom callback (to avoid double alerts in UI)
+        if (!onCompleteRef) alert(message);
         if (onCompleteRef) onCompleteRef();
     }
   };
