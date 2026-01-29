@@ -2,14 +2,15 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { Download, Search, RefreshCw, SaveAll, Copy, FileSpreadsheet, Check, Sun, Sunset, Bell, ArrowUpCircle, Pencil, Trash2, ChevronDown, ChevronUp, CalendarRange, Clock, AlertCircle, Users, ArrowRight, Calendar, Sunrise, Moon, Stethoscope, Loader2, CheckCircle2, XCircle } from 'lucide-react';
-import { format, startOfWeek, parseISO, isValid, addWeeks, addDays } from 'date-fns';
+import { format, isValid, addWeeks, addDays } from 'date-fns';
+import startOfWeek from 'date-fns/startOfWeek';
 import { ShopperRecord, ShiftType } from '../types';
 import { AdminHeatmap } from './AdminHeatmap';
 import { EditShopperModal } from './EditShopperModal';
 import { ShopperTableRow } from './Admin/ShopperTableRow';
 import { ShopperExpandedDetails } from './Admin/ShopperExpandedDetails';
 import { ComplianceReportModal } from './ComplianceReportModal'; // NEW IMPORT
-import { validateShopperSchedule } from '../utils/validation';
+import { validateShopperSchedule, getSafeDateFromKey } from '../utils/validation';
 import { 
     generateSpreadsheetRow, 
     generateBulkHRSpreadsheetRow
@@ -98,14 +99,17 @@ export const AdminDataView: React.FC = () => {
       .order('created_at', { ascending: false });
 
     if (!error && shoppers) {
-        setData(shoppers);
+        // FILTER: Hide shoppers imported purely for Talks (who shouldn't be in scheduling view)
+        const visibleShoppers = shoppers.filter(s => !s.details?.isHiddenFromMainView);
+        
+        setData(visibleShoppers);
         if (editingShopperIdRef.current) {
-            const current = shoppers.find(s => s.id === editingShopperIdRef.current);
+            const current = visibleShoppers.find(s => s.id === editingShopperIdRef.current);
             if (current) setEditingShopper(current);
         }
         // Silent re-check logic to update counts if ignored status changed
         if (Object.keys(complianceIssues).length > 0) {
-            runComplianceCheck(shoppers, true); 
+            runComplianceCheck(visibleShoppers, true); 
         }
     }
     setLoading(false);
@@ -120,7 +124,11 @@ export const AdminDataView: React.FC = () => {
             'postgres_changes',
             { event: 'INSERT', schema: 'public', table: 'shoppers' },
             async (payload) => {
-                const newId = (payload.new as any).id;
+                const newRec = payload.new as any;
+                // Don't alert for hidden imports
+                if (newRec.details?.isHiddenFromMainView) return;
+
+                const newId = newRec.id;
                 setTimeout(async () => {
                     const { data: fullRecord } = await supabase
                         .from('shoppers')
@@ -128,7 +136,7 @@ export const AdminDataView: React.FC = () => {
                         .eq('id', newId)
                         .single();
                     
-                    if (fullRecord) {
+                    if (fullRecord && !fullRecord.details?.isHiddenFromMainView) {
                         setPendingShoppers(prev => {
                             if (prev.find(p => p.id === fullRecord.id)) return prev;
                             return [fullRecord, ...prev];
@@ -395,7 +403,7 @@ export const AdminDataView: React.FC = () => {
       if (viewMode === 'SESSION') {
           const datePart = groupKey.substring(0, 10);
           const isMorning = groupKey.includes('0_MORNING');
-          const dateDisplay = isValid(parseISO(datePart)) ? format(parseISO(datePart), 'EEE, MMM do') : datePart;
+          const dateDisplay = isValid(getSafeDateFromKey(datePart)) ? format(getSafeDateFromKey(datePart), 'EEE, MMM do') : datePart;
           return {
               title: dateDisplay,
               subtitle: isMorning ? 'Morning Session' : 'Afternoon Session',
@@ -410,7 +418,7 @@ export const AdminDataView: React.FC = () => {
           const parts = groupKey.split('_');
           const datePart = parts[0];
           const shiftName = parts.slice(2).join(' ');
-          const dateDisplay = isValid(parseISO(datePart)) ? format(parseISO(datePart), 'EEE, MMM do') : datePart;
+          const dateDisplay = isValid(getSafeDateFromKey(datePart)) ? format(getSafeDateFromKey(datePart), 'EEE, MMM do') : datePart;
           let icon = <CalendarRange className="w-5 h-5" />;
           let colorClass = 'bg-gray-100 text-gray-600';
           let bgClass = 'bg-gray-50';
@@ -428,7 +436,7 @@ export const AdminDataView: React.FC = () => {
       const buckets: Record<string, { shopper: ShopperRecord, offset: number }[]> = {};
       items.forEach(shopper => {
           if (!shopper.details?.firstWorkingDay) return;
-          const fwd = parseISO(shopper.details.firstWorkingDay);
+          const fwd = getSafeDateFromKey(shopper.details.firstWorkingDay);
           if (!isValid(fwd)) return;
           const w1Monday = startOfWeek(fwd, { weekStartsOn: 1 });
           const w1Key = format(w1Monday, 'yyyy-MM-dd');
@@ -540,7 +548,7 @@ export const AdminDataView: React.FC = () => {
                         <div className="flex flex-wrap gap-2 items-center">
                              {calendarKeys.length === 0 ? <span className="text-xs text-gray-400 italic px-2">No dates set</span> : calendarKeys.map((mondayKey) => {
                                    const entries = calendarBuckets[mondayKey];
-                                   const mondayDate = parseISO(mondayKey);
+                                   const mondayDate = getSafeDateFromKey(mondayKey);
                                    const sundayDate = addDays(mondayDate, 6);
                                    const label = `Week of ${format(mondayDate, 'MMM d')}`;
                                    const rangeLabel = `${format(mondayDate, 'd')} - ${format(sundayDate, 'd MMM')}`;

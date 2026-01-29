@@ -3,10 +3,13 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { Activity, ChevronDown, ChevronUp, BarChart3, Bus, TrendingUp, ChevronLeft, ChevronRight, Calendar, Users } from 'lucide-react';
 import { 
     format, eachDayOfInterval, addDays, endOfWeek, addWeeks, isSameDay, 
-    differenceInCalendarDays, startOfDay, startOfWeek, subWeeks, parseISO 
+    differenceInCalendarDays, startOfDay
 } from 'date-fns';
+import startOfWeek from 'date-fns/startOfWeek';
+import subWeeks from 'date-fns/subWeeks';
 import { ShiftType, ShopperRecord } from '../types';
 import { SHIFT_TIMES } from '../constants';
+import { getSafeDateFromKey } from '../utils/validation';
 
 interface AdminHeatmapProps {
   data: ShopperRecord[];
@@ -37,7 +40,7 @@ export const AdminHeatmap: React.FC<AdminHeatmapProps> = ({ data }) => {
 
           // Updated Weekly Average Calculation: Based on Day Span
           if (count > 0) {
-              const dates = shopper.shifts.map(s => parseISO(s.date).getTime());
+              const dates = shopper.shifts.map(s => getSafeDateFromKey(s.date).getTime());
               const earliest = new Date(Math.min(...dates));
               const latest = new Date(Math.max(...dates));
               

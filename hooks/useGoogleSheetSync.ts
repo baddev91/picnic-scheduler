@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { ShopperRecord } from '../types';
-import { GOOGLE_CLIENT_ID, GOOGLE_SPREADSHEET_ID, SHEET_TAB_NAME } from '../constants';
+import { GOOGLE_CLIENT_ID, GOOGLE_SPREADSHEET_ID, SHEET_TAB_NAME, GOOGLE_SHEET_CSV_URL } from '../constants';
 
 interface SyncResult {
   updatedCount: number;
@@ -22,8 +22,10 @@ export const useGoogleSheetSync = () => {
   const [shoppersRef, setShoppersRef] = useState<ShopperRecord[]>([]);
   const [onCompleteRef, setOnCompleteRef] = useState<(() => void) | undefined>(undefined);
 
-  // Initialize Google Token Client on Mount
+  // Initialize Google Token Client on Mount (Only if no CSV URL is provided)
   useEffect(() => {
+    if (GOOGLE_SHEET_CSV_URL) return; // Skip OAuth init if using CSV
+
     if (window.google && GOOGLE_CLIENT_ID && !GOOGLE_CLIENT_ID.includes('INSERISCI')) {
       try {
         const client = window.google.accounts.oauth2.initTokenClient({
@@ -46,25 +48,97 @@ export const useGoogleSheetSync = () => {
   }, []);
 
   // 1. Triggered by UI Button
-  const syncShoppers = (shoppers: ShopperRecord[], onComplete?: () => void) => {
+  const syncShoppers = async (shoppers: ShopperRecord[], onComplete?: () => void) => {
+    setIsSyncing(true);
+    setShoppersRef(shoppers);
+    setOnCompleteRef(() => onComplete);
+
+    // METHOD A: PUBLIC CSV (Fastest, No Login)
+    if (GOOGLE_SHEET_CSV_URL) {
+        await fetchCsvData();
+        return;
+    }
+
+    // METHOD B: OAUTH LOGIN (Secure, Private)
     if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.includes('INSERISCI')) {
       alert("Please set GOOGLE_CLIENT_ID in constants.ts first!");
+      setIsSyncing(false);
       return;
     }
     if (!tokenClient) {
       alert("Google Login Service not ready. Refresh page or check internet.");
+      setIsSyncing(false);
       return;
     }
-
-    setIsSyncing(true);
-    setShoppersRef(shoppers); // Store current shoppers to use after async login
-    setOnCompleteRef(() => onComplete);
 
     // Request Access Token (Triggers Popup)
     tokenClient.requestAccessToken();
   };
 
-  // 2. Fetch Data using Token
+  // --- METHOD A: CSV FETCH ---
+  const fetchCsvData = async () => {
+      try {
+          const response = await fetch(GOOGLE_SHEET_CSV_URL);
+          if (!response.ok) throw new Error("Failed to fetch CSV");
+          
+          const text = await response.text();
+          const rows = parseCSV(text);
+          
+          if (rows.length < 2) {
+              alert("CSV seems empty or invalid.");
+              setIsSyncing(false);
+              return;
+          }
+
+          // Skip header row (index 0) and process
+          await updateSupabase(rows.slice(1));
+
+      } catch (e: any) {
+          console.error("CSV Sync Error:", e);
+          alert(`CSV Error: ${e.message}`);
+          setIsSyncing(false);
+      }
+  };
+
+  // Simple CSV Parser that handles basic quotes
+  const parseCSV = (text: string): string[][] => {
+      const rows: string[][] = [];
+      let currentRow: string[] = [];
+      let currentVal = '';
+      let insideQuote = false;
+      
+      for (let i = 0; i < text.length; i++) {
+          const char = text[i];
+          const nextChar = text[i+1];
+
+          if (char === '"') {
+              if (insideQuote && nextChar === '"') {
+                  currentVal += '"'; // Escape double quote
+                  i++;
+              } else {
+                  insideQuote = !insideQuote;
+              }
+          } else if (char === ',' && !insideQuote) {
+              currentRow.push(currentVal);
+              currentVal = '';
+          } else if ((char === '\r' || char === '\n') && !insideQuote) {
+              if (currentVal || currentRow.length > 0) currentRow.push(currentVal);
+              if (currentRow.length > 0) rows.push(currentRow);
+              currentRow = [];
+              currentVal = '';
+              if (char === '\r' && nextChar === '\n') i++;
+          } else {
+              currentVal += char;
+          }
+      }
+      if (currentVal || currentRow.length > 0) {
+          currentRow.push(currentVal);
+          rows.push(currentRow);
+      }
+      return rows;
+  };
+
+  // --- METHOD B: API FETCH ---
   const fetchDataFromSheets = async (accessToken: string) => {
     try {
       const range = `${SHEET_TAB_NAME}!A2:G`; // Read A to G, starting row 2
@@ -99,21 +173,22 @@ export const useGoogleSheetSync = () => {
     }
   };
 
-  // 3. Match & Update Supabase
+  // 3. Match & Update Supabase OR Create New
   const updateSupabase = async (rows: any[]) => {
     let updatedCount = 0;
-    const matches: string[] = [];
+    let createdCount = 0;
+    const newShoppersToInsert: any[] = [];
 
     // Map rows to object structure
     // Assumes structure: [Name, PN, ActiveWeeks, Absence, Late, Speed, Notes]
     const sheetData = rows.map(row => ({
-      name: row[0],
-      pnNumber: row[1],
-      activeWeeks: row[2],
-      absence: row[3],
-      late: row[4],
-      speedAM: row[5],
-      notes: row[6]
+      name: row[0] || '',
+      pnNumber: row[1] || '',
+      activeWeeks: row[2] || '',
+      absence: row[3] || '',
+      late: row[4] || '',
+      speedAM: row[5] || '',
+      notes: row[6] || ''
     }));
 
     for (const rowData of sheetData) {
@@ -122,11 +197,19 @@ export const useGoogleSheetSync = () => {
       // Match shopper (Case Insensitive)
       const shopper = shoppersRef.find(s => s.name.trim().toLowerCase() === String(rowData.name).trim().toLowerCase());
 
+      const performanceMetrics = {
+        activeWeeks: rowData.activeWeeks ? Number(rowData.activeWeeks) : undefined,
+        absence: rowData.absence ? Number(rowData.absence) : undefined,
+        late: rowData.late ? Number(rowData.late) : undefined,
+        speedAM: rowData.speedAM ? Number(rowData.speedAM) : undefined,
+      };
+
       if (shopper) {
+        // --- UPDATE EXISTING ---
         const currentDetails = shopper.details || {};
         const currentPerformance = currentDetails.performance || {};
 
-        // Merge logic
+        // Merge notes logic
         let newNotes = currentDetails.notes;
         if (rowData.notes) {
              const noteText = String(rowData.notes).trim();
@@ -141,10 +224,7 @@ export const useGoogleSheetSync = () => {
           notes: newNotes,
           performance: {
             ...currentPerformance,
-            activeWeeks: rowData.activeWeeks ? Number(rowData.activeWeeks) : currentPerformance.activeWeeks,
-            absence: rowData.absence ? Number(rowData.absence) : currentPerformance.absence,
-            late: rowData.late ? Number(rowData.late) : currentPerformance.late,
-            speedAM: rowData.speedAM ? Number(rowData.speedAM) : currentPerformance.speedAM,
+            ...performanceMetrics // Overwrite with non-undefined values
           }
         };
 
@@ -153,19 +233,51 @@ export const useGoogleSheetSync = () => {
           .update({ details: newDetails })
           .eq('id', shopper.id);
 
-        if (!error) {
-          updatedCount++;
-          matches.push(shopper.name);
-        }
+        if (!error) updatedCount++;
+
+      } else {
+        // --- PREPARE FOR CREATION (If not found) ---
+        // We set 'isHiddenFromMainView' to true so they don't appear in the Scheduling Dashboard
+        newShoppersToInsert.push({
+            name: rowData.name,
+            details: {
+                isHiddenFromMainView: true,
+                pnNumber: rowData.pnNumber,
+                notes: rowData.notes ? `[Sheet Imported]: ${rowData.notes}` : '',
+                performance: performanceMetrics,
+                // Default required fields to avoid UI crashes if viewed elsewhere
+                usePicnicBus: null, 
+                civilStatus: 'unknown', 
+                clothingSize: 'M', 
+                shoeSize: '40', 
+                gloveSize: '8 (M)', 
+                isRandstad: false
+            }
+        });
       }
     }
 
+    // Batch Insert New Shoppers
+    if (newShoppersToInsert.length > 0) {
+        const { error: insertError } = await supabase.from('shoppers').insert(newShoppersToInsert);
+        if (!insertError) {
+            createdCount = newShoppersToInsert.length;
+        } else {
+            console.error("Error creating new shoppers from sheet:", insertError);
+        }
+    }
+
     setIsSyncing(false);
-    if (updatedCount > 0) {
-      alert(`✅ Successfully synced ${updatedCount} shoppers from Google Sheets!`);
-      if (onCompleteRef) onCompleteRef();
+    
+    let message = "";
+    if (updatedCount > 0) message += `✅ Updated ${updatedCount} existing profiles.\n`;
+    if (createdCount > 0) message += `✨ Created ${createdCount} new profiles (hidden from main view).\n`;
+    
+    if (updatedCount === 0 && createdCount === 0) {
+        alert("⚠️ No matching shoppers found and no valid data to import.");
     } else {
-      alert("⚠️ No matching shoppers found in the spreadsheet.");
+        alert(message);
+        if (onCompleteRef) onCompleteRef();
     }
   };
 

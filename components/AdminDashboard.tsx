@@ -143,7 +143,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           </div>
                           <div>
                               <h3 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight group-hover:text-blue-700 transition-colors">
-                                  View Submissions
+                                  SER Submissions
                               </h3>
                               <p className="text-gray-500 text-sm sm:text-base font-medium mt-1 max-w-xl">
                                   Access the main data table, manage shopper shifts, edit profiles, and export reports.

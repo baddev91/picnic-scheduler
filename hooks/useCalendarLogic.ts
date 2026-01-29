@@ -2,10 +2,13 @@
 import { useState, useMemo } from 'react';
 import { 
   format, endOfMonth, eachDayOfInterval, addMonths, isWeekend, endOfWeek, isWithinInterval, 
-  isAfter, isBefore, addWeeks, getDay, startOfWeek, parseISO, subMonths, startOfMonth, startOfDay
+  isAfter, isBefore, addWeeks, getDay, startOfMonth, startOfDay
 } from 'date-fns';
+import startOfWeek from 'date-fns/startOfWeek';
+import subMonths from 'date-fns/subMonths';
 import { ShiftTime, ShiftType, ShopperShift, AdminAvailabilityMap, WeeklyTemplate } from '../types';
 import { formatDateKey, getShopperAllowedRange, getShopperMinDate } from '../constants';
+import { getSafeDateFromKey } from '../utils/validation';
 
 interface UseCalendarLogicProps {
   mode: 'ADMIN' | 'SHOPPER';
@@ -72,7 +75,7 @@ export const useCalendarLogic = ({
 
     // 2. Fallback to Standard Weekly Pattern if exists
     if (weeklyTemplate) {
-        const dateObj = parseISO(dateKey);
+        const dateObj = getSafeDateFromKey(dateKey);
         const dayOfWeek = getDay(dateObj); // 0 (Sun) - 6 (Sat)
         
         // Check if day exists in template
@@ -96,7 +99,7 @@ export const useCalendarLogic = ({
         if (dateKey < firstWorkingDay) return true;
 
         // Block dates AFTER the allowed window (Sunday of the following week)
-        const fwdDate = parseISO(firstWorkingDay);
+        const fwdDate = getSafeDateFromKey(firstWorkingDay);
         const limitDate = endOfWeek(addWeeks(fwdDate, 1), { weekStartsOn: 1 });
         
         if (isAfter(date, limitDate)) return true;
@@ -133,7 +136,7 @@ export const useCalendarLogic = ({
 
        // If FWD is selected (Step 2), TIGHTEN the list range
        if (step >= 2 && firstWorkingDay) {
-           const fwdDate = parseISO(firstWorkingDay);
+           const fwdDate = getSafeDateFromKey(firstWorkingDay);
            
            if (isAfter(fwdDate, rangeStart)) {
                rangeStart = fwdDate;

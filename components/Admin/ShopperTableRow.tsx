@@ -1,8 +1,9 @@
 
 import React from 'react';
 import { GripVertical, Pencil, Trash2, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import { ShopperRecord, ShiftType } from '../../types';
+import { getSafeDateFromKey } from '../../utils/validation';
 
 interface ShopperTableRowProps {
     shopper: ShopperRecord;
@@ -53,7 +54,7 @@ export const ShopperTableRow: React.FC<ShopperTableRowProps> = ({
 
         sortedAA.forEach((s: any) => {
             try {
-                const dateObj = parseISO(s.date);
+                const dateObj = getSafeDateFromKey(s.date);
                 const dayName = format(dateObj, 'EEE'); // e.g. "Sun"
                 const timeShort = s.time.split('(')[0].trim();
                 
@@ -123,7 +124,7 @@ export const ShopperTableRow: React.FC<ShopperTableRowProps> = ({
             </td>
             <td className="px-6 py-4 text-gray-500">
                 <div className="flex items-center gap-2">
-                    {shopper.details?.firstWorkingDay ? format(new Date(shopper.details.firstWorkingDay), 'EEE, MMM d') : '-'}
+                    {shopper.details?.firstWorkingDay ? format(getSafeDateFromKey(shopper.details.firstWorkingDay), 'EEE, MMM d') : '-'}
                     
                     {/* ATTENDANCE BADGE */}
                     {status === 'SHOWED_UP' && (

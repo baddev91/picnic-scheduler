@@ -1,5 +1,5 @@
 
-import { addDays, isAfter, endOfWeek, addWeeks, format, isWeekend, startOfDay, differenceInHours, parseISO, getDay } from 'date-fns';
+import { addDays, isAfter, endOfWeek, addWeeks, format, isWeekend, startOfDay, differenceInHours, getDay } from 'date-fns';
 import { ShiftTime, ShiftType, ShopperShift } from '../types';
 import { formatDateKey, EUROPEAN_COUNTRIES, getShopperMinDate } from '../constants';
 
@@ -138,7 +138,7 @@ export const validateShopperSchedule = (shifts: ShopperShift[]): string[] => {
     // 1. AA Pattern Check
     // Requirement: At least 2 distinct days of the week (e.g. Mon + Sat, or Sat + Sun)
     const aaShifts = shifts.filter(s => s.type === ShiftType.AA);
-    const uniqueDaysOfWeek = new Set(aaShifts.map(s => getDay(parseISO(s.date))));
+    const uniqueDaysOfWeek = new Set(aaShifts.map(s => getDay(getSafeDateFromKey(s.date))));
     
     if (uniqueDaysOfWeek.size < 2) {
         issues.push(`Invalid AA Pattern: Found ${uniqueDaysOfWeek.size} distinct weekday(s), expected at least 2.`);

@@ -6,7 +6,7 @@ import { Button } from './Button';
 import { CalendarView } from './CalendarView';
 import { MobileInstructionModal } from './MobileInstructionModal';
 import { User, PlayCircle, CheckCircle, ArrowRight, Layers, CalendarCheck, Globe2 } from 'lucide-react';
-import { addDays, getDay, endOfWeek, addWeeks, isBefore, parseISO } from 'date-fns';
+import { addDays, getDay, endOfWeek, addWeeks, isBefore } from 'date-fns';
 import { supabase } from '../supabaseClient';
 import { ShopperAAWizard } from './ShopperAAWizard';
 import { ShopperSummary } from './ShopperSummary';
@@ -460,7 +460,7 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
     
     const finalShifts = newShifts.map((s) => {
         if (s.type === ShiftType.AA && s.date >= fwd) {
-            const dayIndex = getDay(parseISO(s.date));
+            const dayIndex = getDay(getSafeDateFromKey(s.date));
             const originalIntent = aaSelections.find(aa => aa.dayIndex === dayIndex);
             const shiftIndex = workingShifts.findIndex(ws => ws.date === s.date);
 

@@ -82,6 +82,7 @@ export interface ShopperDetails {
   firstDayStatus?: 'PENDING' | 'SHOWED_UP' | 'NO_SHOW'; // New Attendance Tracking
   notes?: string; // NEW: Admin Notes
   ignoreCompliance?: boolean; // NEW: Flag to ignore compliance checks
+  isHiddenFromMainView?: boolean; // NEW: If true, hides from Shift Scheduler View (imported from sheets)
   
   // FROZEN SPECIFIC FIELDS
   isFrozenEligible?: boolean;
