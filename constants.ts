@@ -1,8 +1,6 @@
 
 import { ShiftTime, BusConfig } from './types';
-import { format, addWeeks, endOfWeek, addDays } from 'date-fns';
-import startOfWeek from 'date-fns/startOfWeek';
-import startOfDay from 'date-fns/startOfDay';
+import { format, addWeeks, endOfWeek, addDays, startOfWeek, startOfDay } from 'date-fns';
 
 export const SHIFT_TIMES = [
   ShiftTime.OPENING,
@@ -111,10 +109,10 @@ export const GOOGLE_CLIENT_ID = '520487940784-73147tpo2ugt4svf1v7d5atp59u1gm1m.a
 // Apri il tuo file Google Sheet nel browser.
 // L'ID è la stringa lunga nell'URL tra /d/ e /edit
 // Esempio: https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit
-// Copia solo "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
-export const GOOGLE_SPREADSHEET_ID = 'https://docs.google.com/spreadsheets/d/1qXTpVH_JQB1ru1W9NQEub4JgD4CdRqzFniXX6ODVyuc';
+// Copia solo "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms" (NON TUTTO L'URL)
+export const GOOGLE_SPREADSHEET_ID = '1qXTpVH_JQB1ru1W9NQEub4JgD4CdRqzFniXX6ODVyuc';
 
 // 3. NOME DEL FOGLIO
 // Guarda in basso a sinistra nel tuo file Excel/Sheet. Come si chiama la linguetta?
 // Se è in italiano spesso è "Foglio1", in inglese "Sheet1". DEVE ESSERE ESATTO.
-export const SHEET_TAB_NAME = 'Shift-Dashboard-proposal'; 
+export const SHEET_TAB_NAME = 'Shift-Dashboard-proposal';

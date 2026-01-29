@@ -1,11 +1,10 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
 import { Activity, ChevronDown, ChevronUp, BarChart3, Bus, TrendingUp, ChevronLeft, ChevronRight, Calendar, Users } from 'lucide-react';
-import { format, eachDayOfInterval, addDays, endOfWeek, addWeeks, isSameDay, differenceInCalendarDays, min, max } from 'date-fns';
-import parseISO from 'date-fns/parseISO';
-import startOfDay from 'date-fns/startOfDay';
-import startOfWeek from 'date-fns/startOfWeek';
-import subWeeks from 'date-fns/subWeeks';
+import { 
+    format, eachDayOfInterval, addDays, endOfWeek, addWeeks, isSameDay, 
+    differenceInCalendarDays, startOfDay, startOfWeek, subWeeks, parseISO 
+} from 'date-fns';
 import { ShiftType, ShopperRecord } from '../types';
 import { SHIFT_TIMES } from '../constants';
 
@@ -38,9 +37,9 @@ export const AdminHeatmap: React.FC<AdminHeatmapProps> = ({ data }) => {
 
           // Updated Weekly Average Calculation: Based on Day Span
           if (count > 0) {
-              const dates = shopper.shifts.map(s => parseISO(s.date));
-              const earliest = min(dates);
-              const latest = max(dates);
+              const dates = shopper.shifts.map(s => parseISO(s.date).getTime());
+              const earliest = new Date(Math.min(...dates));
+              const latest = new Date(Math.max(...dates));
               
               // Calculate span in exact days + 1 (inclusive)
               const daysSpan = differenceInCalendarDays(latest, earliest) + 1;
