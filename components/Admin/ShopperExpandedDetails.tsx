@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, MapPin, Sheet, Copy, FileSpreadsheet, Calendar, Star, CheckCircle, XCircle, Clock, AlertTriangle, X, Check, Globe, FileText, Save, Snowflake, Building2 } from 'lucide-react';
+import { User, MapPin, Sheet, Copy, FileSpreadsheet, Calendar, Star, CheckCircle, XCircle, Clock, AlertTriangle, X, Check, Globe, FileText, Save, Snowflake, Building2, MessageSquare, TrendingUp, Zap, Target, Award, Flag } from 'lucide-react';
 import { format } from 'date-fns';
 import { supabase } from '../../supabaseClient';
 import { ShopperRecord, ShiftType } from '../../types';
@@ -14,6 +14,33 @@ interface ShopperExpandedDetailsProps {
     onStatusUpdate?: (id: string, status: 'PENDING' | 'SHOWED_UP' | 'NO_SHOW') => void;
     onUpdateShopper?: (shopper: ShopperRecord) => void;
 }
+
+// Helper component for Talk Status Badges
+const TalkStatusBadge: React.FC<{ label: string; status?: string; icon: React.ReactNode }> = ({ label, status = 'TODO', icon }) => {
+    let colorClass = 'bg-gray-100 text-gray-500 border-gray-200';
+    let displayStatus = status;
+
+    if (status === 'DONE' || status === 'YES') {
+        colorClass = 'bg-green-50 text-green-700 border-green-200';
+        displayStatus = status === 'YES' ? 'YES' : 'DONE';
+    } else if (status === 'SKIPPED' || status === 'NO') {
+        colorClass = 'bg-gray-100 text-gray-400 border-gray-200 opacity-70';
+    } else if (status === 'HOLD') {
+        colorClass = 'bg-orange-50 text-orange-700 border-orange-200';
+    } else if (status === 'TODO') {
+        colorClass = 'bg-blue-50 text-blue-600 border-blue-100';
+    }
+
+    return (
+        <div className={`flex flex-col p-2 rounded-lg border ${colorClass} transition-all`}>
+            <div className="flex items-center gap-1.5 mb-1 opacity-80">
+                {React.cloneElement(icon as React.ReactElement, { className: "w-3 h-3" })}
+                <span className="text-[10px] font-bold uppercase tracking-wider">{label}</span>
+            </div>
+            <span className="text-xs font-black">{displayStatus}</span>
+        </div>
+    );
+};
 
 export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ shopper, onStatusUpdate, onUpdateShopper }) => {
     // Local state for confirmation flow
@@ -37,6 +64,10 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
     }, [shopper.details?.firstDayStatus, shopper.id, shopper.details?.isFrozenEligible]);
     
     const hasNoteChanged = notes !== (shopper.details?.notes || '');
+
+    // Data shortcuts
+    const tp = shopper.details?.talkProgress || {};
+    const perf = shopper.details?.performance || {};
 
     // --- COPY HANDLERS (Local to the item) ---
     const handleCopyForSheet = (weekOffset: number) => {
@@ -141,6 +172,7 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
     return (
         <div className="bg-gray-50/50 px-4 py-4 md:px-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in slide-in-from-top-2">
+                
                 {/* LEFT COL: Personal Details */}
                 <div className="space-y-3 text-sm text-gray-600 md:border-r md:pr-6">
                     <h4 className="font-bold text-gray-900 flex items-center gap-2"><User className="w-4 h-4" /> Personal Details</h4>
@@ -166,65 +198,7 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
                             </span>
                         )}
                     </div>
-                    {shopper.details?.isRandstad && (
-                        <div className="mt-2 pt-2 border-t">
-                            <div className="flex items-start gap-2 text-xs font-medium text-blue-800 bg-blue-50 p-2 rounded">
-                                <MapPin className="w-3 h-3 mt-0.5 shrink-0 text-blue-500" />
-                                {shopper.details?.address || 'No address provided'}
-                            </div>
-                        </div>
-                    )}
                     
-                    {/* FROZEN TOGGLE WITH CONFIRMATION */}
-                    <div className="mt-4 pt-4 border-t relative">
-                        {pendingFrozenToggle ? (
-                             <div className="flex items-center justify-between p-3 bg-white border border-yellow-300 rounded-xl shadow-sm animate-in fade-in">
-                                 <div className="text-xs font-bold text-gray-700 flex items-center gap-1">
-                                     <AlertTriangle className="w-3 h-3 text-yellow-500" />
-                                     {isFrozenEligible ? 'Remove from Frozen?' : 'Mark as Eligible?'}
-                                 </div>
-                                 <div className="flex gap-2">
-                                     <button 
-                                        onClick={() => setPendingFrozenToggle(false)}
-                                        className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-100 text-gray-500 transition-colors"
-                                     > 
-                                        <X className="w-3 h-3" /> 
-                                     </button>
-                                     <button 
-                                        onClick={handleConfirmFrozenToggle}
-                                        className="px-2 py-1.5 rounded-lg bg-gray-900 text-white text-xs font-bold hover:bg-black transition-colors flex items-center gap-1 shadow-sm"
-                                     > 
-                                        <Check className="w-3 h-3" /> Confirm
-                                     </button>
-                                 </div>
-                             </div>
-                        ) : (
-                            <button 
-                                onClick={() => setPendingFrozenToggle(true)}
-                                className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all group ${
-                                    isFrozenEligible 
-                                    ? 'bg-cyan-50 border-cyan-200 shadow-sm' 
-                                    : 'bg-white border-gray-200 hover:border-cyan-300'
-                                }`}
-                            >
-                                <div className="flex items-center gap-2">
-                                    <div className={`p-1.5 rounded-lg ${isFrozenEligible ? 'bg-cyan-100 text-cyan-600' : 'bg-gray-100 text-gray-400'}`}>
-                                        <Snowflake className="w-4 h-4" />
-                                    </div>
-                                    <div className="text-left">
-                                        <span className={`block text-xs font-bold uppercase ${isFrozenEligible ? 'text-cyan-800' : 'text-gray-500'}`}>
-                                            Frozen Dept.
-                                        </span>
-                                        <span className="text-[10px] text-gray-400">Mark as eligible</span>
-                                    </div>
-                                </div>
-                                <div className={`w-10 h-5 rounded-full relative transition-colors ${isFrozenEligible ? 'bg-cyan-500' : 'bg-gray-200'}`}>
-                                    <div className={`absolute top-1 left-1 w-3 h-3 bg-white rounded-full shadow-sm transition-transform ${isFrozenEligible ? 'translate-x-5' : 'translate-x-0'}`} />
-                                </div>
-                            </button>
-                        )}
-                    </div>
-
                     {/* EXPORT BUTTONS */}
                     <div className="mt-4 pt-4 border-t space-y-3">
                         <h5 className="font-bold text-gray-900 text-xs uppercase flex items-center gap-2"><Sheet className="w-3 h-3 text-green-600" /> Google Sheets Export</h5>
@@ -263,11 +237,11 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
                 </div>
 
                 {/* RIGHT COL: Shifts Grid + Notes */}
-                <div className="col-span-2">
+                <div className="col-span-2 space-y-6">
                     
                     {/* ATTENDANCE CHECK CONTROL */}
                     {onStatusUpdate && (
-                        <div className="mb-6 p-4 bg-white rounded-xl border border-gray-200 shadow-sm relative overflow-hidden transition-all duration-300">
+                        <div className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm relative overflow-hidden transition-all duration-300">
                             
                             {/* Title */}
                             <h4 className="font-bold text-gray-800 text-sm mb-3 flex items-center gap-2">
@@ -342,6 +316,61 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
                             )}
                         </div>
                     )}
+
+                    {/* NEW: TALKS & PERFORMANCE DASHBOARD */}
+                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                        <div className="bg-gradient-to-r from-gray-50 to-white px-4 py-2 border-b border-gray-100 flex items-center gap-2">
+                            <TrendingUp className="w-4 h-4 text-purple-600" />
+                            <span className="text-xs font-bold text-gray-600 uppercase tracking-wider">Performance & Talks</span>
+                        </div>
+                        
+                        <div className="p-4 space-y-4">
+                            {/* Row 1: Key Metrics */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                {/* Speed AM */}
+                                <div className="bg-gray-50 p-2 rounded-lg border border-gray-100 flex flex-col items-center">
+                                    <span className="text-[9px] text-gray-400 font-bold uppercase mb-1">Picking Speed (AM)</span>
+                                    <span className="text-lg font-black text-gray-800 flex items-center gap-1">
+                                        {perf.speedAM || '-'} <Zap className="w-3 h-3 text-yellow-500" />
+                                    </span>
+                                </div>
+                                {/* Speed CH */}
+                                <div className="bg-gray-50 p-2 rounded-lg border border-gray-100 flex flex-col items-center">
+                                    <span className="text-[9px] text-gray-400 font-bold uppercase mb-1">Picking Speed (CH)</span>
+                                    <span className="text-lg font-black text-gray-800 flex items-center gap-1">
+                                        {perf.speedCH || '-'} <Zap className="w-3 h-3 text-blue-500" />
+                                    </span>
+                                </div>
+                                {/* Check In Today */}
+                                <div className={`p-2 rounded-lg border flex flex-col items-center justify-center transition-all ${tp.checkInToday ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-100'}`}>
+                                    <span className="text-[9px] font-bold uppercase mb-1 opacity-60">Checked In Today</span>
+                                    {tp.checkInToday ? (
+                                        <CheckCircle className="w-5 h-5 text-green-600" />
+                                    ) : (
+                                        <span className="text-xs font-bold text-gray-400">Pending</span>
+                                    )}
+                                </div>
+                                {/* Reps */}
+                                <div className="bg-gray-50 p-2 rounded-lg border border-gray-100 flex flex-col items-center">
+                                    <span className="text-[9px] text-gray-400 font-bold uppercase mb-1">Reps</span>
+                                    <span className="text-lg font-black text-gray-800 flex items-center gap-1">
+                                        {perf.reps || '-'} <Target className="w-3 h-3 text-red-500" />
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* Row 2: Talks Pipeline */}
+                            <div className="space-y-2">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Talks Pipeline</span>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                    <TalkStatusBadge label="Welcome" status={tp.welcomeTalk} icon={<MessageSquare />} />
+                                    <TalkStatusBadge label="Mid-Term" status={tp.midTermEval} icon={<Sheet />} />
+                                    <TalkStatusBadge label="Promotion" status={tp.promotionDecision} icon={<Award />} />
+                                    <TalkStatusBadge label="End Trial" status={tp.endOfTrialTalk} icon={<Flag />} />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
                     <div className="flex gap-6 flex-col lg:flex-row">
                         <div className="flex-1">

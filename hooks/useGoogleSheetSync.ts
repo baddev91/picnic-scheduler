@@ -3,11 +3,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { ShopperRecord } from '../types';
 import { GOOGLE_CLIENT_ID, GOOGLE_SPREADSHEET_ID, SHEET_TAB_NAME, GOOGLE_SHEET_CSV_URL } from '../constants';
-
-interface SyncResult {
-  updatedCount: number;
-  matches: string[];
-}
+import { SyncResultData } from '../components/SyncResultModal';
 
 // Declare Google Types for TypeScript
 declare global {
@@ -19,6 +15,12 @@ declare global {
 export const useGoogleSheetSync = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [tokenClient, setTokenClient] = useState<any>(null);
+  
+  // NEW: Store the Access Token to avoid re-opening the popup
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  
+  // NEW: State for Modal Result instead of alert
+  const [syncResult, setSyncResult] = useState<SyncResultData | null>(null);
   const [onCompleteRef, setOnCompleteRef] = useState<(() => void) | undefined>(undefined);
 
   // Initialize Google Token Client on Mount (Only if no CSV URL is provided)
@@ -32,10 +34,19 @@ export const useGoogleSheetSync = () => {
           scope: 'https://www.googleapis.com/auth/spreadsheets.readonly',
           callback: (tokenResponse: any) => {
             if (tokenResponse && tokenResponse.access_token) {
+              // CACHE THE TOKEN
+              setAccessToken(tokenResponse.access_token);
               fetchDataFromSheets(tokenResponse.access_token);
             } else {
               setIsSyncing(false);
-              alert("Login canceled or failed.");
+              setSyncResult({
+                  isOpen: true,
+                  updatedCount: 0,
+                  createdCount: 0,
+                  totalRowsProcessed: 0,
+                  isError: true,
+                  errorMessage: "Login canceled or failed."
+              });
             }
           },
         });
@@ -49,6 +60,7 @@ export const useGoogleSheetSync = () => {
   // 1. Triggered by UI Button
   const syncShoppers = async (shoppers: ShopperRecord[], onComplete?: () => void) => {
     setIsSyncing(true);
+    setSyncResult(null); // Reset previous result
     setOnCompleteRef(() => onComplete);
 
     // METHOD A: PUBLIC CSV (Fastest, No Login)
@@ -63,6 +75,13 @@ export const useGoogleSheetSync = () => {
       setIsSyncing(false);
       return;
     }
+
+    // NEW LOGIC: Use Cached Token if available
+    if (accessToken) {
+        await fetchDataFromSheets(accessToken);
+        return;
+    }
+
     if (!tokenClient) {
       alert("Google Login Service not ready. Refresh page or check internet.");
       setIsSyncing(false);
@@ -83,7 +102,14 @@ export const useGoogleSheetSync = () => {
           const rows = parseCSV(text);
           
           if (rows.length < 5) {
-              alert("CSV seems too short (needs at least 5 rows to skip headers).");
+              setSyncResult({
+                  isOpen: true,
+                  updatedCount: 0,
+                  createdCount: 0,
+                  totalRowsProcessed: rows.length,
+                  isError: true,
+                  errorMessage: "CSV file is too short/empty."
+              });
               setIsSyncing(false);
               return;
           }
@@ -93,7 +119,14 @@ export const useGoogleSheetSync = () => {
 
       } catch (e: any) {
           console.error("CSV Sync Error:", e);
-          alert(`CSV Error: ${e.message}`);
+          setSyncResult({
+              isOpen: true,
+              updatedCount: 0,
+              createdCount: 0,
+              totalRowsProcessed: 0,
+              isError: true,
+              errorMessage: e.message
+          });
           setIsSyncing(false);
       }
   };
@@ -137,7 +170,7 @@ export const useGoogleSheetSync = () => {
   };
 
   // --- METHOD B: API FETCH ---
-  const fetchDataFromSheets = async (accessToken: string) => {
+  const fetchDataFromSheets = async (token: string) => {
     try {
       // UPDATED RANGE: A4 to AE to capture Picking Speed at AD
       // Row 4 is Header, Data starts Row 5
@@ -146,11 +179,16 @@ export const useGoogleSheetSync = () => {
 
       const response = await fetch(url, {
         headers: {
-          'Authorization': `Bearer ${accessToken}`
+          'Authorization': `Bearer ${token}`
         }
       });
 
       if (!response.ok) {
+        // If token expired (401), clear it and retry flow manually (user has to click again for now to keep it simple)
+        if (response.status === 401) {
+            setAccessToken(null); 
+            throw new Error("Session expired. Please click Sync again.");
+        }
         const err = await response.json();
         throw new Error(err.error?.message || "Failed to fetch sheets");
       }
@@ -159,7 +197,14 @@ export const useGoogleSheetSync = () => {
       const rows = data.values || [];
 
       if (rows.length === 0) {
-        alert("Spreadsheet is empty or range incorrect.");
+        setSyncResult({
+            isOpen: true,
+            updatedCount: 0,
+            createdCount: 0,
+            totalRowsProcessed: 0,
+            isError: true,
+            errorMessage: "Spreadsheet range is empty."
+        });
         setIsSyncing(false);
         return;
       }
@@ -169,15 +214,20 @@ export const useGoogleSheetSync = () => {
 
     } catch (error: any) {
       console.error("Sheet API Error:", error);
-      alert(`Error fetching sheet: ${error.message}`);
+      setSyncResult({
+          isOpen: true,
+          updatedCount: 0,
+          createdCount: 0,
+          totalRowsProcessed: 0,
+          isError: true,
+          errorMessage: error.message
+      });
       setIsSyncing(false);
     }
   };
 
   // 3. Match & Update Supabase OR Create New
   const updateSupabase = async (rows: any[]) => {
-    console.log("Raw Sheet Rows:", rows); // DEBUG FOR USER
-
     let updatedCount = 0;
     let createdCount = 0;
     const newShoppersToInsert: any[] = [];
@@ -186,7 +236,14 @@ export const useGoogleSheetSync = () => {
     const { data: dbShoppers, error: fetchError } = await supabase.from('shoppers').select('*');
     
     if (fetchError) {
-        alert("Error reading database. Sync aborted.");
+        setSyncResult({
+            isOpen: true,
+            updatedCount: 0,
+            createdCount: 0,
+            totalRowsProcessed: rows.length,
+            isError: true,
+            errorMessage: "Database Connection Error"
+        });
         setIsSyncing(false);
         return;
     }
@@ -203,10 +260,6 @@ export const useGoogleSheetSync = () => {
       speedAM: row[29] || '', // AD is index 29
       notes: '' // Optional mapping
     }));
-
-    // OPTIONAL: Reset 'isOnSheet' for all users before marking current ones?
-    // For performance, we skip this reset and just mark the found ones as true.
-    // Ideally, you'd want to set everyone to false first, but that's a bulk op.
 
     for (const rowData of sheetData) {
       if (!rowData.name) continue;
@@ -229,7 +282,7 @@ export const useGoogleSheetSync = () => {
         const newDetails = {
           ...currentDetails,
           pnNumber: rowData.pnNumber || currentDetails.pnNumber,
-          isOnSheet: true, // MARK AS ON SHEET
+          isOnSheet: true, // MARK AS ON SHEET (Critical for visibility)
           performance: {
             ...currentPerformance,
             ...performanceMetrics 
@@ -272,25 +325,34 @@ export const useGoogleSheetSync = () => {
             createdCount = newShoppersToInsert.length;
         } else {
             console.error("Error creating new shoppers from sheet:", insertError);
-            alert(`Failed to create ${newShoppersToInsert.length} new shoppers. Check console for details. Error: ${insertError.message}`);
+            setSyncResult({
+                isOpen: true,
+                updatedCount,
+                createdCount: 0,
+                totalRowsProcessed: rows.length,
+                isError: true,
+                errorMessage: `Partial Failure: Updated ${updatedCount} but failed to create new profiles. Error: ${insertError.message}`
+            });
+            setIsSyncing(false);
+            return;
         }
     }
 
     setIsSyncing(false);
     
-    let message = "";
-    if (updatedCount > 0) message += `✅ Updated ${updatedCount} existing profiles.\n`;
-    if (createdCount > 0) message += `✨ Created ${createdCount} new profiles (hidden from main view).\n`;
-    
-    if (updatedCount === 0 && createdCount === 0) {
-        const firstRowPreview = rows.length > 0 ? JSON.stringify(rows[0].slice(0, 3)) : "No rows";
-        alert(`⚠️ Sync completed but no matches found.\n\nDebug Info:\n- Parsed Rows: ${rows.length}\n- First Row Read: ${firstRowPreview}\n- Checked Name at Index 2 (Column C).\n\nCheck if your sheet range includes Column C.`);
-    } else {
-        // Only show alert if user didn't provide a custom callback (to avoid double alerts in UI)
-        if (!onCompleteRef) alert(message);
-        if (onCompleteRef) onCompleteRef();
-    }
+    // SUCCESS MODAL STATE
+    setSyncResult({
+        isOpen: true,
+        updatedCount,
+        createdCount,
+        totalRowsProcessed: rows.length,
+        isError: false
+    });
+
+    if (onCompleteRef) onCompleteRef();
   };
 
-  return { isSyncing, syncShoppers };
+  const closeSyncModal = () => setSyncResult(null);
+
+  return { isSyncing, syncShoppers, syncResult, closeSyncModal };
 };

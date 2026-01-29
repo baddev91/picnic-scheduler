@@ -2,10 +2,11 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
 import { ShopperRecord } from '../../types';
-import { Search, MessageSquare, ArrowLeft, RefreshCw, User, CalendarCheck, CloudDownload, Filter, Layers } from 'lucide-react';
+import { Search, MessageSquare, ArrowLeft, RefreshCw, User, CalendarCheck, CloudDownload, Filter, Layers, X } from 'lucide-react';
 import { Button } from '../Button';
 import { TalkModal } from './TalkModal';
 import { useGoogleSheetSync } from '../../hooks/useGoogleSheetSync';
+import { SyncResultModal } from '../SyncResultModal'; // New Import
 
 interface TalksDashboardProps {
   onBack: () => void;
@@ -171,7 +172,8 @@ export const TalksDashboard: React.FC<TalksDashboardProps> = ({ onBack }) => {
   // VIEW MODE: 'SHEET' = Only synced shoppers, 'ALL' = Everyone in DB
   const [viewMode, setViewMode] = useState<'SHEET' | 'ALL'>('SHEET');
   
-  const { isSyncing, syncShoppers } = useGoogleSheetSync();
+  // Updated Hook usage
+  const { isSyncing, syncShoppers, syncResult, closeSyncModal } = useGoogleSheetSync();
 
   const fetchShoppers = async () => {
     setLoading(true);
@@ -196,9 +198,21 @@ export const TalksDashboard: React.FC<TalksDashboardProps> = ({ onBack }) => {
 
   const handleSyncClick = () => {
       syncShoppers(shoppers, () => {
+          // NOTE: This runs after the sync logic completes inside the hook
           fetchShoppers();
-          setViewMode('SHEET'); // Force back to sheet view after sync to show results
+          setViewMode('SHEET'); 
       });
+  };
+
+  const handleModalClose = () => {
+      closeSyncModal();
+      // Double check: Refresh data again when modal closes to ensure UI is up to date
+      fetchShoppers();
+  };
+
+  const clearFilters = () => {
+      setSearchTerm('');
+      setViewMode('ALL');
   };
 
   // FILTER LOGIC
@@ -210,6 +224,7 @@ export const TalksDashboard: React.FC<TalksDashboardProps> = ({ onBack }) => {
 
       // 2. View Mode Filter
       if (viewMode === 'SHEET') {
+          // Ensure we handle potential null details safely
           return s.details?.isOnSheet === true;
       }
       return true;
@@ -278,6 +293,11 @@ export const TalksDashboard: React.FC<TalksDashboardProps> = ({ onBack }) => {
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm transition-all shadow-sm"
                         />
+                        {searchTerm && (
+                            <button onClick={() => setSearchTerm('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600">
+                                <X className="w-3 h-3" />
+                            </button>
+                        )}
                     </div>
                     
                     {/* GOOGLE SYNC BUTTON */}
@@ -334,19 +354,27 @@ export const TalksDashboard: React.FC<TalksDashboardProps> = ({ onBack }) => {
                             ? "Try syncing with the spreadsheet to populate the active list." 
                             : "No records found in the database matching your search."}
                     </p>
-                    {viewMode === 'SHEET' && (
+                    <div className="flex justify-center gap-3 mt-4">
+                        {viewMode === 'SHEET' && (
+                            <button 
+                                onClick={handleSyncClick}
+                                className="text-blue-600 font-bold text-sm hover:underline flex items-center gap-1"
+                            >
+                                Sync Now <ArrowLeft className="w-3 h-3 rotate-180" />
+                            </button>
+                        )}
                         <button 
-                            onClick={handleSyncClick}
-                            className="mt-4 text-blue-600 font-bold text-sm hover:underline flex items-center gap-1 mx-auto"
+                            onClick={clearFilters}
+                            className="text-gray-500 font-bold text-sm hover:text-gray-700 flex items-center gap-1 border border-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-all"
                         >
-                            Sync Now <ArrowLeft className="w-3 h-3 rotate-180" />
+                            Reset Filters
                         </button>
-                    )}
+                    </div>
                 </div>
             ) : (
                 <>
                     <div className="mb-4 text-xs font-bold text-gray-400 uppercase tracking-wider flex justify-between items-center px-2">
-                        <span>Showing {filteredShoppers.length} Records ({viewMode === 'SHEET' ? 'Active Sheet' : 'History'})</span>
+                        <span>Showing {filteredShoppers.length} Records ({viewMode === 'SHEET' ? 'Active Shoppers' : 'All Shoppers'})</span>
                     </div>
 
                     {/* Desktop Table View */}
@@ -388,6 +416,12 @@ export const TalksDashboard: React.FC<TalksDashboardProps> = ({ onBack }) => {
                 onUpdate={handleUpdateShopper}
             />
         )}
+
+        {/* New Sync Result Modal */}
+        <SyncResultModal 
+            result={syncResult}
+            onClose={handleModalClose}
+        />
         
         {/* Custom Animation Style */}
         <style>{`
