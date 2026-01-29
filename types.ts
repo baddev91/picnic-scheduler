@@ -37,26 +37,30 @@ export interface TalkLogEntry {
 }
 
 export interface PerformanceMetrics {
+  // General
   activeWeeks?: number;
-  valuestream?: 'Inbound' | 'Outbound' | 'Captain' | 'Other';
+  shiftsCount?: number; // Total shifts worked
+  currentZone?: string; // "Currently Clocked"
   
-  // Attendance
+  // Attendance & Discipline
   late?: number;
   absence?: number;
   absenceAA?: number; // Absence on AA shift
   nsnc?: number; // No Show No Call
   nswc?: number; // No Show With Call
+  officialWarnings?: number; // OW
   
   // Behavior
-  behaviorIssues?: number;
+  behaviorScore?: number; // "Behaviour" column
   compliments?: number;
-  officialWarnings?: number;
   
-  // Speed
+  // Speed & Productivity
   speedAM?: number;
   speedCH?: number;
+  pickingScore?: number; // "Picking" column
   reps?: number;
   modules?: string; // Comma separated modules
+  valuestream?: 'Inbound' | 'Outbound' | 'Captain' | 'Other';
 }
 
 export interface TalkProgress {

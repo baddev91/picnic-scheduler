@@ -172,9 +172,9 @@ export const useGoogleSheetSync = () => {
   // --- METHOD B: API FETCH ---
   const fetchDataFromSheets = async (token: string) => {
     try {
-      // UPDATED RANGE: A4 to AE to capture Picking Speed at AD
+      // UPDATED RANGE: A4 to AH to capture "Picnic Modules" (Column 34 / Index 33)
       // Row 4 is Header, Data starts Row 5
-      const range = `${SHEET_TAB_NAME}!A4:AE`; 
+      const range = `${SHEET_TAB_NAME}!A4:AH`; 
       const url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SPREADSHEET_ID}/values/${range}`;
 
       const response = await fetch(url, {
@@ -251,14 +251,52 @@ export const useGoogleSheetSync = () => {
     const referenceShoppers = dbShoppers || [];
 
     // --- DASHBOARD Z37 MAPPING ---
+    // Column Mapping based on Spreadsheet Screenshot:
+    // A=0, B=1, C=2 (Name), ...
+    // G (6) = Active Weeks
+    // K (10) = Shifts
+    // L (11) = Currently Clocked
+    // N (13) = Late
+    // O (14) = Absence
+    // P (15) = Absence on AA
+    // Q (16) = NSNC
+    // R (17) = NSWC
+    // S (18) = Behaviour
+    // T (19) = Compliment
+    // U (20) = OW (Official Warning)
+    // AD (29) = Picking Speed AM
+    // AE (30) = Picking Speed CH
+    // AF (31) = Picking Score
+    // AG (32) = Reps
+    // AH (33) = Modules
+
     const sheetData = rows.map(row => ({
       pnNumber: row[1] ? String(row[1]).trim() : '',
       name: row[2] ? String(row[2]).trim() : '',
-      activeWeeks: row[6] || '',
-      late: row[13] || '',
-      absence: row[14] || '',
-      speedAM: row[29] || '', // AD is index 29
-      notes: '' // Optional mapping
+      
+      // General
+      activeWeeks: row[6],
+      shiftsCount: row[10],
+      currentZone: row[11],
+
+      // Attendance
+      late: row[13],
+      absence: row[14],
+      absenceAA: row[15],
+      nsnc: row[16],
+      nswc: row[17],
+      
+      // Behavior
+      behaviorScore: row[18],
+      compliments: row[19],
+      officialWarnings: row[20],
+
+      // Productivity
+      speedAM: row[29], // AD
+      speedCH: row[30], // AE
+      pickingScore: row[31], // AF
+      reps: row[32], // AG
+      modules: row[33], // AH
     }));
 
     for (const rowData of sheetData) {
@@ -269,9 +307,24 @@ export const useGoogleSheetSync = () => {
 
       const performanceMetrics = {
         activeWeeks: rowData.activeWeeks ? Number(rowData.activeWeeks) : undefined,
-        absence: rowData.absence ? Number(rowData.absence) : undefined,
+        shiftsCount: rowData.shiftsCount ? Number(rowData.shiftsCount) : undefined,
+        currentZone: rowData.currentZone || '',
+        
         late: rowData.late ? Number(rowData.late) : undefined,
+        absence: rowData.absence ? Number(rowData.absence) : undefined,
+        absenceAA: rowData.absenceAA ? Number(rowData.absenceAA) : undefined,
+        nsnc: rowData.nsnc ? Number(rowData.nsnc) : undefined,
+        nswc: rowData.nswc ? Number(rowData.nswc) : undefined,
+        
+        behaviorScore: rowData.behaviorScore ? Number(rowData.behaviorScore) : undefined,
+        compliments: rowData.compliments ? Number(rowData.compliments) : undefined,
+        officialWarnings: rowData.officialWarnings ? Number(rowData.officialWarnings) : undefined,
+
         speedAM: rowData.speedAM ? Number(rowData.speedAM) : undefined,
+        speedCH: rowData.speedCH ? Number(rowData.speedCH) : undefined,
+        pickingScore: rowData.pickingScore ? Number(rowData.pickingScore) : undefined,
+        reps: rowData.reps ? Number(rowData.reps) : undefined,
+        modules: rowData.modules || '',
       };
 
       if (shopper) {
@@ -282,7 +335,7 @@ export const useGoogleSheetSync = () => {
         const newDetails = {
           ...currentDetails,
           pnNumber: rowData.pnNumber || currentDetails.pnNumber,
-          isOnSheet: true, // MARK AS ON SHEET (Critical for visibility)
+          isOnSheet: true, // MARK AS ON SHEET
           performance: {
             ...currentPerformance,
             ...performanceMetrics 

@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { ShopperRecord, TalkLogEntry, TalkType, PerformanceMetrics } from '../../types';
-import { X, User, Save, Clock, Calendar, MessageSquare, Check, AlertTriangle, TrendingUp, MoreHorizontal, Send } from 'lucide-react';
+import { X, User, Save, Clock, Calendar, MessageSquare, Check, AlertTriangle, TrendingUp, MoreHorizontal, Send, Zap, Target, Box, AlertOctagon, Heart, Flag, Briefcase, Star } from 'lucide-react';
 import { format } from 'date-fns';
 import { supabase } from '../../supabaseClient';
 import { Button } from '../Button';
@@ -32,7 +31,7 @@ export const TalkModal: React.FC<TalkModalProps> = ({ shopper, onClose, onUpdate
   // State for New Log
   const [newLogType, setNewLogType] = useState<TalkType>('CHECK_IN');
   const [newLogNotes, setNewLogNotes] = useState('');
-  const [leadName, setLeadName] = useState(''); // Could default to logged in user if auth was strict
+  const [leadName, setLeadName] = useState('');
 
   const logs = (shopper.details?.talkLogs || []).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
@@ -104,209 +103,250 @@ export const TalkModal: React.FC<TalkModalProps> = ({ shopper, onClose, onUpdate
       if (!error) onUpdate({ ...shopper, details: updatedDetails });
   };
 
+  // Helper Input Component for the grid
+  const MetricInput = ({ label, field, icon, placeholder = "0", type = "number", className = "" }: { label: string; field: keyof PerformanceMetrics; icon?: React.ReactNode; placeholder?: string; type?: string; className?: string }) => (
+      <div className="flex flex-col">
+          <label className="text-[10px] uppercase font-bold text-gray-400 mb-1 flex items-center gap-1">
+              {icon} {label}
+          </label>
+          <input 
+              type={type}
+              value={metrics[field] || ''}
+              onChange={(e) => handleMetricChange(field, type === 'number' ? Number(e.target.value) : e.target.value)}
+              className={`w-full bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-sm font-bold text-gray-800 outline-none focus:bg-white focus:border-blue-400 transition-all ${className}`}
+              placeholder={placeholder}
+          />
+      </div>
+  );
+
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-0 md:p-4 animate-in fade-in duration-200">
-        <div className="bg-white w-full md:max-w-2xl h-[95vh] md:h-[85vh] md:rounded-2xl rounded-t-2xl shadow-2xl flex flex-col overflow-hidden">
+        <div className="bg-white w-full md:max-w-4xl h-[95vh] md:h-[90vh] md:rounded-3xl rounded-t-3xl shadow-2xl flex flex-col overflow-hidden">
             
             {/* Header */}
-            <div className="px-6 py-4 border-b flex justify-between items-center bg-gray-50 shrink-0">
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm">
+            <div className="px-6 py-4 border-b flex justify-between items-center bg-white shrink-0">
+                <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center font-bold text-lg shadow-blue-200 shadow-lg">
                         {shopper.name.substring(0, 2).toUpperCase()}
                     </div>
                     <div>
-                        <h2 className="text-lg font-bold text-gray-900 leading-none">{shopper.name}</h2>
-                        <p className="text-xs text-gray-500 font-mono mt-1">{shopper.details?.pnNumber}</p>
+                        <h2 className="text-xl font-black text-gray-900 leading-none">{shopper.name}</h2>
+                        <div className="flex items-center gap-2 mt-1">
+                            <span className="text-xs font-mono bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded border border-gray-200">{shopper.details?.pnNumber}</span>
+                            {metrics.currentZone && <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">{metrics.currentZone}</span>}
+                        </div>
                     </div>
                 </div>
-                <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
-                    <X className="w-5 h-5 text-gray-500" />
+                <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                    <X className="w-6 h-6 text-gray-400" />
                 </button>
             </div>
 
             {/* Quick Actions Bar */}
-            <div className="px-6 py-3 border-b bg-white flex gap-2 overflow-x-auto no-scrollbar shrink-0">
+            <div className="px-6 py-3 border-b bg-gray-50 flex gap-3 overflow-x-auto no-scrollbar shrink-0 items-center">
                 <button 
                     onClick={toggleCheckInToday}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold border transition-all whitespace-nowrap ${
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border transition-all whitespace-nowrap shadow-sm active:scale-95 ${
                         shopper.details?.talkProgress?.checkInToday 
                         ? 'bg-green-100 border-green-200 text-green-700' 
-                        : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                        : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
                     }`}
                 >
-                    {shopper.details?.talkProgress?.checkInToday ? <Check className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
-                    Check-In Today
+                    {shopper.details?.talkProgress?.checkInToday ? <Check className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
+                    Checked In
                 </button>
-                <div className="w-px h-8 bg-gray-200 mx-1"></div>
+                <div className="w-px h-6 bg-gray-300 mx-1"></div>
                 <button 
                     onClick={() => { setActiveTab('LOG_TALK'); setNewLogType('WELCOME'); }}
-                    className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-100 hover:bg-blue-100 whitespace-nowrap"
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 text-white shadow-blue-200 shadow-md hover:bg-blue-700 active:scale-95 transition-all whitespace-nowrap ml-auto md:ml-0"
                 >
-                    <MessageSquare className="w-3 h-3" /> Log Talk
+                    <MessageSquare className="w-4 h-4" /> Log Talk
                 </button>
+                {hasMetricChanges && (
+                    <button onClick={saveMetrics} className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-gray-900 text-white shadow-lg animate-in zoom-in ml-auto">
+                        <Save className="w-4 h-4" /> Save Changes
+                    </button>
+                )}
             </div>
 
             {/* Main Content Area */}
-            <div className="flex-1 overflow-y-auto bg-gray-50/50">
+            <div className="flex-1 overflow-y-auto bg-gray-100">
                 
                 {/* TABS */}
-                <div className="flex border-b bg-white sticky top-0 z-10">
+                <div className="flex bg-white px-6 sticky top-0 z-20 shadow-sm">
                     <button 
                         onClick={() => setActiveTab('OVERVIEW')}
-                        className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'OVERVIEW' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
+                        className={`py-4 text-sm font-bold border-b-2 px-4 transition-colors ${activeTab === 'OVERVIEW' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
                     >
-                        Overview & History
+                        Dashboard
                     </button>
                     <button 
                         onClick={() => setActiveTab('LOG_TALK')}
-                        className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'LOG_TALK' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
+                        className={`py-4 text-sm font-bold border-b-2 px-4 transition-colors ${activeTab === 'LOG_TALK' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
                     >
-                        New Entry
+                        Talk History
                     </button>
                 </div>
 
                 {activeTab === 'OVERVIEW' && (
-                    <div className="p-6 space-y-6">
+                    <div className="p-4 md:p-6 space-y-6">
                         
-                        {/* 1. Editable Metrics Card */}
-                        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-                            <div className="flex justify-between items-center mb-4">
-                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
-                                    <TrendingUp className="w-4 h-4" /> Performance Snapshot
+                        {/* 1. General & Operational Stats */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                            
+                            {/* GENERAL INFO CARD */}
+                            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
+                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                    <Briefcase className="w-4 h-4" /> General Info
                                 </h4>
-                                {hasMetricChanges && (
-                                    <button onClick={saveMetrics} className="text-xs bg-blue-600 text-white px-3 py-1 rounded-full font-bold shadow-sm hover:bg-blue-700 animate-in fade-in">
-                                        Save Changes
-                                    </button>
-                                )}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <MetricInput label="Active Weeks" field="activeWeeks" icon={<Calendar className="w-3 h-3"/>} />
+                                    <MetricInput label="Total Shifts" field="shiftsCount" icon={<Clock className="w-3 h-3"/>} />
+                                    <div className="col-span-2">
+                                        <MetricInput label="Current Zone" field="currentZone" type="text" placeholder="e.g. ZONE_PICKING - AM" />
+                                    </div>
+                                </div>
                             </div>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                <div>
-                                    <label className="text-[10px] text-gray-500 font-bold block mb-1">Active Weeks</label>
-                                    <input 
-                                        type="number" 
-                                        value={metrics.activeWeeks || ''}
-                                        onChange={(e) => handleMetricChange('activeWeeks', Number(e.target.value))}
-                                        className="w-full bg-gray-50 border rounded p-1.5 text-sm font-bold text-center"
-                                        placeholder="0"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-[10px] text-gray-500 font-bold block mb-1">Absence</label>
-                                    <input 
-                                        type="number" 
-                                        value={metrics.absence || ''}
-                                        onChange={(e) => handleMetricChange('absence', Number(e.target.value))}
-                                        className={`w-full bg-gray-50 border rounded p-1.5 text-sm font-bold text-center ${metrics.absence ? 'text-red-600 border-red-200 bg-red-50' : ''}`}
-                                        placeholder="0"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-[10px] text-gray-500 font-bold block mb-1">Late</label>
-                                    <input 
-                                        type="number" 
-                                        value={metrics.late || ''}
-                                        onChange={(e) => handleMetricChange('late', Number(e.target.value))}
-                                        className={`w-full bg-gray-50 border rounded p-1.5 text-sm font-bold text-center ${metrics.late ? 'text-orange-600 border-orange-200 bg-orange-50' : ''}`}
-                                        placeholder="0"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-[10px] text-gray-500 font-bold block mb-1">Speed (AM)</label>
-                                    <input 
-                                        type="number" 
-                                        value={metrics.speedAM || ''}
-                                        onChange={(e) => handleMetricChange('speedAM', Number(e.target.value))}
-                                        className="w-full bg-gray-50 border rounded p-1.5 text-sm font-bold text-center text-blue-700"
-                                        placeholder="-"
-                                    />
+
+                            {/* PRODUCTIVITY CARD */}
+                            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 relative overflow-hidden">
+                                <div className="absolute top-0 right-0 w-20 h-20 bg-blue-50 rounded-bl-full -mr-10 -mt-10 z-0"></div>
+                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2 relative z-10">
+                                    <Zap className="w-4 h-4 text-blue-500" /> Productivity
+                                </h4>
+                                <div className="grid grid-cols-3 gap-3 relative z-10">
+                                    <MetricInput label="Speed (AM)" field="speedAM" className="text-blue-600" />
+                                    <MetricInput label="Speed (CH)" field="speedCH" className="text-blue-600" />
+                                    <MetricInput label="Pick %" field="pickingScore" />
+                                    <MetricInput label="Reps" field="reps" icon={<Target className="w-3 h-3"/>} />
+                                    <div className="col-span-2">
+                                        <MetricInput label="Modules" field="modules" type="text" placeholder="e.g. Safe, Quality..." />
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
-                        {/* 2. Timeline / History */}
-                        <div>
-                            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                <Calendar className="w-4 h-4" /> Conversation Log
-                            </h4>
-                            
-                            {logs.length === 0 ? (
-                                <div className="text-center py-8 text-gray-400 border-2 border-dashed border-gray-200 rounded-xl">
-                                    <p className="text-sm">No talks recorded yet.</p>
-                                    <button onClick={() => setActiveTab('LOG_TALK')} className="text-blue-600 text-xs font-bold mt-2 hover:underline">Log the first one</button>
-                                </div>
-                            ) : (
-                                <div className="relative border-l-2 border-gray-200 ml-3 space-y-6">
-                                    {logs.map((log: TalkLogEntry) => (
-                                        <div key={log.id} className="relative pl-6">
-                                            {/* Dot */}
-                                            <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-white border-4 border-blue-200"></div>
-                                            
-                                            <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
-                                                <div className="flex justify-between items-start mb-2">
-                                                    <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase ${TALK_TYPES.find(t => t.id === log.type)?.color || 'bg-gray-100'}`}>
-                                                        {TALK_TYPES.find(t => t.id === log.type)?.label || log.type}
-                                                    </span>
-                                                    <span className="text-xs text-gray-400">{format(new Date(log.date), 'MMM d, HH:mm')}</span>
-                                                </div>
-                                                <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{log.notes}</p>
-                                                <div className="mt-3 pt-3 border-t border-gray-50 text-xs text-gray-400 flex items-center gap-1">
-                                                    <User className="w-3 h-3" /> Logged by: <strong className="text-gray-600">{log.leadShopper}</strong>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
+                        {/* 2. Attendance & Discipline (RED ZONE) */}
+                        <div className="bg-white rounded-2xl shadow-sm border border-red-100 p-5 relative overflow-hidden">
+                             <div className="absolute top-0 left-0 w-1 h-full bg-red-500"></div>
+                             <h4 className="text-xs font-bold text-red-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                <AlertOctagon className="w-4 h-4" /> Attendance & Discipline
+                             </h4>
+                             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                                <MetricInput label="Late" field="late" className="bg-red-50 text-red-700 border-red-100" />
+                                <MetricInput label="Absence" field="absence" className="bg-red-50 text-red-700 border-red-100" />
+                                <MetricInput label="Absence (AA)" field="absenceAA" className="bg-red-50 text-red-700 border-red-100" />
+                                <MetricInput label="No Show (Call)" field="nswc" className="bg-red-50 text-red-700 border-red-100" />
+                                <MetricInput label="No Show (No Call)" field="nsnc" className="bg-red-50 text-red-700 border-red-100" />
+                             </div>
                         </div>
+
+                        {/* 3. Behaviour & Warnings */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
+                                <h4 className="text-xs font-bold text-orange-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                    <Flag className="w-4 h-4" /> Warnings & Scores
+                                </h4>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <MetricInput label="Official Warnings" field="officialWarnings" className="text-orange-600 bg-orange-50 border-orange-100" />
+                                    <MetricInput label="Behaviour Score" field="behaviorScore" />
+                                </div>
+                             </div>
+
+                             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
+                                <h4 className="text-xs font-bold text-green-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                    <Heart className="w-4 h-4" /> Positives
+                                </h4>
+                                <div className="grid grid-cols-1">
+                                    <MetricInput label="Compliments" field="compliments" icon={<Star className="w-3 h-3 text-yellow-400 fill-yellow-400"/>} className="text-green-700 bg-green-50 border-green-100" />
+                                </div>
+                             </div>
+                        </div>
+
                     </div>
                 )}
 
                 {activeTab === 'LOG_TALK' && (
-                    <div className="p-6 space-y-6 animate-in slide-in-from-right-4">
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-2">Talk Type</label>
-                                <div className="grid grid-cols-2 gap-2">
-                                    {TALK_TYPES.map(t => (
-                                        <button
-                                            key={t.id}
-                                            onClick={() => setNewLogType(t.id)}
-                                            className={`p-3 rounded-lg text-xs font-bold border text-left transition-all ${
-                                                newLogType === t.id 
-                                                ? `ring-2 ring-offset-1 ring-blue-500 ${t.color} border-transparent` 
-                                                : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
-                                            }`}
-                                        >
-                                            {t.label}
-                                        </button>
-                                    ))}
+                    <div className="p-4 md:p-6 space-y-6">
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            
+                            {/* LEFT: FORM */}
+                            <div className="lg:col-span-1 space-y-6">
+                                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-200">
+                                    <h3 className="text-sm font-bold text-gray-800 mb-4">New Entry</h3>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-500 mb-2 uppercase">Talk Type</label>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                {TALK_TYPES.map(t => (
+                                                    <button
+                                                        key={t.id}
+                                                        onClick={() => setNewLogType(t.id)}
+                                                        className={`p-2 rounded-lg text-[10px] font-bold border text-center transition-all ${
+                                                            newLogType === t.id 
+                                                            ? `ring-2 ring-offset-1 ring-blue-500 ${t.color} border-transparent` 
+                                                            : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'
+                                                        }`}
+                                                    >
+                                                        {t.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-500 mb-2 uppercase">Lead Shopper</label>
+                                            <input 
+                                                value={leadName}
+                                                onChange={(e) => setLeadName(e.target.value)}
+                                                placeholder="Name..."
+                                                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-500 mb-2 uppercase">Notes</label>
+                                            <textarea 
+                                                value={newLogNotes}
+                                                onChange={(e) => setNewLogNotes(e.target.value)}
+                                                placeholder="Summary of conversation..."
+                                                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm min-h-[120px] resize-none font-medium"
+                                            />
+                                        </div>
+
+                                        <Button onClick={submitLog} fullWidth className="py-3 text-sm bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-100">
+                                            <Send className="w-4 h-4 mr-2" /> Save Log
+                                        </Button>
+                                    </div>
                                 </div>
                             </div>
 
-                            <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-2">Lead Shopper Name</label>
-                                <input 
-                                    value={leadName}
-                                    onChange={(e) => setLeadName(e.target.value)}
-                                    placeholder="Who is conducting this talk?"
-                                    className="w-full p-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-                                />
+                            {/* RIGHT: HISTORY */}
+                            <div className="lg:col-span-2">
+                                <h3 className="text-sm font-bold text-gray-800 mb-4 px-2">History ({logs.length})</h3>
+                                {logs.length === 0 ? (
+                                    <div className="text-center py-12 text-gray-400 border-2 border-dashed border-gray-200 rounded-2xl">
+                                        <p className="text-sm">No talks recorded yet.</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4">
+                                        {logs.map((log: TalkLogEntry) => (
+                                            <div key={log.id} className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col gap-3 hover:shadow-md transition-shadow">
+                                                <div className="flex justify-between items-start">
+                                                    <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider ${TALK_TYPES.find(t => t.id === log.type)?.color || 'bg-gray-100'}`}>
+                                                        {TALK_TYPES.find(t => t.id === log.type)?.label || log.type}
+                                                    </span>
+                                                    <span className="text-xs text-gray-400 font-medium">{format(new Date(log.date), 'MMM d, HH:mm')}</span>
+                                                </div>
+                                                <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{log.notes}</p>
+                                                <div className="pt-2 border-t border-gray-50 text-xs text-gray-400 flex items-center gap-1 font-medium">
+                                                    <User className="w-3 h-3" /> By: <span className="text-gray-900">{log.leadShopper}</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
-
-                            <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-2">Notes & Outcome</label>
-                                <textarea 
-                                    value={newLogNotes}
-                                    onChange={(e) => setNewLogNotes(e.target.value)}
-                                    placeholder="Write summary here..."
-                                    className="w-full p-4 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm min-h-[150px] resize-none"
-                                />
-                            </div>
-
-                            <Button onClick={submitLog} fullWidth className="py-4 text-base bg-blue-600 hover:bg-blue-700">
-                                <Send className="w-4 h-4 mr-2" /> Save Log Entry
-                            </Button>
                         </div>
                     </div>
                 )}
