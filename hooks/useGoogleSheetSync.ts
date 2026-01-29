@@ -19,7 +19,6 @@ declare global {
 export const useGoogleSheetSync = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [tokenClient, setTokenClient] = useState<any>(null);
-  const [shoppersRef, setShoppersRef] = useState<ShopperRecord[]>([]);
   const [onCompleteRef, setOnCompleteRef] = useState<(() => void) | undefined>(undefined);
 
   // Initialize Google Token Client on Mount (Only if no CSV URL is provided)
@@ -50,7 +49,6 @@ export const useGoogleSheetSync = () => {
   // 1. Triggered by UI Button
   const syncShoppers = async (shoppers: ShopperRecord[], onComplete?: () => void) => {
     setIsSyncing(true);
-    setShoppersRef(shoppers);
     setOnCompleteRef(() => onComplete);
 
     // METHOD A: PUBLIC CSV (Fastest, No Login)
@@ -85,7 +83,7 @@ export const useGoogleSheetSync = () => {
           const rows = parseCSV(text);
           
           if (rows.length < 2) {
-              alert("CSV seems empty or invalid.");
+              alert("CSV seems empty or invalid (less than 2 rows).");
               setIsSyncing(false);
               return;
           }
@@ -179,11 +177,23 @@ export const useGoogleSheetSync = () => {
     let createdCount = 0;
     const newShoppersToInsert: any[] = [];
 
+    // CRITICAL FIX: Fetch fresh DB data to ensure we don't duplicate existing users
+    // or fail to update users that were just created.
+    const { data: dbShoppers, error: fetchError } = await supabase.from('shoppers').select('*');
+    
+    if (fetchError) {
+        alert("Error reading database. Sync aborted.");
+        setIsSyncing(false);
+        return;
+    }
+
+    const referenceShoppers = dbShoppers || [];
+
     // Map rows to object structure
     // Assumes structure: [Name, PN, ActiveWeeks, Absence, Late, Speed, Notes]
     const sheetData = rows.map(row => ({
-      name: row[0] || '',
-      pnNumber: row[1] || '',
+      name: row[0] ? String(row[0]).trim() : '',
+      pnNumber: row[1] ? String(row[1]).trim() : '',
       activeWeeks: row[2] || '',
       absence: row[3] || '',
       late: row[4] || '',
@@ -194,8 +204,8 @@ export const useGoogleSheetSync = () => {
     for (const rowData of sheetData) {
       if (!rowData.name) continue;
 
-      // Match shopper (Case Insensitive)
-      const shopper = shoppersRef.find(s => s.name.trim().toLowerCase() === String(rowData.name).trim().toLowerCase());
+      // Match shopper (Case Insensitive) against DB Data
+      const shopper = referenceShoppers.find(s => s.name.trim().toLowerCase() === rowData.name.toLowerCase());
 
       const performanceMetrics = {
         activeWeeks: rowData.activeWeeks ? Number(rowData.activeWeeks) : undefined,
@@ -264,6 +274,7 @@ export const useGoogleSheetSync = () => {
             createdCount = newShoppersToInsert.length;
         } else {
             console.error("Error creating new shoppers from sheet:", insertError);
+            alert(`Failed to create ${newShoppersToInsert.length} new shoppers. Check console for details. Error: ${insertError.message}`);
         }
     }
 
@@ -274,7 +285,7 @@ export const useGoogleSheetSync = () => {
     if (createdCount > 0) message += `✨ Created ${createdCount} new profiles (hidden from main view).\n`;
     
     if (updatedCount === 0 && createdCount === 0) {
-        alert("⚠️ No matching shoppers found and no valid data to import.");
+        alert(`⚠️ Sync completed but no changes were made.\nParsed ${sheetData.length} rows from sheet.\nFound ${sheetData.filter(r => r.name).length} valid names.`);
     } else {
         alert(message);
         if (onCompleteRef) onCompleteRef();
