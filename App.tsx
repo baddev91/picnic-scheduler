@@ -471,17 +471,6 @@ export default function App() {
                           onGoToTalks={() => setMode(AppMode.TALKS_DASHBOARD)} // CONNECTED
                       />
                   )}
-                  {adminWizardStep === AdminWizardStep.DASHBOARD && (
-                      <div className="mt-8 border-t pt-8">
-                          <h3 className="text-lg font-bold text-gray-800 mb-4">Availability Preview</h3>
-                          <CalendarView 
-                              mode="ADMIN"
-                              adminAvailability={adminAvailability}
-                              weeklyTemplate={savedCloudTemplate} // Pass standard template
-                              onAdminToggle={handleAdminToggle}
-                          />
-                      </div>
-                  )}
                   {adminWizardStep === AdminWizardStep.WIZARD_DAYS && (
                       <AdminWizardDays 
                           wizardDayIndex={wizardDayIndex} setWizardDayIndex={setWizardDayIndex}

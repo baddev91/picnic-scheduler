@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { ShopperRecord, TalkLogEntry, TalkType, PerformanceMetrics } from '../../types';
-import { X, User, Save, Clock, Calendar, MessageSquare, Check, AlertTriangle, TrendingUp, MoreHorizontal, Send, Zap, Target, Box, AlertOctagon, Heart, Flag, Briefcase, Star } from 'lucide-react';
+import { X, User, Save, Clock, Calendar, MessageSquare, Check, AlertTriangle, TrendingUp, MoreHorizontal, Send, Zap, Target, Box, AlertOctagon, Heart, Flag, Briefcase, Star, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { supabase } from '../../supabaseClient';
 import { Button } from '../Button';
@@ -93,6 +94,24 @@ export const TalkModal: React.FC<TalkModalProps> = ({ shopper, onClose, onUpdate
       }
   };
 
+  const deleteLog = async (logId: string) => {
+      if (!window.confirm("Are you sure you want to delete this log entry? This cannot be undone.")) return;
+
+      const updatedLogs = (shopper.details?.talkLogs || []).filter((l: TalkLogEntry) => l.id !== logId);
+      const updatedDetails = {
+          ...shopper.details,
+          talkLogs: updatedLogs
+      };
+
+      const { error } = await supabase.from('shoppers').update({ details: updatedDetails }).eq('id', shopper.id);
+
+      if (!error) {
+          onUpdate({ ...shopper, details: updatedDetails });
+      } else {
+          alert("Error deleting log entry");
+      }
+  };
+
   const toggleCheckInToday = async () => {
       const currentVal = shopper.details?.talkProgress?.checkInToday;
       const updatedDetails = {
@@ -146,7 +165,7 @@ export const TalkModal: React.FC<TalkModalProps> = ({ shopper, onClose, onUpdate
             <div className="px-6 py-3 border-b bg-gray-50 flex gap-3 overflow-x-auto no-scrollbar shrink-0 items-center">
                 <button 
                     onClick={toggleCheckInToday}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border transition-all whitespace-nowrap shadow-sm active:scale-95 ${
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold border transition-all whitespace-nowrap shadow-sm active:scale-[0.98] ${
                         shopper.details?.talkProgress?.checkInToday 
                         ? 'bg-green-100 border-green-200 text-green-700' 
                         : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
@@ -331,8 +350,15 @@ export const TalkModal: React.FC<TalkModalProps> = ({ shopper, onClose, onUpdate
                                 ) : (
                                     <div className="space-y-4">
                                         {logs.map((log: TalkLogEntry) => (
-                                            <div key={log.id} className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col gap-3 hover:shadow-md transition-shadow">
-                                                <div className="flex justify-between items-start">
+                                            <div key={log.id} className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col gap-3 hover:shadow-md transition-shadow relative group">
+                                                <button 
+                                                    onClick={() => deleteLog(log.id)}
+                                                    className="absolute top-4 right-4 p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all md:opacity-0 md:group-hover:opacity-100"
+                                                    title="Delete log entry"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                                <div className="flex justify-between items-start pr-8">
                                                     <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider ${TALK_TYPES.find(t => t.id === log.type)?.color || 'bg-gray-100'}`}>
                                                         {TALK_TYPES.find(t => t.id === log.type)?.label || log.type}
                                                     </span>
