@@ -1,11 +1,11 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { ShiftTime, ShiftType, ShopperData, AdminAvailabilityMap, ShopperDetails, ShopperStep, BusConfig, ShopperShift, AppMode } from '../types';
-import { SHIFT_TIMES, formatDateKey, getShopperAllowedRange, getShopperMinDate } from '../constants';
+import { SHIFT_TIMES, formatDateKey, getShopperAllowedRange, getShopperMinDate, EUROPEAN_COUNTRIES } from '../constants';
 import { Button } from './Button';
 import { CalendarView } from './CalendarView';
 import { MobileInstructionModal } from './MobileInstructionModal';
-import { User, PlayCircle, CheckCircle, ArrowRight, Layers, CalendarCheck, Globe2, UserCircle2, Flag } from 'lucide-react';
+import { User, PlayCircle, CheckCircle, ArrowRight, Layers, CalendarCheck, Globe2, UserCircle2, Flag, Briefcase, Clock, FileWarning } from 'lucide-react';
 import { addDays, getDay, endOfWeek, addWeeks, isBefore, format } from 'date-fns';
 import { supabase } from '../supabaseClient';
 import { ShopperAAWizard } from './ShopperAAWizard';
@@ -146,7 +146,8 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
   useEffect(() => {
     fetchFWDCounts();
     setTimeout(() => { if (flowScrollContainerRef.current) flowScrollContainerRef.current.scrollTop = 0; window.scrollTo(0, 0); }, 50);
-    if (viewMode === 'FLOW' && step > 0) setShowMobileInstructions(true);
+    // Only show mobile instructions for standard scheduling steps
+    if (viewMode === 'FLOW' && step >= 1 && step <= 3) setShowMobileInstructions(true);
   }, [step, viewMode]);
 
   // --- SAFETY CHECK ---
@@ -213,10 +214,59 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
       setFwdCounts(counts);
   };
 
+  const isEuropeanCountry = (countryName: string) => {
+      if (!countryName) return false;
+      return EUROPEAN_COUNTRIES.some(
+          c => c.toLowerCase() === countryName.trim().toLowerCase()
+      );
+  };
+
   const handleNationalitySubmit = (nationality: string) => {
       const existing = selections[0];
-      setSelections([{ ...existing, details: { ...existing.details, nationality } as ShopperDetails }]);
-      setStep(ShopperStep.AA_SELECTION);
+      const normalizedNat = nationality.trim();
+      
+      const newDetails: ShopperDetails = { 
+          ...existing.details!, 
+          nationality: normalizedNat,
+          workPermitStatus: isEuropeanCountry(normalizedNat) ? 'NOT_REQUIRED' : undefined 
+      };
+
+      setSelections([{ ...existing, details: newDetails }]);
+      
+      if (isEuropeanCountry(normalizedNat)) {
+          // If European, proceed directly to Scheduling
+          setStep(ShopperStep.AA_SELECTION);
+      } else {
+          // If NOT European, ask about Work Permit
+          setStep(ShopperStep.WORK_PERMIT_CHECK);
+      }
+  };
+
+  const handleWorkPermitSubmit = (hasPermit: boolean) => {
+      const existing = selections[0];
+      
+      if (hasPermit) {
+          // HAS PERMIT -> Go to Schedule
+          setSelections([{ ...existing, details: { ...existing.details!, workPermitStatus: 'VALID' } }]);
+          setStep(ShopperStep.AA_SELECTION);
+      } else {
+          // WAITING FOR PERMIT -> Skip Schedule -> Go to Details
+          // Enforce Randstad & Require Address
+          setSelections([{ 
+              ...existing, 
+              details: { 
+                  ...existing.details!, 
+                  workPermitStatus: 'WAITING',
+                  isRandstad: true // Enforced
+              },
+              shifts: [] // Clear shifts as they can't schedule yet
+          }]);
+          
+          setStep(ShopperStep.DETAILS); // Technically done with flow steps
+          setViewMode('SUMMARY'); // Go to summary view
+          // We'll open the modal via effect or immediate trigger
+          setTimeout(() => openDetailsModal(), 100);
+      }
   };
 
   // --- AA LOGIC SPLIT START ---
@@ -504,6 +554,7 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
         const { data: shopperData, error: shopperError } = await supabase.from('shoppers').insert([{ name: shopper.name, details: shopper.details || {} }]).select().single();
         if (shopperError) throw new Error(shopperError.message);
         
+        // Handle logic when shifts might be empty (Waiting for permit)
         let finalShifts = shopper.shifts;
         if (shopper.details?.firstWorkingDay) {
             const limitKey = formatDateKey(endOfWeek(addWeeks(getSafeDateFromKey(shopper.details.firstWorkingDay), 1), { weekStartsOn: 1 }));
@@ -627,7 +678,10 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
               setMode={(m) => { 
                   if (m === AppMode.SHOPPER_FLOW) {
                       setViewMode('FLOW');
-                      if (step === ShopperStep.DETAILS) {
+                      // If we are waiting for permit, we don't go back to standard selection, we go back to permit check or nationality
+                      if (data.details?.workPermitStatus === 'WAITING') {
+                          setStep(ShopperStep.WORK_PERMIT_CHECK);
+                      } else if (step === ShopperStep.DETAILS) {
                           setStep(ShopperStep.STANDARD_SELECTION);
                       }
                   } 
@@ -659,7 +713,7 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
             {shopperName}
           </h2>
           
-          {step > 0 && (
+          {step >= 1 && (
               <div className="flex items-center gap-2 text-xs font-bold mt-1 animate-in slide-in-from-top-1 fade-in">
                  <button 
                     onClick={() => handleStepClick(1)} 
@@ -686,14 +740,14 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
                  </button>
               </div>
           )}
-          {step === 0 && (
+          {(step === 0 || step === ShopperStep.WORK_PERMIT_CHECK) && (
               <div className="flex items-center gap-2 text-xs font-bold mt-1 text-gray-400">
                   Setup Profile
               </div>
           )}
         </div>
         
-        {step > 0 && (
+        {step >= 1 && (
             <div className="flex gap-3">
                 <div className="hidden md:flex gap-4 text-xs font-medium text-gray-500 items-center border-l pl-4">
                      <span>Selected AA: <strong className="text-red-600">{aaSelections.length}</strong></span>
@@ -799,6 +853,56 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
               </div>
           )}
 
+          {/* STEP 0.5: WORK PERMIT CHECK */}
+          {step === ShopperStep.WORK_PERMIT_CHECK && (
+              <div className="p-4 md:p-8 animate-in slide-in-from-right duration-300 h-full flex flex-col justify-center">
+                  <div className="max-w-md mx-auto space-y-8">
+                      <div className="text-center space-y-4">
+                          <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                              <Briefcase className="w-10 h-10 text-orange-600" />
+                          </div>
+                          <h2 className="text-3xl font-black text-gray-900">Work Permit</h2>
+                          <p className="text-gray-600 text-lg leading-relaxed">
+                              Since you selected a non-EU nationality, we need to know your current work permit status.
+                          </p>
+                      </div>
+
+                      <div className="space-y-4">
+                          <button
+                              onClick={() => handleWorkPermitSubmit(true)}
+                              className="w-full flex items-center justify-between p-6 bg-white border-2 border-gray-200 hover:border-green-500 hover:bg-green-50 rounded-2xl transition-all group text-left shadow-sm hover:shadow-lg"
+                          >
+                              <div>
+                                  <h4 className="font-bold text-gray-900 text-lg group-hover:text-green-800">Yes, I have a Permit</h4>
+                                  <p className="text-gray-500 text-sm mt-1">I can start working immediately.</p>
+                              </div>
+                              <CheckCircle className="w-6 h-6 text-gray-300 group-hover:text-green-600" />
+                          </button>
+
+                          <button
+                              onClick={() => handleWorkPermitSubmit(false)}
+                              className="w-full flex items-center justify-between p-6 bg-white border-2 border-gray-200 hover:border-orange-500 hover:bg-orange-50 rounded-2xl transition-all group text-left shadow-sm hover:shadow-lg"
+                          >
+                              <div>
+                                  <h4 className="font-bold text-gray-900 text-lg group-hover:text-orange-800">No, Waiting for Permit</h4>
+                                  <p className="text-gray-500 text-sm mt-1">I am waiting for approval.</p>
+                              </div>
+                              <Clock className="w-6 h-6 text-gray-300 group-hover:text-orange-600" />
+                          </button>
+                      </div>
+
+                      <div className="pt-8 border-t">
+                          <button 
+                              onClick={() => setStep(ShopperStep.NATIONALITY_SELECTION)} 
+                              className="text-gray-400 font-bold hover:text-gray-600 text-sm flex items-center justify-center gap-2 w-full"
+                          >
+                              <ArrowRight className="w-4 h-4 rotate-180" /> Back to Nationality
+                          </button>
+                      </div>
+                  </div>
+              </div>
+          )}
+
           {step === ShopperStep.AA_SELECTION && (
               <ShopperAAWizard 
                   savedCloudTemplate={savedCloudTemplate} 
@@ -883,9 +987,13 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
                   </div>
 
                   <div className="flex justify-between items-center gap-3">
-                      <Button variant="secondary" onClick={() => setStep(ShopperStep.FWD_SELECTION)} className="px-6 border-gray-200">
-                          Back
-                      </Button>
+                      {/* Hide Back Button if Waiting for Permit */}
+                      {data.details?.workPermitStatus !== 'WAITING' && (
+                          <Button variant="secondary" onClick={() => setStep(ShopperStep.FWD_SELECTION)} className="px-6 border-gray-200">
+                              Back
+                          </Button>
+                      )}
+                      
                       <Button onClick={openDetailsModal} className="flex-1 shadow-xl hover:shadow-2xl hover:-translate-y-0.5 transition-all bg-gray-900 hover:bg-black text-white py-3.5 rounded-xl flex items-center justify-center gap-2 group">
                           <UserCircle2 className="w-5 h-5 group-hover:scale-110 transition-transform" /> Complete Profile <ArrowRight className="w-4 h-4" />
                       </Button>

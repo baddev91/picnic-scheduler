@@ -1,5 +1,6 @@
 
-import { addDays, isAfter, endOfWeek, addWeeks, format, isWeekend, startOfDay, differenceInHours, getDay } from 'date-fns';
+import { addDays, isAfter, endOfWeek, addWeeks, format, isWeekend, differenceInHours, getDay } from 'date-fns';
+import startOfDay from 'date-fns/startOfDay';
 import { ShiftTime, ShiftType, ShopperShift } from '../types';
 import { formatDateKey, EUROPEAN_COUNTRIES, getShopperMinDate } from '../constants';
 
@@ -26,6 +27,7 @@ const addBusinessDays = (startDate: Date, daysToAdd: number): Date => {
     let currentDate = startDate;
     while (count < daysToAdd) {
         currentDate = addDays(currentDate, 1);
+        // If it's Saturday (6) or Sunday (0), don't count it
         if (!isWeekend(currentDate)) {
             count++;
         }
@@ -37,19 +39,25 @@ export const calculateMinStartDate = (nationality: string | undefined): Date => 
     // If no nationality selected (shouldn't happen in flow), default to standard
     if (!nationality) return getShopperMinDate();
 
+    const normalizedNat = nationality.trim().toLowerCase();
+
     // 1. Special Rule: Ukraine -> 7 Working Days
-    if (nationality === 'Ukraine' || nationality.includes('Ukraine')) {
+    if (normalizedNat === 'ukraine' || normalizedNat.includes('ukraine')) {
         return addBusinessDays(startOfDay(new Date()), 7);
     }
 
     // 2. Check if EU/European (Standard Rule)
-    const isEuropean = EUROPEAN_COUNTRIES.includes(nationality) || EUROPEAN_COUNTRIES.some(c => nationality.includes(c));
+    // Case-insensitive check against the allowed European list
+    const isEuropean = EUROPEAN_COUNTRIES.some(c => 
+        c.toLowerCase() === normalizedNat || normalizedNat.includes(c.toLowerCase())
+    );
 
     if (isEuropean) {
         // Standard Rule: Today + 3 Days
         return getShopperMinDate();
     } else {
-        // 3. Non-EU Rule: Today + 5 WORKING Days
+        // 3. Non-EU / Not in List Rule: Today + 5 WORKING Days
+        // This ensures any manual input not recognized as European gets the longer lead time.
         return addBusinessDays(startOfDay(new Date()), 5);
     }
 };

@@ -3,10 +3,11 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { Activity, ChevronDown, ChevronUp, BarChart3, Bus, TrendingUp, ChevronLeft, ChevronRight, Calendar, Users } from 'lucide-react';
 import { 
     format, eachDayOfInterval, addDays, endOfWeek, addWeeks, isSameDay, 
-    differenceInCalendarDays, startOfDay
+    differenceInCalendarDays
 } from 'date-fns';
 import startOfWeek from 'date-fns/startOfWeek';
 import subWeeks from 'date-fns/subWeeks';
+import startOfDay from 'date-fns/startOfDay';
 import { ShiftType, ShopperRecord } from '../types';
 import { SHIFT_TIMES } from '../constants';
 import { getSafeDateFromKey } from '../utils/validation';

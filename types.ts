@@ -73,6 +73,7 @@ export interface TalkProgress {
 
 export interface ShopperDetails {
   nationality?: string; // New Field
+  workPermitStatus?: 'VALID' | 'WAITING' | 'NOT_REQUIRED'; // NEW: Track permit status
   usePicnicBus: boolean | null; // Changed to allow null for explicit selection requirement
   civilStatus: string;
   gender?: string; // New field for Gender (Male, Female, N/D)
@@ -146,7 +147,8 @@ export enum AppMode {
 }
 
 export enum ShopperStep {
-  NATIONALITY_SELECTION = 0, // New First Step
+  NATIONALITY_SELECTION = 0,
+  WORK_PERMIT_CHECK = 0.5, // NEW INTERMEDIATE STEP
   AA_SELECTION = 1,
   FWD_SELECTION = 2, 
   STANDARD_SELECTION = 3,

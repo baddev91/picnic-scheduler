@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { X, Bus, Shirt, Heart, AlertCircle, User, ArrowRight } from 'lucide-react';
+import { X, Bus, Shirt, Heart, AlertCircle, User, ArrowRight, Lock } from 'lucide-react';
 import { Button } from './Button';
 import { ShopperDetails } from '../types';
 import { calculateGloveSize } from '../utils/validation';
@@ -23,6 +23,8 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
   const [error, setError] = useState<string | null>(null);
 
   if (!showDetailsModal) return null;
+
+  const isPermitWaiting = tempDetails.workPermitStatus === 'WAITING';
 
   // Helper to calculate glove size live
   const updateClothing = (size: string) => {
@@ -221,18 +223,27 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
 
             {/* Randstad */}
             <div className="space-y-3 pt-4 border-t">
-                <div className="flex items-center gap-3">
+                <div className={`flex items-center gap-3 ${isPermitWaiting ? 'opacity-50 cursor-not-allowed' : ''}`}>
                     <input 
                        type="checkbox" 
                        id="randstad"
                        checked={tempDetails.isRandstad}
+                       disabled={isPermitWaiting}
                        onChange={(e) => setTempDetails(prev => ({ ...prev, isRandstad: e.target.checked }))}
-                       className="w-5 h-5 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                       className="w-5 h-5 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer disabled:cursor-not-allowed"
                     />
-                    <label htmlFor="randstad" className="font-bold text-gray-800 cursor-pointer select-none">
+                    <label htmlFor="randstad" className={`font-bold text-gray-800 select-none ${isPermitWaiting ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                        Registered via Randstad Employment Agency?
                     </label>
+                    {isPermitWaiting && <Lock className="w-3 h-3 text-gray-400" />}
                 </div>
+                
+                {isPermitWaiting && (
+                    <p className="text-xs text-orange-600 bg-orange-50 p-2 rounded border border-orange-100 flex items-center gap-1.5">
+                        <AlertCircle className="w-3 h-3" />
+                        Required for candidates waiting for work permit.
+                    </p>
+                )}
                 
                 {tempDetails.isRandstad && (
                     <div className="animate-in slide-in-from-top-2 p-4 bg-orange-50/50 rounded-xl border border-orange-100">

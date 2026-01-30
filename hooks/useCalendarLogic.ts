@@ -2,10 +2,12 @@
 import { useState, useMemo } from 'react';
 import { 
   format, endOfMonth, eachDayOfInterval, addMonths, isWeekend, endOfWeek, isWithinInterval, 
-  isAfter, isBefore, addWeeks, getDay, startOfMonth, startOfDay
+  isAfter, isBefore, addWeeks, getDay
 } from 'date-fns';
 import startOfWeek from 'date-fns/startOfWeek';
 import subMonths from 'date-fns/subMonths';
+import startOfDay from 'date-fns/startOfDay';
+import startOfMonth from 'date-fns/startOfMonth';
 import { ShiftTime, ShiftType, ShopperShift, AdminAvailabilityMap, WeeklyTemplate } from '../types';
 import { formatDateKey, getShopperAllowedRange, getShopperMinDate } from '../constants';
 import { getSafeDateFromKey } from '../utils/validation';
