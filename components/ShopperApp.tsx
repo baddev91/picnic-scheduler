@@ -417,6 +417,8 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
       }
 
       try {
+          // --- PRE-CHECK (UX Only) ---
+          // This helps catch issues early, but handleSubmitData has the final authority.
           const { data: potentialConflicts } = await supabase
               .from('shoppers')
               .select('id')
@@ -561,6 +563,46 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
     setSyncStatus('idle');
     try {
         const shopper = selections[0];
+        
+        // --- 1. DOUBLE CHECK CAPACITY IMMEDIATELY BEFORE INSERT ---
+        // This is the "Race Condition" barrier.
+        // We re-query the DB one last time to ensure the First Working Day slot is still valid.
+        if (shopper.details?.firstWorkingDay) {
+            const fwdDate = shopper.details.firstWorkingDay;
+            // Find the shift object that matches the FWD
+            const fwdShift = shopper.shifts.find(s => s.date === fwdDate);
+            
+            if (fwdShift) {
+                // A. Find all shoppers who declared this specific date as their FWD
+                const { data: conflictShoppers, error: confError } = await supabase
+                    .from('shoppers')
+                    .select('id')
+                    .eq('details->>firstWorkingDay', fwdDate);
+                
+                if (confError) throw confError;
+
+                if (conflictShoppers && conflictShoppers.length > 0) {
+                    const ids = conflictShoppers.map(c => c.id);
+                    
+                    // B. Count strictly how many of THESE specific shoppers are scheduled for this time
+                    const { count, error: countError } = await supabase
+                        .from('shifts')
+                        .select('*', { count: 'exact', head: true })
+                        .in('shopper_id', ids) // Filter by shoppers who have this FWD
+                        .eq('date', fwdDate)
+                        .eq('time', fwdShift.time); // Matches the FWD Shift Time
+
+                    if (countError) throw countError;
+
+                    // C. The Limit Check
+                    if (count !== null && count >= 5) {
+                        throw new Error("RACE_CONDITION_FULL");
+                    }
+                }
+            }
+        }
+        // --- END DOUBLE CHECK ---
+
         const { data: shopperData, error: shopperError } = await supabase.from('shoppers').insert([{ name: shopper.name, details: shopper.details || {} }]).select().single();
         if (shopperError) throw new Error(shopperError.message);
         
@@ -576,7 +618,21 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
         }
         setSyncStatus('success');
         localStorage.removeItem(STORAGE_KEY);
-    } catch (error: any) { setSyncStatus('error'); alert(`Failed: ${error.message}`); } finally { setIsSyncing(false); }
+    } catch (error: any) { 
+        setSyncStatus('error'); 
+        
+        // SPECIFIC ERROR HANDLING FOR RACE CONDITION
+        if (error.message === "RACE_CONDITION_FULL") {
+            alert("⚠️ SLOT FILLED\n\nWhile you were completing your profile, the last slot for your First Day was taken by someone else.\n\nPlease go back and select a different start date.");
+            setIsSyncing(false);
+            setViewMode('FLOW'); // Go back to flow
+            setStep(ShopperStep.FWD_SELECTION); // Force back to Step 2
+            setShowDetailsModal(false); // Close any open modals
+            return;
+        }
+
+        alert(`Failed: ${error.message}`); 
+    } finally { setIsSyncing(false); }
   };
 
   const openDetailsModal = () => {
