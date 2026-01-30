@@ -54,8 +54,8 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
           const response = await ai.models.generateContent({
               model: 'gemini-2.5-flash',
               contents: `Verify and format this address in the Netherlands: "${inputAddr}". 
-                         1. If the address is valid, return the official formatted string (Street + Number + City).
-                         2. If the user input is partial but likely matches a real place, suggest the full address.
+                         1. If the address is valid, return the official formatted string (Street + Number + Postal Code + City).
+                         2. If the user input is partial but likely matches a real place, suggest the full address with Postal Code.
                          3. If it's completely invalid, return nothing.
                          Return ONLY the address string. No other text.`,
               config: {
@@ -91,12 +91,12 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
   };
 
   // 2. EFFECT HOOK (Must strictly follow useState)
-  // We use optional chaining in dependency array to avoid crashes if tempDetails is null
+  // Lowered threshold to 5 chars and debounce to 800ms for better responsiveness
   useEffect(() => {
-      if (showDetailsModal && tempDetails?.address && tempDetails.address.length > 8 && tempDetails.isRandstad) {
+      if (showDetailsModal && tempDetails?.address && tempDetails.address.length > 5 && tempDetails.isRandstad) {
           const timer = setTimeout(() => {
               verifyAddressWithGenAI(tempDetails.address);
-          }, 1000); 
+          }, 800); 
           return () => clearTimeout(timer);
       }
   }, [tempDetails?.address, tempDetails?.isRandstad, showDetailsModal]);
@@ -337,7 +337,7 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
                                     }}
                                     onBlur={() => verifyAddressWithGenAI()} // Verify on blur
                                     onKeyDown={(e) => e.key === 'Enter' && verifyAddressWithGenAI()}
-                                    placeholder="Street + Number + City"
+                                    placeholder="Street + Number + Postal Code + City"
                                     className="w-full p-3 pr-20 bg-white border-2 border-orange-100 rounded-xl outline-none focus:border-orange-500 transition-all text-sm font-medium"
                                 />
                                 
@@ -359,7 +359,7 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
 
                             <p className="text-[10px] text-orange-600 mt-2 flex items-start gap-1">
                                 <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
-                                Please include your Street, <strong>House Number</strong> and City.
+                                Please include your Street, <strong>House Number</strong>, Postal Code and City.
                             </p>
                         </div>
 
