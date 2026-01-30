@@ -35,13 +35,13 @@ export const getShopperMinDate = () => {
   return addDays(startOfDay(new Date()), MIN_DAYS_TO_START);
 };
 
-// Helper to get the allowed range (Current Week + 8 Weeks into the future to allow future starts)
+// Helper to get the allowed range (Current Week + 3 Weeks into the future)
 export const getShopperAllowedRange = () => {
   const now = new Date();
   // Start Monday of current week
   const start = startOfWeek(now, { weekStartsOn: 1 });
-  // End Sunday of the 8th week from now (allows picking a start date ~2 months out)
-  const end = endOfWeek(addWeeks(start, 8), { weekStartsOn: 1 });
+  // End Sunday of the 3rd week from now (allows picking a start date ~3 weeks out)
+  const end = endOfWeek(addWeeks(start, 3), { weekStartsOn: 1 });
   
   return { start, end };
 };

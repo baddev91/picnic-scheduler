@@ -252,20 +252,27 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
       } else {
           // WAITING FOR PERMIT -> Skip Schedule -> Go to Details
           // Enforce Randstad & Require Address
+          
+          const newDetails: ShopperDetails = {
+              ...existing.details!, 
+              workPermitStatus: 'WAITING',
+              isRandstad: true // Enforced
+          };
+
           setSelections([{ 
               ...existing, 
-              details: { 
-                  ...existing.details!, 
-                  workPermitStatus: 'WAITING',
-                  isRandstad: true // Enforced
-              },
+              details: newDetails,
               shifts: [] // Clear shifts as they can't schedule yet
           }]);
           
+          // IMPORTANT: Update tempDetails immediately so the modal receives the correct 'isRandstad: true' state
+          setTempDetails(newDetails);
+
           setStep(ShopperStep.DETAILS); // Technically done with flow steps
           setViewMode('SUMMARY'); // Go to summary view
-          // We'll open the modal via effect or immediate trigger
-          setTimeout(() => openDetailsModal(), 100);
+          
+          // Open modal immediately
+          setTimeout(() => setShowDetailsModal(true), 100);
       }
   };
 
