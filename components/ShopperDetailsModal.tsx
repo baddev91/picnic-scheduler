@@ -28,7 +28,8 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
   const [suggestedAddress, setSuggestedAddress] = useState<string | null>(null);
   const [mapsLink, setMapsLink] = useState<string | null>(null);
 
-  if (!showDetailsModal) return null;
+  // CRITICAL FIX: Ensure tempDetails exists before rendering to prevent crash
+  if (!showDetailsModal || !tempDetails) return null;
 
   const isPermitWaiting = tempDetails.workPermitStatus === 'WAITING';
 
@@ -51,7 +52,16 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
       setError(null);
 
       try {
-          const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+          // SAFEGUARD: Ensure process is defined to avoid crash in environments without polyfills
+          const apiKey = typeof process !== 'undefined' ? process.env.API_KEY : '';
+          
+          if (!apiKey) {
+              console.warn("API Key missing, skipping verification");
+              setIsVerifying(false);
+              return;
+          }
+
+          const ai = new GoogleGenAI({ apiKey });
           const response = await ai.models.generateContent({
               model: 'gemini-2.5-flash',
               contents: `Verify and format this address in the Netherlands: "${inputAddr}". 

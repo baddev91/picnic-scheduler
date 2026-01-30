@@ -580,9 +580,13 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
   };
 
   const openDetailsModal = () => {
-      if (selections[0].details) {
-          setTempDetails(selections[0].details);
-      }
+      // Fallback details if corrupted session
+      const existingDetails = selections[0].details || { 
+          nationality: '', usePicnicBus: null, civilStatus: '', gender: '', 
+          clothingSize: 'M', shoeSize: '40', gloveSize: '8 (M)', isRandstad: false, address: ''
+      };
+      
+      setTempDetails(existingDetails);
       setShowDetailsModal(true);
   };
 
