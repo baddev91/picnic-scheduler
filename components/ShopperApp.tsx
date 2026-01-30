@@ -45,7 +45,7 @@ const ALL_COUNTRIES = [
     "Denmark", "Egypt", "Estonia", "Ethiopia", "Finland", "France",
     "Georgia", "Germany", "Ghana", "Greece", "Hungary", "India", "Indonesia", "Iran", "Iraq", "Ireland", "Israel", "Italy",
     "Japan", "Jordan", "Kazakhstan", "Kenya", "Latvia", "Lebanon", "Lithuania", "Luxembourg",
-    "Malaysia", "Malta", "Mexico", "Moldova", "Morocco",
+    "Malaysia", "Malta", "Mexico", "Moldova", "Morocco", "Myanmar",
     "Netherlands", "New Zealand", "Nigeria", "North Macedonia", "Norway",
     "Pakistan", "Philippines", "Poland", "Portugal",
     "Romania", "Russia",
@@ -123,6 +123,10 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
       }
       return 'FLOW';
   });
+
+  // --- MANUAL NATIONALITY STATE ---
+  const [showManualNationalityInput, setShowManualNationalityInput] = useState(false);
+  const [manualNationality, setManualNationality] = useState('');
 
   const [countAnim, setCountAnim] = useState(false);
   const flowScrollContainerRef = useRef<HTMLDivElement>(null);
@@ -704,45 +708,93 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
           {step === ShopperStep.NATIONALITY_SELECTION && (
               <div className="p-4 md:p-8 animate-in slide-in-from-right duration-300">
                   <div className="max-w-2xl mx-auto space-y-8">
-                      <div className="text-center space-y-2">
-                          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                              <Globe2 className="w-8 h-8 text-blue-600" />
+                      {showManualNationalityInput ? (
+                          <div className="max-w-md mx-auto space-y-6 animate-in fade-in zoom-in-95">
+                              <div className="text-center space-y-2">
+                                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                      <Globe2 className="w-8 h-8 text-gray-500" />
+                                  </div>
+                                  <h2 className="text-2xl font-black text-gray-900">Type your Nationality</h2>
+                                  <p className="text-gray-500">Please enter your country name below.</p>
+                              </div>
+
+                              <div className="space-y-4">
+                                  <input
+                                      type="text"
+                                      value={manualNationality}
+                                      onChange={(e) => setManualNationality(e.target.value)}
+                                      onKeyDown={(e) => e.key === 'Enter' && manualNationality.trim() && handleNationalitySubmit(manualNationality.trim())}
+                                      placeholder="e.g. Argentina"
+                                      className="w-full p-4 bg-white border-2 border-gray-200 rounded-xl font-bold text-gray-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-50 transition-all text-center text-lg"
+                                      autoFocus
+                                  />
+
+                                  <div className="flex gap-3">
+                                      <Button variant="secondary" onClick={() => setShowManualNationalityInput(false)} className="flex-1 py-3">
+                                          Back
+                                      </Button>
+                                      <Button 
+                                          onClick={() => handleNationalitySubmit(manualNationality.trim())} 
+                                          disabled={!manualNationality.trim()}
+                                          className="flex-[2] bg-gray-900 text-white hover:bg-black py-3"
+                                      >
+                                          Confirm
+                                      </Button>
+                                  </div>
+                              </div>
                           </div>
-                          <h2 className="text-2xl font-black text-gray-900">Where are you from?</h2>
-                          <p className="text-gray-500">Please select your nationality to proceed.</p>
-                      </div>
+                      ) : (
+                          <>
+                              <div className="text-center space-y-2">
+                                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                      <Globe2 className="w-8 h-8 text-blue-600" />
+                                  </div>
+                                  <h2 className="text-2xl font-black text-gray-900">Where are you from?</h2>
+                                  <p className="text-gray-500">Please select your nationality to proceed.</p>
+                              </div>
 
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                          {TOP_NATIONALITIES.map((nation) => (
-                              <button
-                                  key={nation.code}
-                                  onClick={() => handleNationalitySubmit(nation.name)}
-                                  className="flex flex-col items-center justify-center p-6 bg-white border-2 border-gray-100 hover:border-blue-500 hover:bg-blue-50 hover:shadow-lg rounded-2xl transition-all group"
-                              >
-                                  <span className="text-4xl mb-2 filter drop-shadow-sm group-hover:scale-110 transition-transform duration-200">{nation.flag}</span>
-                                  <span className="font-bold text-gray-700 group-hover:text-blue-700">{nation.name}</span>
-                              </button>
-                          ))}
-                      </div>
+                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                  {TOP_NATIONALITIES.map((nation) => (
+                                      <button
+                                          key={nation.code}
+                                          onClick={() => handleNationalitySubmit(nation.name)}
+                                          className="flex flex-col items-center justify-center p-6 bg-white border-2 border-gray-100 hover:border-blue-500 hover:bg-blue-50 hover:shadow-lg rounded-2xl transition-all group"
+                                      >
+                                          <span className="text-4xl mb-2 filter drop-shadow-sm group-hover:scale-110 transition-transform duration-200">{nation.flag}</span>
+                                          <span className="font-bold text-gray-700 group-hover:text-blue-700">{nation.name}</span>
+                                      </button>
+                                  ))}
+                              </div>
 
-                      <div className="relative">
-                          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200"></div></div>
-                          <div className="relative flex justify-center"><span className="bg-gray-50 px-2 text-xs text-gray-400 font-bold uppercase">Or select other</span></div>
-                      </div>
+                              <div className="relative">
+                                  <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200"></div></div>
+                                  <div className="relative flex justify-center"><span className="bg-gray-50 px-2 text-xs text-gray-400 font-bold uppercase">Or select other</span></div>
+                              </div>
 
-                      <div className="bg-white p-4 rounded-xl border shadow-sm">
-                           <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">All Countries</label>
-                           <select 
-                              onChange={(e) => {
-                                  if (e.target.value) handleNationalitySubmit(e.target.value);
-                              }}
-                              className="w-full p-4 bg-gray-50 border-2 border-transparent rounded-xl font-bold text-gray-700 outline-none focus:border-blue-500 focus:bg-white transition-all appearance-none cursor-pointer"
-                              defaultValue=""
-                           >
-                               <option value="" disabled>Tap to select country...</option>
-                               {ALL_COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
-                           </select>
-                      </div>
+                              <div className="bg-white p-4 rounded-xl border shadow-sm">
+                                   <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">All Countries</label>
+                                   <select 
+                                      onChange={(e) => {
+                                          if (e.target.value) handleNationalitySubmit(e.target.value);
+                                      }}
+                                      className="w-full p-4 bg-gray-50 border-2 border-transparent rounded-xl font-bold text-gray-700 outline-none focus:border-blue-500 focus:bg-white transition-all appearance-none cursor-pointer"
+                                      defaultValue=""
+                                   >
+                                       <option value="" disabled>Tap to select country...</option>
+                                       {ALL_COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                   </select>
+                              </div>
+
+                              <div className="text-center">
+                                  <button 
+                                      onClick={() => setShowManualNationalityInput(true)}
+                                      className="text-sm font-bold text-gray-400 hover:text-gray-600 underline decoration-gray-300 underline-offset-4 transition-all"
+                                  >
+                                      My country is not listed
+                                  </button>
+                              </div>
+                          </>
+                      )}
                   </div>
               </div>
           )}
