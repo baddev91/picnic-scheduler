@@ -187,17 +187,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </div>
                   </div>
 
-                  {/* 2. SHOPPER TALKS (WIP Style) */}
+                  {/* 2. TALKS (With WIP Badge) */}
                   <button 
                     onClick={onGoToTalks}
                     className="flex flex-col justify-between h-full bg-white border border-gray-200 p-5 rounded-2xl text-left hover:bg-white hover:border-orange-300 hover:border-solid hover:shadow-lg transition-all group relative"
                   >
+                      <div className="absolute top-3 right-3">
+                          <span className="bg-yellow-100 text-yellow-800 text-[10px] font-bold px-2 py-1 rounded-full border border-yellow-200 flex items-center gap-1 shadow-sm">
+                              <Construction className="w-3 h-3" /> WIP
+                          </span>
+                      </div>
+
                       <div>
                           <div className="flex items-center gap-3 mb-3">
                               <div className="p-2 bg-orange-50 text-orange-600 rounded-lg group-hover:bg-orange-600 group-hover:text-white transition-colors">
                                   <MessageSquare className="w-5 h-5" />
                               </div>
-                              <h3 className="font-bold text-gray-900 group-hover:text-orange-800 transition-colors">Shopper Talks</h3>
+                              <h3 className="font-bold text-gray-900 group-hover:text-orange-800 transition-colors">TALKS</h3>
                           </div>
                           <p className="text-xs text-gray-500 font-medium">Logs, Check-ins & Performance.</p>
                       </div>

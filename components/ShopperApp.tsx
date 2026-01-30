@@ -667,6 +667,7 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
 
   if (viewMode === 'SUMMARY') {
       return (
+        <>
           <ShopperSummary 
               shopper={data} isSyncing={isSyncing} syncStatus={syncStatus}
               setShowDetailsModal={(show) => {
@@ -688,6 +689,12 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
               }}
               busConfig={busConfig}
           />
+          <ShopperDetailsModal 
+              showDetailsModal={showDetailsModal} setShowDetailsModal={setShowDetailsModal}
+              tempDetails={tempDetails} setTempDetails={setTempDetails}
+              handleDetailsSubmit={handleDetailsSubmit}
+          />
+        </>
       );
   }
 
