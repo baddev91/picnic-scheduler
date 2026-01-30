@@ -91,7 +91,7 @@ export const DesktopDayPanel: React.FC<DesktopDayPanelProps> = ({
                       ? 'First Working Day (Locked)'
                       : step === 0 
                           ? 'Select AA Pattern' 
-                          : 'Select Standard Shifts'
+                          : 'Select Normal Shifts'
               }
             </p>
           </div>

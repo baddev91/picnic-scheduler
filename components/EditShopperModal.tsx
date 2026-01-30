@@ -462,7 +462,7 @@ export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onC
                                         <div className="md:col-span-4 flex justify-between md:justify-center items-center mb-2 md:mb-0">
                                             <span className="text-[10px] font-bold text-gray-400 uppercase md:hidden">Type</span>
                                             <div className="flex bg-white rounded-lg border shadow-sm p-1">
-                                                <button onClick={() => handleLocalShiftUpdate(shift.id, 'type', ShiftType.STANDARD)} className={`px-4 md:px-3 py-1.5 md:py-1 rounded text-xs md:text-[10px] font-bold transition-all ${shift.type === ShiftType.STANDARD ? 'bg-green-100 text-green-700 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>Std</button>
+                                                <button onClick={() => handleLocalShiftUpdate(shift.id, 'type', ShiftType.STANDARD)} className={`px-4 md:px-3 py-1.5 md:py-1 rounded text-xs md:text-[10px] font-bold transition-all ${shift.type === ShiftType.STANDARD ? 'bg-green-100 text-green-700 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>Normal</button>
                                                 <button onClick={() => handleLocalShiftUpdate(shift.id, 'type', ShiftType.AA)} className={`px-4 md:px-3 py-1.5 md:py-1 rounded text-xs md:text-[10px] font-bold transition-all ${shift.type === ShiftType.AA ? 'bg-red-100 text-red-700 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>AA</button>
                                             </div>
                                         </div>
@@ -493,7 +493,7 @@ export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onC
                                     {SHIFT_TIMES.map(t => (<option key={t} value={t}>{t.split('(')[0]}</option>))}
                                 </select>
                                 <select value={newShiftType} onChange={(e) => setNewShiftType(e.target.value as ShiftType)} className="w-full md:w-24 p-2 rounded-lg border text-sm outline-none focus:ring-2 focus:ring-green-500 bg-white">
-                                    <option value={ShiftType.STANDARD}>Std</option>
+                                    <option value={ShiftType.STANDARD}>Normal</option>
                                     <option value={ShiftType.AA}>AA</option>
                                 </select>
                                 <Button onClick={handleAddShift} disabled={!newShiftDate} variant="secondary" className="px-4 py-2 text-xs h-10 md:h-auto">Add</Button>

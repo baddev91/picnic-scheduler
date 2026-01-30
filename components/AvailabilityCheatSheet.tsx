@@ -156,7 +156,7 @@ export const AvailabilityCheatSheet: React.FC<AvailabilityCheatSheetProps> = ({
                                                 {hasStd && (
                                                     <div className="w-full flex-1 min-h-[32px] bg-emerald-500 rounded-lg md:rounded-xl shadow-sm shadow-emerald-200 flex items-center justify-center relative overflow-hidden group/item hover:scale-[1.02] transition-transform">
                                                         <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent"></div>
-                                                        <span className="text-xs md:text-lg font-black text-white uppercase tracking-tighter relative z-10 drop-shadow-sm">STD</span>
+                                                        <span className="text-xs md:text-lg font-black text-white uppercase tracking-tighter relative z-10 drop-shadow-sm">NORMAL</span>
                                                     </div>
                                                 )}
                                             </div>

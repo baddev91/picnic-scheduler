@@ -233,7 +233,7 @@ export const WeeklyTemplateModal: React.FC<WeeklyTemplateModalProps> = ({
                       }`}
                     >
                       {isAvailable(selectedDayIndex, shift, ShiftType.STANDARD) ? <Check className="w-4 h-4" /> : <Ban className="w-4 h-4" />}
-                      Standard
+                      Normal
                     </button>
                   </div>
                 </div>

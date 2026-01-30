@@ -105,7 +105,7 @@ export const AdminWizardDays: React.FC<AdminWizardDaysProps> = ({
                                   }`}
                               >
                                   {isShiftEnabled(shift, ShiftType.STANDARD) ? <CheckCircle className="w-4 h-4" /> : <Ban className="w-4 h-4" />}
-                                  Standard
+                                  Normal
                               </button>
                           </div>
                       </div>

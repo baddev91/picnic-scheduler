@@ -152,7 +152,7 @@ export const DesktopCalendarGrid: React.FC<DesktopCalendarGridProps> = ({
                 
                 {status.stdShift && stdLabel && !isFWDSelection && (
                   <div className="p-0.5 md:px-2 md:py-1.5 bg-green-100 border border-green-200 text-green-800 rounded md:rounded-lg text-[9px] md:text-xs font-bold shadow-sm flex items-center justify-center md:justify-between">
-                    <span className="hidden md:inline">Std</span>
+                    <span className="hidden md:inline">Normal</span>
                     <span className="md:hidden">{stdLabel.mobile}</span>
                     <span className="hidden md:inline">{stdLabel.desktop}</span>
                   </div>

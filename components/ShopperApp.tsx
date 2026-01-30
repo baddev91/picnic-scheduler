@@ -764,7 +764,7 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
                     disabled={step <= 3}
                     className={`px-3 py-1 rounded-full transition-all ${getStepBadgeClass(3)}`}
                  >
-                    3. Standard
+                    3. Normal
                  </button>
               </div>
           )}
@@ -779,7 +779,7 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
             <div className="flex gap-3 pt-1">
                 <div className="hidden md:flex gap-4 text-xs font-medium text-gray-500 items-center border-l pl-4">
                      <span>Selected AA: <strong className="text-red-600">{aaSelections.length}</strong></span>
-                     <span>Selected Standard: <strong className="text-green-600">{stdCount}</strong></span>
+                     <span>Selected Normal: <strong className="text-green-600">{stdCount}</strong></span>
                 </div>
             </div>
         )}
@@ -971,7 +971,7 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
                         <div className="flex gap-4">
                             <div className="p-2 rounded-lg h-fit bg-white text-green-600"><CheckCircle className="w-5 h-5" /></div>
                             <div>
-                               <h3 className="font-bold text-green-800">Select Standard Shifts</h3>
+                               <h3 className="font-bold text-green-800">Select Normal Shifts</h3>
                                <p className="text-sm mt-1 text-green-600">Select shifts for your first 2 weeks based on your start date.</p>
                             </div>
                         </div>

@@ -207,7 +207,7 @@ export const AdminHeatmap: React.FC<AdminHeatmapProps> = ({ data }) => {
                         <div className="flex items-center gap-3 text-xs text-gray-400">
                             <span className="font-semibold text-gray-500">Key:</span>
                             <div className="flex items-center gap-1"><div className="w-3 h-3 bg-red-500 rounded-sm"></div><span>AA</span></div>
-                            <div className="flex items-center gap-1"><div className="w-3 h-3 bg-green-500 rounded-sm"></div><span>Std</span></div>
+                            <div className="flex items-center gap-1"><div className="w-3 h-3 bg-green-500 rounded-sm"></div><span>Normal</span></div>
                         </div>
                     </div>
 
@@ -284,7 +284,7 @@ export const AdminHeatmap: React.FC<AdminHeatmapProps> = ({ data }) => {
                                                                         <span className="font-bold font-mono text-red-400">{cellData.aa}</span>
                                                                     </div>
                                                                     <div className="flex justify-between items-center">
-                                                                        <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-green-500"></div> Standard</span>
+                                                                        <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-green-500"></div> Normal</span>
                                                                         <span className="font-bold font-mono text-green-400">{cellData.std}</span>
                                                                     </div>
                                                                     <div className="border-t border-gray-700 mt-2 pt-1 flex justify-between items-center font-bold text-sm">
