@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Bus, Shirt, Heart, AlertCircle, User, ArrowRight, Lock, MapPin, Search, Sparkles, ExternalLink, Check } from 'lucide-react';
 import { Button } from './Button';
 import { ShopperDetails } from '../types';
@@ -41,8 +41,9 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
       }));
   };
 
-  const verifyAddressWithGenAI = async () => {
-      if (!tempDetails.address || tempDetails.address.length < 5) return;
+  const verifyAddressWithGenAI = async (addressToVerify?: string) => {
+      const inputAddr = (addressToVerify || tempDetails.address || '').trim();
+      if (!inputAddr || inputAddr.length < 5) return;
       
       setIsVerifying(true);
       setSuggestedAddress(null);
@@ -53,9 +54,11 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
           const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
           const response = await ai.models.generateContent({
               model: 'gemini-2.5-flash',
-              contents: `Verify this address in the Netherlands: "${tempDetails.address}". 
-                         If found, return ONLY the official formatted address (Street HouseNumber, Zip City). 
-                         Do not add any other text.`,
+              contents: `Verify and format this address in the Netherlands: "${inputAddr}". 
+                         1. If the address is valid, return the official formatted string (Street + Number + City).
+                         2. If the user input is partial but likely matches a real place, suggest the full address.
+                         3. If it's completely invalid, return nothing.
+                         Return ONLY the address string. No other text.`,
               config: {
                   tools: [{ googleMaps: {} }],
               },
@@ -63,33 +66,43 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
 
           const resultText = response.text?.trim();
           
-          // Extract Maps Link if available for compliance/UX
+          // Extract Maps Link if available
           const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
           let uri = null;
           if (chunks) {
-              const mapChunk = chunks.find((c: any) => c.web?.uri || c.maps?.uri); // Fallback to web if maps specific type varies
+              const mapChunk = chunks.find((c: any) => c.web?.uri || c.maps?.uri); 
               if (mapChunk) {
                   uri = mapChunk.maps?.uri || mapChunk.web?.uri;
               }
           }
 
-          if (resultText) {
-              // Simple check to see if it's different enough to suggest
-              if (resultText.toLowerCase() !== tempDetails.address.toLowerCase()) {
+          if (resultText && resultText.length > 5) {
+              // Normalize to compare
+              const normalizedInput = inputAddr.toLowerCase().replace(/\s+/g, '');
+              const normalizedResult = resultText.toLowerCase().replace(/\s+/g, '');
+
+              // If suggestion is different (meaning better formatted or corrected), show it
+              if (normalizedInput !== normalizedResult) {
                   setSuggestedAddress(resultText);
                   setMapsLink(uri);
-              } else {
-                  // It matches, just show a temporary success indicator or nothing
-                  // For now we assume if it matches perfectly we don't need to suggest
               }
           }
       } catch (e) {
           console.error("Address verification failed", e);
-          // Silent fail or minor error, don't block the user
       } finally {
           setIsVerifying(false);
       }
   };
+
+  // Debounced Auto-Verification
+  useEffect(() => {
+      if (tempDetails.address && tempDetails.address.length > 8 && tempDetails.isRandstad) {
+          const timer = setTimeout(() => {
+              verifyAddressWithGenAI(tempDetails.address);
+          }, 1000); // Wait 1 second after typing stops
+          return () => clearTimeout(timer);
+      }
+  }, [tempDetails.address]);
 
   const applySuggestion = () => {
       if (suggestedAddress) {
@@ -129,7 +142,6 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
               return;
           }
 
-          // Ultra-relaxed validation: Just check for minimal content length (3 chars)
           const isLongEnough = addr.length >= 3;
 
           if (!isLongEnough) {
@@ -321,23 +333,25 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
                                         setSuggestedAddress(null); // Reset suggestion on type
                                         if (error) setError(null);
                                     }}
-                                    onBlur={() => {
-                                        if (tempDetails.address && tempDetails.address.length > 5) {
-                                            // Optional: Auto verify on blur if desired, but button is safer
-                                        }
-                                    }}
+                                    onBlur={() => verifyAddressWithGenAI()} // Verify on blur
+                                    onKeyDown={(e) => e.key === 'Enter' && verifyAddressWithGenAI()}
                                     placeholder="Street + Number + City"
                                     className="w-full p-3 pr-20 bg-white border-2 border-orange-100 rounded-xl outline-none focus:border-orange-500 transition-all text-sm font-medium"
                                 />
                                 
                                 {/* Verify Button inside input */}
                                 <button 
-                                    onClick={verifyAddressWithGenAI}
+                                    onClick={() => verifyAddressWithGenAI()}
                                     disabled={isVerifying || !tempDetails.address}
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-orange-100 text-orange-700 hover:bg-orange-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-orange-100 text-orange-700 hover:bg-orange-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed group/btn"
                                     title="Check Address with Google Maps"
                                 >
-                                    {isVerifying ? <Sparkles className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                                    {isVerifying ? <Sparkles className="w-4 h-4 animate-spin" /> : (
+                                        <div className="flex items-center gap-1">
+                                            <Search className="w-4 h-4" />
+                                            <span className="text-[10px] font-bold uppercase hidden group-hover/btn:inline">Check</span>
+                                        </div>
+                                    )}
                                 </button>
                             </div>
 
@@ -349,10 +363,10 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
 
                         {/* Suggestion Box */}
                         {suggestedAddress && (
-                            <div className="bg-white border border-green-200 rounded-xl p-3 shadow-md animate-in zoom-in-95 flex flex-col gap-2">
+                            <div className="bg-white border border-green-200 rounded-xl p-3 shadow-md animate-in zoom-in-95 flex flex-col gap-2 ring-2 ring-green-100">
                                 <div className="flex items-start justify-between">
                                     <div className="flex items-center gap-2 text-green-700 font-bold text-xs uppercase tracking-wider">
-                                        <Sparkles className="w-3 h-3" /> Suggestion found
+                                        <Sparkles className="w-3 h-3" /> Did you mean?
                                     </div>
                                     {mapsLink && (
                                         <a href={mapsLink} target="_blank" rel="noreferrer" className="text-[10px] text-blue-500 hover:underline flex items-center gap-1">
@@ -362,18 +376,15 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
                                 </div>
                                 
                                 <div className="flex gap-3 items-center">
-                                    <div className="flex-1 bg-green-50 p-2 rounded-lg text-sm font-medium text-green-900 border border-green-100">
-                                        {suggestedAddress}
-                                    </div>
                                     <button 
                                         onClick={applySuggestion}
-                                        className="shrink-0 bg-green-600 hover:bg-green-700 text-white p-2 rounded-lg transition-colors shadow-sm"
-                                        title="Use this address"
+                                        className="flex-1 bg-green-50 hover:bg-green-100 p-2 rounded-lg text-sm font-medium text-green-900 border border-green-200 text-left transition-colors flex items-center justify-between group/suggestion"
                                     >
-                                        <Check className="w-4 h-4" />
+                                        <span>{suggestedAddress}</span>
+                                        <span className="bg-green-600 text-white text-[10px] px-2 py-1 rounded font-bold group-hover/suggestion:bg-green-700">USE THIS</span>
                                     </button>
                                 </div>
-                                <p className="text-[10px] text-gray-400">Google Maps Match</p>
+                                <p className="text-[10px] text-gray-400">Google Maps Verified Address</p>
                             </div>
                         )}
                     </div>

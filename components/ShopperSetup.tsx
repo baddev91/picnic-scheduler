@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { KeyRound, ArrowRight, User, Sparkles, ChevronRight } from 'lucide-react';
+import { KeyRound, ArrowRight, User, Sparkles } from 'lucide-react';
 import { Button } from './Button';
 import { AppMode } from '../types';
 
@@ -14,6 +14,7 @@ interface ShopperSetupProps {
   setTempNameInput: (name: string) => void;
   handleStartShopperClick: () => void;
   setMode: (mode: AppMode) => void;
+  selectedRecruiter: string; // Kept for interface compatibility but not used in UI
 }
 
 export const ShopperSetup: React.FC<ShopperSetupProps> = ({
@@ -25,7 +26,7 @@ export const ShopperSetup: React.FC<ShopperSetupProps> = ({
   tempNameInput,
   setTempNameInput,
   handleStartShopperClick,
-  setMode
+  setMode,
 }) => {
   // PIN Verification Screen
   if (showShopperAuth) {
@@ -99,20 +100,21 @@ export const ShopperSetup: React.FC<ShopperSetupProps> = ({
              <div className="space-y-2">
                 <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight">Shift Scheduler</h2>
                 <p className="text-gray-500 text-sm font-medium">
-                    Let's get you started.<br/>Please enter your <strong>Full Name</strong> below.
+                    Let's get you started.
                 </p>
              </div>
           </div>
           
           {/* Input Section */}
           <div className="space-y-4 pt-2">
+             
              <div className="relative group">
                  <input 
                    value={tempNameInput}
                    onChange={(e) => setTempNameInput(e.target.value)}
                    onKeyDown={(e) => {
                      if (e.key === 'Enter' && tempNameInput.trim()) {
-                       handleStartShopperClick();
+                       if (tempNameInput.trim().split(' ').length >= 2) handleStartShopperClick();
                      }
                    }}
                    placeholder="e.g. John Doe"
@@ -122,11 +124,14 @@ export const ShopperSetup: React.FC<ShopperSetupProps> = ({
              </div>
 
              <button 
-               disabled={!tempNameInput.trim() || tempNameInput.trim().split(' ').length < 2} 
+               disabled={
+                   !tempNameInput.trim() || 
+                   tempNameInput.trim().split(' ').length < 2
+               } 
                onClick={handleStartShopperClick}
                className={`
                  w-full py-4 text-lg font-bold rounded-2xl text-white shadow-xl flex items-center justify-center gap-3 group relative overflow-hidden transition-all duration-300
-                 ${(!tempNameInput.trim() || tempNameInput.trim().split(' ').length < 2) 
+                 ${(!tempNameInput.trim() || tempNameInput.trim().split(' ').length < 2)
                     ? 'bg-gray-300 cursor-not-allowed opacity-50 shadow-none' 
                     : 'bg-gradient-to-r from-[#E31837] to-red-600 hover:scale-[1.02] active:scale-[0.98] shadow-red-200'
                  }

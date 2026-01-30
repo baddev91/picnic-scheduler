@@ -17,6 +17,11 @@ export type AdminAvailabilityMap = Record<string, Partial<Record<ShiftTime, Shif
 // 0 = Sunday, 1 = Monday, ... 6 = Saturday
 export type WeeklyTemplate = Record<number, Record<ShiftTime, ShiftType[]>>;
 
+export interface StaffMember {
+  name: string;
+  isSuperAdmin: boolean;
+}
+
 export interface ShopperShift {
   date: string;
   time: ShiftTime;
@@ -89,6 +94,8 @@ export interface ShopperDetails {
   ignoreCompliance?: boolean; // NEW: Flag to ignore compliance checks
   isHiddenFromMainView?: boolean; // NEW: If true, hides from Shift Scheduler View (imported from sheets)
   
+  recruiter?: string; // NEW: Staff member who conducted the SER
+
   // FROZEN SPECIFIC FIELDS
   isFrozenEligible?: boolean;
   frozenNotes?: string;

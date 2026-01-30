@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { GripVertical, Pencil, Trash2, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
+import { GripVertical, Pencil, Trash2, CheckCircle2, XCircle, AlertTriangle, UserCheck } from 'lucide-react';
 import { format } from 'date-fns';
 import { ShopperRecord, ShiftType } from '../../types';
 import { getSafeDateFromKey } from '../../utils/validation';
@@ -80,6 +80,9 @@ export const ShopperTableRow: React.FC<ShopperTableRowProps> = ({
     };
 
     const status = shopper.details?.firstDayStatus;
+    const recruiterInitials = shopper.details?.recruiter 
+        ? shopper.details.recruiter.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()
+        : null;
 
     return (
         <tr 
@@ -101,8 +104,13 @@ export const ShopperTableRow: React.FC<ShopperTableRowProps> = ({
                 <GripVertical className={`w-4 h-4 mx-auto ${draggingId === shopper.id ? 'text-blue-500' : ''}`} />
             </td>
             <td className="px-6 py-4 font-medium text-gray-900 flex items-center gap-3 relative">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center text-gray-600 font-bold text-xs shrink-0">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center text-gray-600 font-bold text-xs shrink-0 relative">
                     {shopper.name.substring(0,2).toUpperCase()}
+                    {recruiterInitials && (
+                        <div className="absolute -bottom-1 -right-1 bg-blue-600 text-white w-4 h-4 rounded-full text-[8px] flex items-center justify-center border border-white shadow-sm" title={`Recruiter: ${shopper.details.recruiter}`}>
+                            {recruiterInitials}
+                        </div>
+                    )}
                 </div>
                 {shopper.name}
                 

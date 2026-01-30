@@ -173,7 +173,7 @@ const getHRRowValues = (shopper: ShopperRecord): string[] => {
       '',                                           // Col P: Score cards?
       '',                                           // Col Q: Leadership fit?
       '',                                           // Col R: RT?
-      ''                                            // Col S: Recruiter
+      shopper.details?.recruiter || ''              // Col S: Recruiter (NEW)
   ];
 };
 

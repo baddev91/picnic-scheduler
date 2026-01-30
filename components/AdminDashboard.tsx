@@ -1,19 +1,20 @@
 
 import React, { useState } from 'react';
-import { Settings2, RefreshCw, Save, Share2, CalendarRange, Table, Bus, ArrowRight, ShieldCheck, UserCog, Info, AlertTriangle, Clock, CalendarCheck, Zap, ChevronDown, ChevronUp, History, Snowflake, AlertCircle, ShieldAlert, Lock, MessageSquare, Hammer, Construction, Eye } from 'lucide-react';
+import { Settings2, RefreshCw, Save, Share2, CalendarRange, Table, Bus, ArrowRight, ShieldCheck, UserCog, Info, AlertTriangle, Clock, CalendarCheck, Zap, ChevronDown, ChevronUp, History, Snowflake, AlertCircle, ShieldAlert, Lock, MessageSquare, Hammer, Construction, Eye, Users, Trash2, Plus, Shield, Box } from 'lucide-react';
 import { Button } from './Button';
-import { AdminWizardStep, WeeklyTemplate } from '../types';
+import { AdminWizardStep, WeeklyTemplate, StaffMember } from '../types';
 import { MIN_DAYS_TO_START } from '../constants';
 import { AvailabilityCheatSheet } from './AvailabilityCheatSheet';
+import { RecruiterStats } from './RecruiterStats';
 
 interface AdminDashboardProps {
+  isSuperAdmin: boolean; // NEW PROP
   isShopperAuthEnabled: boolean;
   setIsShopperAuthEnabled: (enabled: boolean) => void;
   adminShopperPinInput: string;
   setAdminShopperPinInput: (val: string) => void;
   generateRandomPin: () => void;
   saveShopperAuthSettings: (pin: string, enabled: boolean, silent?: boolean) => void;
-  handleCopyMagicLink: () => void;
   setAdminWizardStep: (step: AdminWizardStep) => void;
   setWizardDayIndex: (idx: number) => void;
   savedCloudTemplate: WeeklyTemplate | null;
@@ -21,20 +22,24 @@ interface AdminDashboardProps {
   tempTemplate: WeeklyTemplate;
   adminPin: string;
   updateAdminPin: (pin: string) => void;
+  superAdminPin: string;
+  updateSuperAdminPin: (pin: string) => void;
   frozenPin: string;
   updateFrozenPin: (pin: string) => void;
   onGoToFrozen: () => void;
   onGoToTalks: () => void;
+  staffList: StaffMember[]; // Updated type
+  saveStaffList: (list: StaffMember[]) => void; // Updated type
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
+  isSuperAdmin,
   isShopperAuthEnabled,
   setIsShopperAuthEnabled,
   adminShopperPinInput,
   setAdminShopperPinInput,
   generateRandomPin,
   saveShopperAuthSettings,
-  handleCopyMagicLink,
   setAdminWizardStep,
   setWizardDayIndex,
   savedCloudTemplate,
@@ -42,15 +47,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   tempTemplate,
   adminPin,
   updateAdminPin,
+  superAdminPin,
+  updateSuperAdminPin,
   frozenPin,
   updateFrozenPin,
   onGoToFrozen,
-  onGoToTalks
+  onGoToTalks,
+  staffList,
+  saveStaffList
 }) => {
   const [newAdminPin, setNewAdminPin] = useState(adminPin);
+  const [newSuperAdminPin, setNewSuperAdminPin] = useState(superAdminPin);
   const [newFrozenPin, setNewFrozenPin] = useState(frozenPin);
   const [showRules, setShowRules] = useState(false);
   const [pinError, setPinError] = useState<string | null>(null);
+  
+  // Staff List local state
+  const [newStaffName, setNewStaffName] = useState('');
+  const [isNewStaffSuper, setIsNewStaffSuper] = useState(false);
   
   // Cheat Sheet Modal State
   const [showCheatSheet, setShowCheatSheet] = useState(false);
@@ -73,8 +87,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // --- VALIDATION LOGIC ---
   const handleUpdateAdminPin = () => {
-      if (newAdminPin === frozenPin) {
-          setPinError("Admin PIN cannot be the same as Frozen PIN.");
+      if (newAdminPin === frozenPin || newAdminPin === superAdminPin) {
+          setPinError("Admin PIN cannot match other PINs.");
           return;
       }
       if (newAdminPin.length < 4) {
@@ -85,9 +99,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       updateAdminPin(newAdminPin);
   };
 
+  const handleUpdateSuperAdminPin = () => {
+      if (newSuperAdminPin === adminPin || newSuperAdminPin === frozenPin) {
+          setPinError("Super Admin PIN cannot match other PINs.");
+          return;
+      }
+      if (newSuperAdminPin.length < 4) {
+          setPinError("PIN too short.");
+          return;
+      }
+      setPinError(null);
+      updateSuperAdminPin(newSuperAdminPin);
+  };
+
   const handleUpdateFrozenPin = () => {
-      if (newFrozenPin === adminPin) {
-          setPinError("Frozen PIN cannot be the same as Admin PIN.");
+      if (newFrozenPin === adminPin || newFrozenPin === superAdminPin) {
+          setPinError("Frozen PIN cannot match other PINs.");
           return;
       }
       if (newFrozenPin.length < 4) {
@@ -98,6 +125,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       updateFrozenPin(newFrozenPin);
   };
 
+  const handleAddStaff = () => {
+      const name = newStaffName.trim();
+      if (!name) return;
+      if (staffList.some(s => s.name === name)) { alert("Name already exists"); return; }
+      
+      const newList = [...staffList, { name, isSuperAdmin: isNewStaffSuper }].sort((a, b) => a.name.localeCompare(b.name));
+      saveStaffList(newList);
+      setNewStaffName('');
+      setIsNewStaffSuper(false);
+  };
+
+  const handleRemoveStaff = (name: string) => {
+      const newList = staffList.filter(s => s.name !== name);
+      saveStaffList(newList);
+  };
+
+  const toggleStaffRole = (member: StaffMember) => {
+      const newList = staffList.map(s => {
+          if (s.name === member.name) return { ...s, isSuperAdmin: !s.isSuperAdmin };
+          return s;
+      });
+      saveStaffList(newList);
+  };
+
   return (
       <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
           
@@ -105,15 +156,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
               <div>
                   <h1 className="text-3xl font-black text-gray-900 tracking-tight">Dashboard</h1>
-                  <p className="text-gray-500 mt-1">Manage schedules, settings and view submissions.</p>
+                  <p className="text-gray-500 mt-1">
+                      {isSuperAdmin ? 'Full Access: Manage schedules, settings and staff.' : 'Manage schedules and view submissions.'}
+                  </p>
               </div>
               <div className="flex gap-2">
-                 <button 
-                    onClick={onGoToFrozen}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-50 text-cyan-700 font-bold hover:bg-cyan-100 transition-colors border border-cyan-200 text-xs shadow-sm"
-                 >
-                     <Snowflake className="w-3 h-3" /> Frozen List View
-                 </button>
+                 {isSuperAdmin && (
+                     <button 
+                        onClick={onGoToFrozen}
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-50 text-cyan-700 font-bold hover:bg-cyan-100 transition-colors border border-cyan-200 text-xs shadow-sm"
+                     >
+                         <Snowflake className="w-3 h-3" /> Frozen List View
+                     </button>
+                 )}
                  <Button 
                     variant="secondary" 
                     onClick={() => setAdminWizardStep(AdminWizardStep.VIEW_LOGS)}
@@ -122,13 +177,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                      <History className="w-3 h-3" /> Audit Logs
                  </Button>
                  {/* NEW SECURITY LOGS BUTTON */}
-                 <Button 
-                    variant="secondary" 
-                    onClick={() => setAdminWizardStep(AdminWizardStep.VIEW_ACCESS_LOGS)}
-                    className="flex items-center gap-2 border-gray-300 hover:border-red-500 hover:text-red-600 transition-colors text-xs bg-red-50/50"
-                 >
-                     <ShieldAlert className="w-3 h-3" /> Security
-                 </Button>
+                 {isSuperAdmin && (
+                     <Button 
+                        variant="secondary" 
+                        onClick={() => setAdminWizardStep(AdminWizardStep.VIEW_ACCESS_LOGS)}
+                        className="flex items-center gap-2 border-gray-300 hover:border-red-500 hover:text-red-600 transition-colors text-xs bg-red-50/50"
+                     >
+                         <ShieldAlert className="w-3 h-3" /> Security
+                     </Button>
+                 )}
               </div>
           </div>
 
@@ -163,16 +220,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </button>
 
               {/* SECONDARY ACTIONS GRID */}
-              <div className="grid md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   
-                  {/* 1. WEEKLY PATTERN (Smaller now) */}
-                  <div className="flex flex-col h-full bg-white border border-gray-200 rounded-2xl overflow-hidden transition-all hover:border-red-500 hover:shadow-lg group">
-                      <div className="p-5 flex-1 relative z-10 cursor-pointer" onClick={handleEditPattern}>
-                          <div className="flex items-center gap-3 mb-3">
-                              <div className="p-2 bg-red-50 text-red-600 rounded-lg group-hover:bg-red-600 group-hover:text-white transition-colors">
-                                  <CalendarRange className="w-5 h-5" />
+                  {/* 1. WEEKLY PATTERN (LOCKED for Regular Admins) */}
+                  <div className={`flex flex-col h-full bg-white border border-gray-200 rounded-2xl overflow-hidden transition-all group ${isSuperAdmin ? 'hover:border-red-500 hover:shadow-lg' : 'opacity-80'}`}>
+                      <div className={`p-5 flex-1 relative z-10 ${isSuperAdmin ? 'cursor-pointer' : 'cursor-not-allowed'}`} onClick={isSuperAdmin ? handleEditPattern : undefined}>
+                          <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-3">
+                                  <div className={`p-2 rounded-lg transition-colors ${isSuperAdmin ? 'bg-red-50 text-red-600 group-hover:bg-red-600 group-hover:text-white' : 'bg-gray-100 text-gray-400'}`}>
+                                      <CalendarRange className="w-5 h-5" />
+                                  </div>
+                                  <h3 className={`font-bold transition-colors ${isSuperAdmin ? 'text-gray-900 group-hover:text-red-700' : 'text-gray-500'}`}>Weekly Pattern</h3>
                               </div>
-                              <h3 className="font-bold text-gray-900 group-hover:text-red-700 transition-colors">Weekly Pattern</h3>
+                              {!isSuperAdmin && <Lock className="w-4 h-4 text-gray-400" />}
                           </div>
                           <p className="text-xs text-gray-500 font-medium">Configure base availability rules.</p>
                       </div>
@@ -187,23 +247,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </div>
                   </div>
 
-                  {/* 2. TALKS (With WIP Badge) */}
+                  {/* 2. TALKS (VISIBLE TO ALL, DISABLED FOR REGULAR) */}
                   <button 
-                    onClick={onGoToTalks}
-                    className="flex flex-col justify-between h-full bg-white border border-gray-200 p-5 rounded-2xl text-left hover:bg-white hover:border-orange-300 hover:border-solid hover:shadow-lg transition-all group relative"
+                    disabled={!isSuperAdmin}
+                    onClick={isSuperAdmin ? onGoToTalks : undefined}
+                    className={`flex flex-col justify-between h-full bg-white border border-gray-200 p-5 rounded-2xl text-left transition-all group relative ${isSuperAdmin ? 'hover:bg-white hover:border-orange-300 hover:border-solid hover:shadow-lg' : 'opacity-60 cursor-not-allowed bg-gray-50'}`}
                   >
-                      <div className="absolute top-3 right-3">
-                          <span className="bg-yellow-100 text-yellow-800 text-[10px] font-bold px-2 py-1 rounded-full border border-yellow-200 flex items-center gap-1 shadow-sm">
-                              <Construction className="w-3 h-3" /> WIP
-                          </span>
-                      </div>
+                      {isSuperAdmin && (
+                          <div className="absolute top-3 right-3">
+                              <span className="bg-yellow-100 text-yellow-800 text-[10px] font-bold px-2 py-1 rounded-full border border-yellow-200 flex items-center gap-1 shadow-sm">
+                                  <Construction className="w-3 h-3" /> WIP
+                              </span>
+                          </div>
+                      )}
 
                       <div>
-                          <div className="flex items-center gap-3 mb-3">
-                              <div className="p-2 bg-orange-50 text-orange-600 rounded-lg group-hover:bg-orange-600 group-hover:text-white transition-colors">
-                                  <MessageSquare className="w-5 h-5" />
+                          <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-3">
+                                  <div className={`p-2 rounded-lg transition-colors ${isSuperAdmin ? 'bg-orange-50 text-orange-600 group-hover:bg-orange-600 group-hover:text-white' : 'bg-gray-100 text-gray-400'}`}>
+                                      <MessageSquare className="w-5 h-5" />
+                                  </div>
+                                  <h3 className={`font-bold transition-colors ${isSuperAdmin ? 'text-gray-900 group-hover:text-orange-800' : 'text-gray-500'}`}>TALKS</h3>
                               </div>
-                              <h3 className="font-bold text-gray-900 group-hover:text-orange-800 transition-colors">TALKS</h3>
+                              {!isSuperAdmin && <Lock className="w-4 h-4 text-gray-400" />}
                           </div>
                           <p className="text-xs text-gray-500 font-medium">Logs, Check-ins & Performance.</p>
                       </div>
@@ -222,6 +288,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                               <h3 className="font-bold text-gray-900 group-hover:text-purple-700 transition-colors">Bus Schedule</h3>
                           </div>
                           <p className="text-xs text-gray-500 font-medium">Manage stops & times.</p>
+                      </div>
+                  </button>
+
+                  {/* 4. BOXES CHECK (VISIBLE TO ALL, DISABLED FOR REGULAR) */}
+                  <button 
+                    disabled={!isSuperAdmin}
+                    onClick={() => {}}
+                    className={`flex flex-col justify-between h-full bg-white border border-gray-200 p-5 rounded-2xl text-left transition-all group ${isSuperAdmin ? 'hover:border-teal-500 hover:shadow-lg' : 'opacity-60 cursor-not-allowed bg-gray-50'}`}
+                  >
+                      <div>
+                          <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-3">
+                                  <div className={`p-2 rounded-lg transition-colors ${isSuperAdmin ? 'bg-teal-50 text-teal-600 group-hover:bg-teal-600 group-hover:text-white' : 'bg-gray-100 text-gray-400'}`}>
+                                      <Box className="w-5 h-5" />
+                                  </div>
+                                  <h3 className={`font-bold transition-colors ${isSuperAdmin ? 'text-gray-900 group-hover:text-teal-700' : 'text-gray-500'}`}>Boxes Check</h3>
+                              </div>
+                              {!isSuperAdmin && <Lock className="w-4 h-4 text-gray-400" />}
+                          </div>
+                          <p className="text-xs text-gray-500 font-medium">Inventory & Compliance.</p>
                       </div>
                   </button>
 
@@ -309,8 +395,69 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
              )}
           </div>
 
-          {/* COMPACT CONFIGURATION SECTION (Moved to Bottom) */}
-          <div className="space-y-3">
+          {/* STAFF MANAGEMENT SECTION - SUPER ADMIN ONLY */}
+          {isSuperAdmin && (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden p-6 animate-in slide-in-from-bottom-2">
+                  <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider mb-4 flex items-center gap-2">
+                      <Users className="w-4 h-4 text-blue-600" /> Staff Management
+                  </h3>
+                  <p className="text-xs text-gray-500 mb-4">Manage the list of Recruiters/Staff. Assign "Super Admin" for advanced access.</p>
+                  
+                  <div className="flex flex-col sm:flex-row gap-2 mb-4">
+                      <input 
+                          type="text"
+                          value={newStaffName}
+                          onChange={(e) => setNewStaffName(e.target.value)}
+                          placeholder="Enter Staff Name (e.g. John D.)"
+                          className="flex-1 border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                          onKeyDown={(e) => e.key === 'Enter' && handleAddStaff()}
+                      />
+                      <label className={`flex items-center gap-2 px-3 rounded-lg border cursor-pointer select-none transition-all ${isNewStaffSuper ? 'bg-purple-100 border-purple-300 text-purple-700' : 'bg-gray-50 border-gray-200 text-gray-500'}`}>
+                          <input 
+                              type="checkbox" 
+                              checked={isNewStaffSuper} 
+                              onChange={(e) => setIsNewStaffSuper(e.target.checked)} 
+                              className="hidden"
+                          />
+                          <Shield className="w-4 h-4" />
+                          <span className="text-xs font-bold">Super</span>
+                      </label>
+                      <Button onClick={handleAddStaff} className="bg-blue-600 hover:bg-blue-700 h-auto py-2">
+                          <Plus className="w-4 h-4 mr-1" /> Add
+                      </Button>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                      {staffList.length === 0 ? (
+                          <span className="text-xs text-gray-400 italic">No staff members added.</span>
+                      ) : (
+                          staffList.map(member => (
+                              <div key={member.name} className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${member.isSuperAdmin ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-gray-100 text-gray-700 border-gray-200'}`}>
+                                  <button 
+                                      onClick={() => toggleStaffRole(member)}
+                                      className={`p-0.5 rounded-full transition-colors ${member.isSuperAdmin ? 'hover:bg-purple-200' : 'hover:bg-gray-300 text-gray-400'}`}
+                                      title="Toggle Super Admin"
+                                  >
+                                      <Shield className={`w-3 h-3 ${member.isSuperAdmin ? 'fill-purple-700' : ''}`} />
+                                  </button>
+                                  {member.name}
+                                  <button onClick={() => handleRemoveStaff(member.name)} className="ml-1 p-0.5 hover:bg-black/10 rounded-full transition-colors text-current opacity-60 hover:opacity-100">
+                                      <Trash2 className="w-3 h-3" />
+                                  </button>
+                              </div>
+                          ))
+                      )}
+                  </div>
+              </div>
+          )}
+
+          {/* RECRUITER STATS (Available to All Admins) */}
+          <div className="animate-in slide-in-from-bottom-3">
+              <RecruiterStats staffList={staffList} />
+          </div>
+
+          {/* CONFIGURATION SECTION - HYBRID ACCESS */}
+          <div className="space-y-3 animate-in slide-in-from-bottom-3">
               <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider px-1">Access Control & Configuration</h3>
               
               {pinError && (
@@ -319,8 +466,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
               )}
 
-              <div className="grid md:grid-cols-3 gap-4">
-                  {/* 1. Shopper Access */}
+              <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* 1. Shopper Access - VISIBLE TO ALL ADMINS */}
                   <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex flex-col justify-between gap-4">
                       <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2 text-gray-800 font-bold text-sm">
@@ -349,47 +496,68 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           </div>
                       </div>
                       
-                      <div className="grid grid-cols-2 gap-2">
-                          <Button onClick={() => saveShopperAuthSettings(adminShopperPinInput, isShopperAuthEnabled, false)} disabled={!isShopperAuthEnabled} className="text-xs py-1.5 h-auto">Save</Button>
-                          <Button variant="secondary" onClick={handleCopyMagicLink} className="text-xs py-1.5 h-auto">Link</Button>
-                      </div>
+                      {/* MAGIC LINK REMOVED */}
+                      <Button onClick={() => saveShopperAuthSettings(adminShopperPinInput, isShopperAuthEnabled, false)} disabled={!isShopperAuthEnabled} className="text-xs py-1.5 h-auto w-full">Save</Button>
                   </div>
 
-                  {/* 2. Admin Access */}
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex flex-col justify-between gap-4">
-                      <div className="flex items-center gap-2 text-gray-800 font-bold text-sm">
-                          <UserCog className="w-4 h-4 text-purple-600" />
-                          Admin PIN
+                  {/* SENSITIVE PIN SETTINGS - SUPER ADMIN ONLY */}
+                  {isSuperAdmin && (
+                    <>
+                      {/* 2. Admin Access */}
+                      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex flex-col justify-between gap-4">
+                          <div className="flex items-center gap-2 text-gray-800 font-bold text-sm">
+                              <UserCog className="w-4 h-4 text-purple-600" />
+                              Admin PIN
+                          </div>
+                          <input 
+                              type="text"
+                              value={newAdminPin}
+                              onChange={e => { setNewAdminPin(e.target.value); setPinError(null); }}
+                              className="w-full border rounded-lg py-1.5 px-2 text-center text-sm font-mono outline-none focus:ring-2 focus:ring-purple-100 focus:border-purple-300"
+                              placeholder="Admin PIN"
+                          />
+                          <Button onClick={handleUpdateAdminPin} disabled={!newAdminPin || newAdminPin === adminPin} className="text-xs py-1.5 h-auto bg-purple-600 hover:bg-purple-700">
+                              Update Admin
+                          </Button>
                       </div>
-                      <input 
-                          type="text"
-                          value={newAdminPin}
-                          onChange={e => { setNewAdminPin(e.target.value); setPinError(null); }}
-                          className="w-full border rounded-lg py-1.5 px-2 text-center text-sm font-mono outline-none focus:ring-2 focus:ring-purple-100 focus:border-purple-300"
-                          placeholder="Admin PIN"
-                      />
-                      <Button onClick={handleUpdateAdminPin} disabled={!newAdminPin || newAdminPin === adminPin} className="text-xs py-1.5 h-auto bg-purple-600 hover:bg-purple-700">
-                          Update Admin
-                      </Button>
-                  </div>
 
-                  {/* 3. Frozen Access */}
-                  <div className="bg-cyan-50 rounded-xl shadow-sm border border-cyan-200 p-4 flex flex-col justify-between gap-4">
-                      <div className="flex items-center gap-2 text-cyan-900 font-bold text-sm">
-                          <Snowflake className="w-4 h-4 text-cyan-600" />
-                          Frozen List PIN
+                      {/* 3. SUPER Admin Access */}
+                      <div className="bg-purple-50 rounded-xl shadow-sm border border-purple-200 p-4 flex flex-col justify-between gap-4">
+                          <div className="flex items-center gap-2 text-purple-900 font-bold text-sm">
+                              <ShieldCheck className="w-4 h-4 text-purple-600" />
+                              Super Admin PIN
+                          </div>
+                          <input 
+                              type="text"
+                              value={newSuperAdminPin}
+                              onChange={e => { setNewSuperAdminPin(e.target.value); setPinError(null); }}
+                              className="w-full border border-purple-200 rounded-lg py-1.5 px-2 text-center text-sm font-mono outline-none focus:ring-2 focus:ring-purple-100 focus:border-purple-300 bg-white"
+                              placeholder="Super PIN"
+                          />
+                          <Button onClick={handleUpdateSuperAdminPin} disabled={!newSuperAdminPin || newSuperAdminPin === superAdminPin} className="text-xs py-1.5 h-auto bg-purple-800 hover:bg-purple-900 shadow-purple-200">
+                              Update Super
+                          </Button>
                       </div>
-                      <input 
-                          type="text"
-                          value={newFrozenPin}
-                          onChange={e => { setNewFrozenPin(e.target.value); setPinError(null); }}
-                          className="w-full border border-cyan-200 rounded-lg py-1.5 px-2 text-center text-sm font-mono outline-none focus:ring-2 focus:ring-cyan-100 focus:border-cyan-300 bg-white"
-                          placeholder="Frozen PIN"
-                      />
-                      <Button onClick={handleUpdateFrozenPin} disabled={!newFrozenPin || newFrozenPin === frozenPin} className="text-xs py-1.5 h-auto bg-cyan-600 hover:bg-cyan-700 shadow-cyan-200">
-                          Update Frozen
-                      </Button>
-                  </div>
+
+                      {/* 4. Frozen Access */}
+                      <div className="bg-cyan-50 rounded-xl shadow-sm border border-cyan-200 p-4 flex flex-col justify-between gap-4">
+                          <div className="flex items-center gap-2 text-cyan-900 font-bold text-sm">
+                              <Snowflake className="w-4 h-4 text-cyan-600" />
+                              Frozen List PIN
+                          </div>
+                          <input 
+                              type="text"
+                              value={newFrozenPin}
+                              onChange={e => { setNewFrozenPin(e.target.value); setPinError(null); }}
+                              className="w-full border border-cyan-200 rounded-lg py-1.5 px-2 text-center text-sm font-mono outline-none focus:ring-2 focus:ring-cyan-100 focus:border-cyan-300 bg-white"
+                              placeholder="Frozen PIN"
+                          />
+                          <Button onClick={handleUpdateFrozenPin} disabled={!newFrozenPin || newFrozenPin === frozenPin} className="text-xs py-1.5 h-auto bg-cyan-600 hover:bg-cyan-700 shadow-cyan-200">
+                              Update Frozen
+                          </Button>
+                      </div>
+                    </>
+                  )}
               </div>
           </div>
 

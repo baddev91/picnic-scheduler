@@ -9,7 +9,7 @@ import { AdminHeatmap } from './AdminHeatmap';
 import { EditShopperModal } from './EditShopperModal';
 import { ShopperTableRow } from './Admin/ShopperTableRow';
 import { ShopperExpandedDetails } from './Admin/ShopperExpandedDetails';
-import { ComplianceReportModal } from './ComplianceReportModal'; // NEW IMPORT
+import { ComplianceReportModal } from './ComplianceReportModal';
 import { validateShopperSchedule, getSafeDateFromKey } from '../utils/validation';
 import { 
     generateSpreadsheetRow, 
@@ -55,7 +55,11 @@ const getFWDGroupKey = (shopper: ShopperRecord) => {
     return `${fwd}_${sortIndex}_${simpleName}`;
 };
 
-export const AdminDataView: React.FC = () => {
+interface AdminDataViewProps {
+    currentUser?: string;
+}
+
+export const AdminDataView: React.FC<AdminDataViewProps> = ({ currentUser }) => {
   const [data, setData] = useState<ShopperRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -312,7 +316,33 @@ export const AdminDataView: React.FC = () => {
 
   const handleBulkCopyLSInflow = async (shoppers: ShopperRecord[], feedbackKey: string) => {
       try {
-          const text = generateBulkHRSpreadsheetRow(shoppers);
+          // LOGIC: Check for missing recruiters and stamp with currentUser
+          const updates: { id: string, details: any }[] = [];
+          
+          const updatedShoppers = shoppers.map(s => {
+              // Only update if recruiter is missing AND we have a logged in user
+              if (!s.details?.recruiter && currentUser) {
+                  const newDetails = { ...s.details, recruiter: currentUser };
+                  updates.push({ id: s.id, details: newDetails });
+                  return { ...s, details: newDetails };
+              }
+              return s;
+          });
+
+          // Perform DB update if needed (Wait for it to ensure data integrity)
+          if (updates.length > 0) {
+              for (const update of updates) {
+                  await supabase.from('shoppers').update({ details: update.details }).eq('id', update.id);
+              }
+              
+              // Reflect update in local state immediately
+              setData(prev => prev.map(item => {
+                  const updated = updates.find(u => u.id === item.id);
+                  return updated ? { ...item, details: updated.details } : item;
+              }));
+          }
+
+          const text = generateBulkHRSpreadsheetRow(updatedShoppers);
           await navigator.clipboard.writeText(text);
           triggerFeedback(feedbackKey);
       } catch (e: any) { alert("Bulk copy failed: " + e.message); }
@@ -591,6 +621,7 @@ export const AdminDataView: React.FC = () => {
                                                     shopper={item} 
                                                     onStatusUpdate={handleStatusUpdate}
                                                     onUpdateShopper={handleUpdateShopper} 
+                                                    currentUser={currentUser} // PASS CURRENT USER FOR SINGLE COPY
                                                 />
                                             </td>
                                         </tr>
@@ -633,7 +664,16 @@ export const AdminDataView: React.FC = () => {
                                  {expandedRow === item.id ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                              </button>
 
-                             {expandedRow === item.id && <div className="border-t pt-3 mt-1"><ShopperExpandedDetails shopper={item} onStatusUpdate={handleStatusUpdate} onUpdateShopper={handleUpdateShopper}/></div>}
+                             {expandedRow === item.id && (
+                                 <div className="border-t pt-3 mt-1">
+                                     <ShopperExpandedDetails 
+                                         shopper={item} 
+                                         onStatusUpdate={handleStatusUpdate} 
+                                         onUpdateShopper={handleUpdateShopper}
+                                         currentUser={currentUser} // PASS CURRENT USER
+                                     />
+                                 </div>
+                             )}
                          </div>
                     ))}
                 </div>

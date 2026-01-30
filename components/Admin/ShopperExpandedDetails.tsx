@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, MapPin, Sheet, Copy, FileSpreadsheet, Calendar, Star, CheckCircle, XCircle, Clock, AlertTriangle, X, Check, Globe, FileText, Save, Snowflake, Building2, MessageSquare, TrendingUp } from 'lucide-react';
+import { User, MapPin, Sheet, Copy, FileSpreadsheet, Calendar, Star, CheckCircle, XCircle, Clock, AlertTriangle, X, Check, Globe, FileText, Save, Snowflake, Building2, MessageSquare, TrendingUp, UserCheck } from 'lucide-react';
 import { format } from 'date-fns';
 import { supabase } from '../../supabaseClient';
 import { ShopperRecord, ShiftType } from '../../types';
@@ -13,9 +13,10 @@ interface ShopperExpandedDetailsProps {
     shopper: ShopperRecord;
     onStatusUpdate?: (id: string, status: 'PENDING' | 'SHOWED_UP' | 'NO_SHOW') => void;
     onUpdateShopper?: (shopper: ShopperRecord) => void;
+    currentUser?: string; // ADDED PROP
 }
 
-export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ shopper, onStatusUpdate, onUpdateShopper }) => {
+export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ shopper, onStatusUpdate, onUpdateShopper, currentUser }) => {
     // Local state for confirmation flow
     const [pendingStatus, setPendingStatus] = useState<'PENDING' | 'SHOWED_UP' | 'NO_SHOW' | null>(null);
     
@@ -52,9 +53,25 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
   
     const handleCopyLSInflow = async () => {
         try {
-            const text = generateHRSpreadsheetRow(shopper);
+            // Logic: Check if recruiter is missing. If so, update DB with currentUser before copying.
+            let shopperToCopy = shopper;
+
+            if (!shopper.details?.recruiter && currentUser) {
+                const newDetails = { ...shopper.details, recruiter: currentUser };
+                
+                // Update DB
+                await supabase.from('shoppers').update({ details: newDetails }).eq('id', shopper.id);
+                
+                // Use updated object locally
+                shopperToCopy = { ...shopper, details: newDetails };
+                
+                // Propagate update to parent (optimistic UI update)
+                if (onUpdateShopper) onUpdateShopper(shopperToCopy);
+            }
+
+            const text = generateHRSpreadsheetRow(shopperToCopy);
             await navigator.clipboard.writeText(text);
-            alert(`Copied LS Inflow Data for ${shopper.name}!\n\nReady to paste.`);
+            alert(`Copied LS Inflow Data for ${shopperToCopy.name}!\n\nReady to paste.`);
         } catch(e: any) {
             alert("Clipboard error: " + e.message);
         }
@@ -153,6 +170,12 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
                              <strong className="text-gray-900">{shopper.details?.nationality || 'N/A'}</strong>
                         </div>
 
+                        {shopper.details?.recruiter && (
+                            <span className="col-span-2 text-xs flex items-center gap-2 py-1 text-gray-500">
+                                <UserCheck className="w-3 h-3" /> Recruiter: <strong className="text-gray-800">{shopper.details.recruiter}</strong>
+                            </span>
+                        )}
+
                         <span>Agency: <strong className={shopper.details?.isRandstad ? 'text-blue-600' : 'text-gray-900'}>{shopper.details?.isRandstad ? 'Randstad' : 'Payroll Select'}</strong></span>
                         <span>Gender: <strong>{shopper.details?.gender || 'N/D'}</strong></span>
                         
@@ -165,6 +188,18 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
                             <span className="col-span-2 font-mono text-xs bg-gray-100 px-2 py-1 rounded w-fit mt-1">
                                 PN: <strong>{shopper.details.pnNumber}</strong>
                             </span>
+                        )}
+
+                        {/* ADDRESS DISPLAY FOR RANDSTAD USERS */}
+                        {shopper.details?.isRandstad && shopper.details?.address && (
+                            <div className="col-span-2 mt-2 p-2.5 bg-blue-50/50 rounded-lg border border-blue-100 text-xs">
+                                <span className="block font-bold text-blue-700 mb-1 flex items-center gap-1 uppercase tracking-wider">
+                                    <MapPin className="w-3 h-3"/> Address (Randstad)
+                                </span>
+                                <span className="text-gray-800 font-medium leading-relaxed block select-all">
+                                    {shopper.details.address}
+                                </span>
+                            </div>
                         )}
                     </div>
                     

@@ -5,7 +5,7 @@ import { SHIFT_TIMES, formatDateKey, getShopperAllowedRange, getShopperMinDate, 
 import { Button } from './Button';
 import { CalendarView } from './CalendarView';
 import { MobileInstructionModal } from './MobileInstructionModal';
-import { User, PlayCircle, CheckCircle, ArrowRight, Layers, CalendarCheck, Globe2, UserCircle2, Flag, Briefcase, Clock, FileWarning } from 'lucide-react';
+import { User, PlayCircle, CheckCircle, ArrowRight, Layers, CalendarCheck, Globe2, UserCircle2, Flag, Briefcase, Clock, FileWarning, UserCheck } from 'lucide-react';
 import { addDays, getDay, endOfWeek, addWeeks, isBefore, format } from 'date-fns';
 import { supabase } from '../supabaseClient';
 import { ShopperAAWizard } from './ShopperAAWizard';
@@ -21,6 +21,7 @@ interface ShopperAppProps {
   savedCloudTemplate: any;
   busConfig: BusConfig;
   onExit: () => void;
+  recruiterName?: string; // NEW PROP
 }
 
 const STORAGE_KEY = 'picnic_shopper_session';
@@ -60,7 +61,8 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
   adminAvailability,
   savedCloudTemplate,
   busConfig,
-  onExit
+  onExit,
+  recruiterName
 }) => {
   // State Initialization with LocalStorage check
   const [step, setStep] = useState<ShopperStep>(() => {
@@ -85,7 +87,8 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
           details: { 
               nationality: '', // Initialize empty
               usePicnicBus: null, civilStatus: '', gender: '', clothingSize: 'M', 
-              shoeSize: '40', gloveSize: '8 (M)', isRandstad: false, address: '' 
+              shoeSize: '40', gloveSize: '8 (M)', isRandstad: false, address: '',
+              recruiter: recruiterName // Persist Recruiter Name
           } 
       }];
   });
@@ -718,7 +721,7 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
   return (
     <div className="h-[100dvh] bg-gray-50 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="bg-white px-6 py-4 shadow-sm border-b sticky top-0 z-20 flex justify-between items-center shrink-0">
+      <div className="bg-white px-6 py-4 shadow-sm border-b sticky top-0 z-20 flex justify-between items-start shrink-0">
         <div>
           <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
             <button onClick={onExit} className="hover:text-red-500 transition-colors outline-none cursor-default active:scale-95" title="Exit to Setup">
@@ -727,8 +730,15 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
             {shopperName}
           </h2>
           
+          {recruiterName && (
+              <div className="flex items-center gap-1.5 text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-1 ml-1">
+                  <UserCheck className="w-3 h-3 text-green-500" /> 
+                  Session by: {recruiterName}
+              </div>
+          )}
+          
           {step >= 1 && (
-              <div className="flex items-center gap-2 text-xs font-bold mt-1 animate-in slide-in-from-top-1 fade-in">
+              <div className="flex items-center gap-2 text-xs font-bold mt-2 animate-in slide-in-from-top-1 fade-in">
                  <button 
                     onClick={() => handleStepClick(1)} 
                     disabled={step <= 1}
@@ -755,14 +765,14 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
               </div>
           )}
           {(step === 0 || step === ShopperStep.WORK_PERMIT_CHECK) && (
-              <div className="flex items-center gap-2 text-xs font-bold mt-1 text-gray-400">
+              <div className="flex items-center gap-2 text-xs font-bold mt-1 text-gray-400 ml-1">
                   Setup Profile
               </div>
           )}
         </div>
         
         {step >= 1 && (
-            <div className="flex gap-3">
+            <div className="flex gap-3 pt-1">
                 <div className="hidden md:flex gap-4 text-xs font-medium text-gray-500 items-center border-l pl-4">
                      <span>Selected AA: <strong className="text-red-600">{aaSelections.length}</strong></span>
                      <span>Selected Standard: <strong className="text-green-600">{stdCount}</strong></span>
