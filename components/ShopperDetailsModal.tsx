@@ -59,12 +59,12 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
               return;
           }
           if (addr.length < 8) {
-              setError("Address seems too short. Please include Street, Number, Postal Code and City.");
+              setError("Address is too short. Please write: Street + Number + City.");
               return;
           }
-          // Basic check for number in address
+          // Basic check for number in address (House number)
           if (!/\d/.test(addr)) {
-              setError("Address must include a House Number.");
+              setError("Address must include a House Number (e.g. 42).");
               return;
           }
       }
@@ -74,6 +74,9 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
 
   const GLOVE_SIZES = ['6 (XS)', '7 (S)', '8 (M)', '9 (L)', '10 (XL)', '11 (XXL)', '12 (3XL)', '12 (4XL)'];
   const CLOTHING_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL', '6XL'];
+
+  // Check if the current error is related to the address field
+  const isAddressError = error && (error.toLowerCase().includes('address') || error.toLowerCase().includes('house number'));
 
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
@@ -93,18 +96,11 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
                   <Bus className="w-4 h-4" /> Transport
                </label>
                
-               {error && (
+               {error && !isAddressError && (
                    <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center justify-between gap-2 animate-pulse">
                        <div className="flex items-center gap-2 text-sm text-red-600 font-medium">
                            <AlertCircle className="w-4 h-4 shrink-0" /> <span>{error}</span>
                        </div>
-                       <button 
-                           onClick={handleDetailsSubmit}
-                           className="text-[10px] text-red-300 hover:text-red-500 underline whitespace-nowrap shrink-0"
-                           title="Force save without validation"
-                       >
-                           Skip check
-                       </button>
                    </div>
                )}
 
@@ -240,31 +236,51 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
                 
                 {tempDetails.isRandstad && (
                     <div className="space-y-2 animate-in slide-in-from-top-2">
-                        <div className="p-4 bg-orange-50/50 rounded-xl border border-orange-100 relative group focus-within:ring-2 focus-within:ring-orange-200">
-                            <label className="text-xs font-bold text-orange-700 uppercase tracking-wider mb-2 block">Home Address</label>
+                        <div className={`p-4 rounded-xl border relative group transition-all duration-300 ${
+                            isAddressError 
+                            ? 'bg-red-50 border-red-300 ring-2 ring-red-100' 
+                            : 'bg-orange-50/50 border-orange-100 focus-within:ring-2 focus-within:ring-orange-200'
+                        }`}>
+                            <label className={`text-xs font-bold uppercase tracking-wider mb-2 block ${isAddressError ? 'text-red-600' : 'text-orange-700'}`}>
+                                Home Address {isAddressError && '*'}
+                            </label>
                             
                             <div className="relative">
                                 <input 
                                     value={tempDetails.address}
                                     onChange={(e) => {
                                         setTempDetails(prev => ({ ...prev, address: e.target.value }));
-                                        if (error) setError(null);
+                                        if (isAddressError) setError(null);
                                     }}
                                     placeholder="Street + House Nr, Postal Code + City"
-                                    className="w-full p-3 bg-white border-2 border-orange-100 rounded-xl outline-none focus:border-orange-500 transition-all text-sm font-medium"
+                                    className={`w-full p-3 rounded-xl outline-none transition-all text-sm font-medium border-2 ${
+                                        isAddressError 
+                                        ? 'bg-white border-red-300 text-red-900 placeholder:text-red-300' 
+                                        : 'bg-white border-orange-100 focus:border-orange-500'
+                                    }`}
                                 />
                             </div>
 
-                            <div className="flex gap-2 mt-3 text-[11px] text-orange-700 bg-orange-100/50 p-2 rounded-lg items-start">
-                                <MapPin className="w-4 h-4 shrink-0 mt-0.5" />
-                                <p className="leading-snug">
-                                    <strong>Important:</strong> Type your full address exactly as it appears on official documents.
-                                    <br/>
-                                    <span className="inline-block mt-1 font-mono text-xs bg-white px-2 py-0.5 rounded border border-orange-200 text-orange-800 shadow-sm">
-                                        Street Name 12, 1234AB City
-                                    </span>
-                                </p>
-                            </div>
+                            {/* Specific Error Message Area */}
+                            {isAddressError && (
+                                <div className="flex items-start gap-2 mt-2 text-xs font-bold text-red-600 animate-in slide-in-from-top-1">
+                                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                                    <span>{error}</span>
+                                </div>
+                            )}
+
+                            {!isAddressError && (
+                                <div className="flex gap-2 mt-3 text-[11px] text-orange-700 bg-orange-100/50 p-2 rounded-lg items-start">
+                                    <MapPin className="w-4 h-4 shrink-0 mt-0.5" />
+                                    <p className="leading-snug">
+                                        <strong>Important:</strong> Type your full address exactly as it appears on official documents.
+                                        <br/>
+                                        <span className="inline-block mt-1 font-mono text-xs bg-white px-2 py-0.5 rounded border border-orange-200 text-orange-800 shadow-sm">
+                                            Street Name 12, 1234AB City
+                                        </span>
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}

@@ -184,6 +184,15 @@ export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onC
     }
   };
 
+  // Helper to display day name for new shift
+  let newShiftDayName = '';
+  if (newShiftDate) {
+      const [y, m, d] = newShiftDate.split('-').map(Number);
+      if (y && m && d) {
+          newShiftDayName = format(new Date(y, m - 1, d), 'EEEE');
+      }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-0 md:p-4 animate-in fade-in">
         <div className="bg-white md:rounded-2xl rounded-t-2xl shadow-2xl w-full max-w-5xl h-[95vh] md:max-h-[90vh] flex flex-col overflow-hidden">
@@ -429,7 +438,7 @@ export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onC
                                         {/* Date Field */}
                                         <div className="md:col-span-3 mb-2 md:mb-0 relative">
                                             {dayName && (
-                                                <div className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider mb-0.5 md:hidden">
+                                                <div className="text-[10px] font-extrabold text-gray-400 uppercase tracking-wider mb-0.5 block">
                                                     {dayName}
                                                 </div>
                                             )}
@@ -490,15 +499,28 @@ export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onC
                         <div className="pt-4 border-t bg-gray-50/50 p-4 rounded-xl border border-dashed border-gray-200">
                             <h5 className="text-xs font-bold uppercase text-gray-400 mb-2 flex items-center gap-2"><Plus className="w-3 h-3" /> Add New Shift</h5>
                             <div className="flex flex-col md:flex-row gap-2">
-                                <input type="date" value={newShiftDate} onChange={(e) => setNewShiftDate(e.target.value)} className="flex-1 p-2 rounded-lg border text-sm outline-none focus:ring-2 focus:ring-green-500 bg-white" />
-                                <select value={newShiftTime} onChange={(e) => setNewShiftTime(e.target.value as ShiftTime)} className="flex-1 p-2 rounded-lg border text-sm outline-none focus:ring-2 focus:ring-green-500 bg-white">
-                                    {SHIFT_TIMES.map(t => (<option key={t} value={t}>{t.split('(')[0]}</option>))}
-                                </select>
-                                <select value={newShiftType} onChange={(e) => setNewShiftType(e.target.value as ShiftType)} className="w-full md:w-24 p-2 rounded-lg border text-sm outline-none focus:ring-2 focus:ring-green-500 bg-white">
-                                    <option value={ShiftType.STANDARD}>Normal</option>
-                                    <option value={ShiftType.AA}>AA</option>
-                                </select>
-                                <Button onClick={handleAddShift} disabled={!newShiftDate} variant="secondary" className="px-4 py-2 text-xs h-10 md:h-auto">Add</Button>
+                                <div className="flex-1 flex flex-col">
+                                    {newShiftDayName && (
+                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 ml-1">
+                                            {newShiftDayName}
+                                        </span>
+                                    )}
+                                    <input type="date" value={newShiftDate} onChange={(e) => setNewShiftDate(e.target.value)} className="w-full p-2 rounded-lg border text-sm outline-none focus:ring-2 focus:ring-green-500 bg-white" />
+                                </div>
+                                <div className="flex-1 flex flex-col justify-end">
+                                    <select value={newShiftTime} onChange={(e) => setNewShiftTime(e.target.value as ShiftTime)} className="w-full p-2 rounded-lg border text-sm outline-none focus:ring-2 focus:ring-green-500 bg-white h-[38px]">
+                                        {SHIFT_TIMES.map(t => (<option key={t} value={t}>{t.split('(')[0]}</option>))}
+                                    </select>
+                                </div>
+                                <div className="w-full md:w-24 flex flex-col justify-end">
+                                    <select value={newShiftType} onChange={(e) => setNewShiftType(e.target.value as ShiftType)} className="w-full p-2 rounded-lg border text-sm outline-none focus:ring-2 focus:ring-green-500 bg-white h-[38px]">
+                                        <option value={ShiftType.STANDARD}>Normal</option>
+                                        <option value={ShiftType.AA}>AA</option>
+                                    </select>
+                                </div>
+                                <div className="flex flex-col justify-end">
+                                    <Button onClick={handleAddShift} disabled={!newShiftDate} variant="secondary" className="px-4 py-2 text-xs h-[38px]">Add</Button>
+                                </div>
                             </div>
                         </div>
                     </div>
