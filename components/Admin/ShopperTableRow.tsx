@@ -41,7 +41,8 @@ export const ShopperTableRow: React.FC<ShopperTableRowProps> = ({
     
     // Helper to visualize AA Pattern in the table
     const renderAAPatternCell = (shifts: any[]) => {
-        const aaShifts = shifts.filter(s => s.type === ShiftType.AA);
+        // Robust check for AA type
+        const aaShifts = shifts.filter(s => s.type === ShiftType.AA || s.type === 'AA');
         if (aaShifts.length === 0) return <span className="text-gray-300">-</span>;
         
         // Use a Map to ensure unique Weekdays. 

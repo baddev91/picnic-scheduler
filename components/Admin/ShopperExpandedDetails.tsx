@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, MapPin, Sheet, Copy, FileSpreadsheet, Calendar, Star, CheckCircle, XCircle, Clock, AlertTriangle, X, Check, Globe, FileText, Save, Snowflake, Building2, MessageSquare, TrendingUp, UserCheck } from 'lucide-react';
+import { User, MapPin, Sheet, Copy, FileSpreadsheet, Calendar, Star, CheckCircle, CheckCircle2, XCircle, Clock, AlertTriangle, X, Check, Globe, FileText, Save, Snowflake, Building2, MessageSquare, TrendingUp, UserCheck } from 'lucide-react';
 import { format } from 'date-fns';
 import { supabase } from '../../supabaseClient';
 import { ShopperRecord, ShiftType } from '../../types';
@@ -332,10 +332,13 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
                                         // Check if this is the First Working Day
                                         const isFWD = shopper.details?.firstWorkingDay === shift.date;
                                         
+                                        // ROBUST CHECK FOR AA SHIFT
+                                        const isAA = shift.type === ShiftType.AA || shift.type === 'AA';
+
                                         let styleClass = '';
                                         if (isFWD) {
                                             styleClass = 'bg-yellow-50 border-yellow-300 text-yellow-800 ring-1 ring-yellow-200';
-                                        } else if (shift.type === ShiftType.AA) {
+                                        } else if (isAA) {
                                             styleClass = 'bg-red-50 border-red-100 text-red-700';
                                         } else {
                                             styleClass = 'bg-green-50 border-green-100 text-green-700';

@@ -101,8 +101,8 @@ const getHRRowValues = (shopper: ShopperRecord): string[] => {
       return 'unknown';
   };
 
-  // 1. Process AA Shifts
-  const aaShifts = (shopper.shifts || []).filter(s => s.type === ShiftType.AA);
+  // 1. Process AA Shifts (Robust check for 'AA' or Enum)
+  const aaShifts = (shopper.shifts || []).filter(s => s.type === ShiftType.AA || s.type === 'AA');
 
   // Identify distinct Weekday vs Weekend pattern
   // Logic: Only take the first found Weekday and first found Weekend

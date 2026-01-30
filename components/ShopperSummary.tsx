@@ -122,7 +122,8 @@ export const ShopperSummary: React.FC<ShopperSummaryProps> = ({
                           {shifts.map((s, i) => {
                               const dateObj = new Date(s.date);
                               const isFWD = shopper.details?.firstWorkingDay === s.date;
-                              const isAA = s.type === ShiftType.AA;
+                              // Robust check
+                              const isAA = s.type === ShiftType.AA || s.type === 'AA';
                               const { name, hours } = getShiftDetails(s.time);
                               
                               // Logic for visual style

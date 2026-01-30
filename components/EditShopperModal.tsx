@@ -405,11 +405,13 @@ export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onC
 
                                   // Dynamic Check for First Working Day (using potentially updated details state)
                                   const isFWD = details.firstWorkingDay === shift.date;
+                                  // Robust AA Check
+                                  const isAA = shift.type === ShiftType.AA || shift.type === 'AA';
 
                                   let rowBg = 'bg-white border-gray-100';
                                   if (isFWD) {
                                       rowBg = 'bg-yellow-50 border-yellow-300 ring-1 ring-yellow-200 shadow-sm';
-                                  } else if (shift.type === ShiftType.AA) {
+                                  } else if (isAA) {
                                       rowBg = 'bg-red-50/30 border-red-100';
                                   }
                                   
@@ -463,7 +465,7 @@ export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onC
                                             <span className="text-[10px] font-bold text-gray-400 uppercase md:hidden">Type</span>
                                             <div className="flex bg-white rounded-lg border shadow-sm p-1">
                                                 <button onClick={() => handleLocalShiftUpdate(shift.id, 'type', ShiftType.STANDARD)} className={`px-4 md:px-3 py-1.5 md:py-1 rounded text-xs md:text-[10px] font-bold transition-all ${shift.type === ShiftType.STANDARD ? 'bg-green-100 text-green-700 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>Normal</button>
-                                                <button onClick={() => handleLocalShiftUpdate(shift.id, 'type', ShiftType.AA)} className={`px-4 md:px-3 py-1.5 md:py-1 rounded text-xs md:text-[10px] font-bold transition-all ${shift.type === ShiftType.AA ? 'bg-red-100 text-red-700 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>AA</button>
+                                                <button onClick={() => handleLocalShiftUpdate(shift.id, 'type', ShiftType.AA)} className={`px-4 md:px-3 py-1.5 md:py-1 rounded text-xs md:text-[10px] font-bold transition-all ${isAA ? 'bg-red-100 text-red-700 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>AA</button>
                                             </div>
                                         </div>
                                         
