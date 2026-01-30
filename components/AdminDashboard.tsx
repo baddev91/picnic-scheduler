@@ -1,9 +1,10 @@
 
 import React, { useState } from 'react';
-import { Settings2, RefreshCw, Save, Share2, CalendarRange, Table, Bus, ArrowRight, ShieldCheck, UserCog, Info, AlertTriangle, Clock, CalendarCheck, Zap, ChevronDown, ChevronUp, History, Snowflake, AlertCircle, ShieldAlert, Lock, MessageSquare, Hammer, Construction } from 'lucide-react';
+import { Settings2, RefreshCw, Save, Share2, CalendarRange, Table, Bus, ArrowRight, ShieldCheck, UserCog, Info, AlertTriangle, Clock, CalendarCheck, Zap, ChevronDown, ChevronUp, History, Snowflake, AlertCircle, ShieldAlert, Lock, MessageSquare, Hammer, Construction, Eye } from 'lucide-react';
 import { Button } from './Button';
 import { AdminWizardStep, WeeklyTemplate } from '../types';
 import { MIN_DAYS_TO_START } from '../constants';
+import { AvailabilityCheatSheet } from './AvailabilityCheatSheet';
 
 interface AdminDashboardProps {
   isShopperAuthEnabled: boolean;
@@ -23,7 +24,7 @@ interface AdminDashboardProps {
   frozenPin: string;
   updateFrozenPin: (pin: string) => void;
   onGoToFrozen: () => void;
-  onGoToTalks: () => void; // NEW PROP
+  onGoToTalks: () => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -50,6 +51,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [newFrozenPin, setNewFrozenPin] = useState(frozenPin);
   const [showRules, setShowRules] = useState(false);
   const [pinError, setPinError] = useState<string | null>(null);
+  
+  // Cheat Sheet Modal State
+  const [showCheatSheet, setShowCheatSheet] = useState(false);
 
   const handleEditPattern = () => {
     if (savedCloudTemplate) {
@@ -162,11 +166,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <div className="grid md:grid-cols-3 gap-4">
                   
                   {/* 1. WEEKLY PATTERN (Smaller now) */}
-                  <button 
-                    onClick={handleEditPattern}
-                    className="flex flex-col justify-between h-full bg-white border border-gray-200 p-5 rounded-2xl text-left hover:border-red-500 hover:shadow-lg transition-all group relative overflow-hidden"
-                  >
-                      <div className="relative z-10">
+                  <div className="flex flex-col h-full bg-white border border-gray-200 rounded-2xl overflow-hidden transition-all hover:border-red-500 hover:shadow-lg group">
+                      <div className="p-5 flex-1 relative z-10 cursor-pointer" onClick={handleEditPattern}>
                           <div className="flex items-center gap-3 mb-3">
                               <div className="p-2 bg-red-50 text-red-600 rounded-lg group-hover:bg-red-600 group-hover:text-white transition-colors">
                                   <CalendarRange className="w-5 h-5" />
@@ -175,26 +176,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           </div>
                           <p className="text-xs text-gray-500 font-medium">Configure base availability rules.</p>
                       </div>
-                  </button>
+                      {/* ACTION BUTTONS */}
+                      <div className="px-5 pb-4">
+                          <button 
+                              onClick={(e) => { e.stopPropagation(); setShowCheatSheet(true); }}
+                              className="w-full flex items-center justify-center gap-2 py-2 bg-gray-50 hover:bg-red-50 text-gray-600 hover:text-red-600 rounded-xl text-xs font-bold transition-colors border border-gray-200 hover:border-red-200"
+                          >
+                              <Eye className="w-3.5 h-3.5" /> Candidate View
+                          </button>
+                      </div>
+                  </div>
 
                   {/* 2. SHOPPER TALKS (WIP Style) */}
                   <button 
                     onClick={onGoToTalks}
-                    className="flex flex-col justify-between h-full bg-gray-50 border border-gray-200 border-dashed p-5 rounded-2xl text-left hover:bg-white hover:border-orange-300 hover:border-solid hover:shadow-lg transition-all group relative"
+                    className="flex flex-col justify-between h-full bg-white border border-gray-200 p-5 rounded-2xl text-left hover:bg-white hover:border-orange-300 hover:border-solid hover:shadow-lg transition-all group relative"
                   >
-                      <div className="absolute top-3 right-3 animate-pulse">
-                          <span className="bg-orange-100 text-orange-700 text-[9px] font-black uppercase px-2 py-1 rounded-md flex items-center gap-1 border border-orange-200">
-                              <Construction className="w-3 h-3" /> Under Construction
-                          </span>
-                      </div>
                       <div>
                           <div className="flex items-center gap-3 mb-3">
-                              <div className="p-2 bg-gray-200 text-gray-500 rounded-lg group-hover:bg-orange-100 group-hover:text-orange-600 transition-colors">
+                              <div className="p-2 bg-orange-50 text-orange-600 rounded-lg group-hover:bg-orange-600 group-hover:text-white transition-colors">
                                   <MessageSquare className="w-5 h-5" />
                               </div>
-                              <h3 className="font-bold text-gray-600 group-hover:text-orange-800 transition-colors">Shopper Talks</h3>
+                              <h3 className="font-bold text-gray-900 group-hover:text-orange-800 transition-colors">Shopper Talks</h3>
                           </div>
-                          <p className="text-xs text-gray-400 font-medium group-hover:text-orange-600/70">Logs, Check-ins & Performance (Beta).</p>
+                          <p className="text-xs text-gray-500 font-medium">Logs, Check-ins & Performance.</p>
                       </div>
                   </button>
 
@@ -381,6 +386,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
               </div>
           </div>
+
+          <AvailabilityCheatSheet 
+              isOpen={showCheatSheet} 
+              onClose={() => setShowCheatSheet(false)} 
+              weeklyTemplate={savedCloudTemplate || tempTemplate} 
+          />
       </div>
   );
 };
