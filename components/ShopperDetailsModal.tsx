@@ -21,6 +21,7 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
   setTempDetails,
   handleDetailsSubmit
 }) => {
+  // 1. ALWAYS CALL HOOKS AT THE TOP LEVEL
   const [error, setError] = useState<string | null>(null);
   
   // Address Verification State
@@ -28,21 +29,10 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
   const [suggestedAddress, setSuggestedAddress] = useState<string | null>(null);
   const [mapsLink, setMapsLink] = useState<string | null>(null);
 
-  // CRITICAL FIX: Ensure tempDetails exists before rendering to prevent crash
-  if (!showDetailsModal || !tempDetails) return null;
-
-  const isPermitWaiting = tempDetails.workPermitStatus === 'WAITING';
-
-  // Helper to calculate glove size live
-  const updateClothing = (size: string) => {
-      setTempDetails(prev => ({
-          ...prev,
-          clothingSize: size,
-          gloveSize: calculateGloveSize(size)
-      }));
-  };
-
   const verifyAddressWithGenAI = async (addressToVerify?: string) => {
+      // Guard clause inside function to prevent execution if details missing
+      if (!tempDetails) return;
+
       const inputAddr = (addressToVerify || tempDetails.address || '').trim();
       if (!inputAddr || inputAddr.length < 5) return;
       
@@ -52,7 +42,6 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
       setError(null);
 
       try {
-          // SAFEGUARD: Ensure process is defined to avoid crash in environments without polyfills
           const apiKey = typeof process !== 'undefined' ? process.env.API_KEY : '';
           
           if (!apiKey) {
@@ -76,7 +65,6 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
 
           const resultText = response.text?.trim();
           
-          // Extract Maps Link if available
           const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
           let uri = null;
           if (chunks) {
@@ -87,11 +75,9 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
           }
 
           if (resultText && resultText.length > 5) {
-              // Normalize to compare
               const normalizedInput = inputAddr.toLowerCase().replace(/\s+/g, '');
               const normalizedResult = resultText.toLowerCase().replace(/\s+/g, '');
 
-              // If suggestion is different (meaning better formatted or corrected), show it
               if (normalizedInput !== normalizedResult) {
                   setSuggestedAddress(resultText);
                   setMapsLink(uri);
@@ -104,15 +90,30 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
       }
   };
 
-  // Debounced Auto-Verification
+  // 2. EFFECT HOOK (Must strictly follow useState)
+  // We use optional chaining in dependency array to avoid crashes if tempDetails is null
   useEffect(() => {
-      if (tempDetails.address && tempDetails.address.length > 8 && tempDetails.isRandstad) {
+      if (showDetailsModal && tempDetails?.address && tempDetails.address.length > 8 && tempDetails.isRandstad) {
           const timer = setTimeout(() => {
               verifyAddressWithGenAI(tempDetails.address);
-          }, 1000); // Wait 1 second after typing stops
+          }, 1000); 
           return () => clearTimeout(timer);
       }
-  }, [tempDetails.address]);
+  }, [tempDetails?.address, tempDetails?.isRandstad, showDetailsModal]);
+
+  // 3. NOW WE CAN SAFELY RETURN NULL IF NOT SHOWING
+  if (!showDetailsModal || !tempDetails) return null;
+
+  // 4. Component Logic (Safe to access tempDetails here)
+  const isPermitWaiting = tempDetails.workPermitStatus === 'WAITING';
+
+  const updateClothing = (size: string) => {
+      setTempDetails(prev => ({
+          ...prev,
+          clothingSize: size,
+          gloveSize: calculateGloveSize(size)
+      }));
+  };
 
   const applySuggestion = () => {
       if (suggestedAddress) {
@@ -125,36 +126,28 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
   const validateAndSubmit = () => {
       setError(null);
       
-      // 1. Bus Check
       if (tempDetails.usePicnicBus === null) {
           setError("Please select how you will travel to work.");
           return;
       }
       
-      // 2. Civil Status Check
       if (!tempDetails.civilStatus) {
           setError("Please select your Civil Status.");
           return;
       }
       
-      // 3. Gender Check
       if (!tempDetails.gender) {
           setError("Please select your Gender.");
           return;
       }
 
-      // 4. Address Validation (Randstad Only)
       if (tempDetails.isRandstad) {
           const addr = (tempDetails.address || '').trim();
-          
           if (!addr) {
               setError("Address is required for Randstad candidates.");
               return;
           }
-
-          const isLongEnough = addr.length >= 3;
-
-          if (!isLongEnough) {
+          if (addr.length < 3) {
               setError("Address is too short.");
               return;
           }
@@ -189,7 +182,6 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
                        <div className="flex items-center gap-2 text-sm text-red-600 font-medium">
                            <AlertCircle className="w-4 h-4 shrink-0" /> <span>{error}</span>
                        </div>
-                       {/* Subtle Bypass Button */}
                        <button 
                            onClick={handleDetailsSubmit}
                            className="text-[10px] text-red-300 hover:text-red-500 underline whitespace-nowrap shrink-0"
