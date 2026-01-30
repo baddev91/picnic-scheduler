@@ -1,10 +1,9 @@
 
-import React, { useState, useEffect } from 'react';
-import { X, Bus, Shirt, Heart, AlertCircle, User, ArrowRight, Lock, MapPin, Search, Sparkles, ExternalLink, Check } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Bus, Shirt, Heart, AlertCircle, ArrowRight, Lock, Search, ExternalLink, MapPin } from 'lucide-react';
 import { Button } from './Button';
 import { ShopperDetails } from '../types';
 import { calculateGloveSize } from '../utils/validation';
-import { GoogleGenAI } from "@google/genai";
 
 interface ShopperDetailsModalProps {
   showDetailsModal: boolean;
@@ -21,90 +20,10 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
   setTempDetails,
   handleDetailsSubmit
 }) => {
-  // 1. ALWAYS CALL HOOKS AT THE TOP LEVEL
   const [error, setError] = useState<string | null>(null);
-  
-  // Address Verification State
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [suggestedAddress, setSuggestedAddress] = useState<string | null>(null);
-  const [mapsLink, setMapsLink] = useState<string | null>(null);
 
-  const verifyAddressWithGenAI = async (addressToVerify?: string) => {
-      // Guard clause inside function to prevent execution if details missing
-      if (!tempDetails) return;
-
-      const inputAddr = (addressToVerify || tempDetails.address || '').trim();
-      if (!inputAddr || inputAddr.length < 5) return;
-      
-      setIsVerifying(true);
-      setSuggestedAddress(null);
-      setMapsLink(null);
-      setError(null);
-
-      try {
-          const apiKey = typeof process !== 'undefined' ? process.env.API_KEY : '';
-          
-          if (!apiKey) {
-              console.warn("API Key missing, skipping verification");
-              setIsVerifying(false);
-              return;
-          }
-
-          const ai = new GoogleGenAI({ apiKey });
-          const response = await ai.models.generateContent({
-              model: 'gemini-2.5-flash',
-              contents: `Verify and format this address in the Netherlands: "${inputAddr}". 
-                         1. If the address is valid, return the official formatted string (Street + Number + Postal Code + City).
-                         2. If the user input is partial but likely matches a real place, suggest the full address with Postal Code.
-                         3. If it's completely invalid, return nothing.
-                         Return ONLY the address string. No other text.`,
-              config: {
-                  tools: [{ googleMaps: {} }],
-              },
-          });
-
-          const resultText = response.text?.trim();
-          
-          const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-          let uri = null;
-          if (chunks) {
-              const mapChunk = chunks.find((c: any) => c.web?.uri || c.maps?.uri); 
-              if (mapChunk) {
-                  uri = mapChunk.maps?.uri || mapChunk.web?.uri;
-              }
-          }
-
-          if (resultText && resultText.length > 5) {
-              const normalizedInput = inputAddr.toLowerCase().replace(/\s+/g, '');
-              const normalizedResult = resultText.toLowerCase().replace(/\s+/g, '');
-
-              if (normalizedInput !== normalizedResult) {
-                  setSuggestedAddress(resultText);
-                  setMapsLink(uri);
-              }
-          }
-      } catch (e) {
-          console.error("Address verification failed", e);
-      } finally {
-          setIsVerifying(false);
-      }
-  };
-
-  // 2. EFFECT HOOK (Must strictly follow useState)
-  // Lowered threshold to 5 chars and debounce to 800ms for better responsiveness
-  useEffect(() => {
-      if (showDetailsModal && tempDetails?.address && tempDetails.address.length > 5 && tempDetails.isRandstad) {
-          const timer = setTimeout(() => {
-              verifyAddressWithGenAI(tempDetails.address);
-          }, 800); 
-          return () => clearTimeout(timer);
-      }
-  }, [tempDetails?.address, tempDetails?.isRandstad, showDetailsModal]);
-
-  // 3. NOW WE CAN SAFELY RETURN NULL IF NOT SHOWING
   if (!showDetailsModal || !tempDetails) return null;
 
-  // 4. Component Logic (Safe to access tempDetails here)
   const isPermitWaiting = tempDetails.workPermitStatus === 'WAITING';
 
   const updateClothing = (size: string) => {
@@ -113,14 +32,6 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
           clothingSize: size,
           gloveSize: calculateGloveSize(size)
       }));
-  };
-
-  const applySuggestion = () => {
-      if (suggestedAddress) {
-          setTempDetails(prev => ({ ...prev, address: suggestedAddress }));
-          setSuggestedAddress(null);
-          setMapsLink(null);
-      }
   };
 
   const validateAndSubmit = () => {
@@ -147,8 +58,13 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
               setError("Address is required for Randstad candidates.");
               return;
           }
-          if (addr.length < 3) {
-              setError("Address is too short.");
+          if (addr.length < 8) {
+              setError("Address seems too short. Please include Street, Number, Postal Code and City.");
+              return;
+          }
+          // Basic check for number in address
+          if (!/\d/.test(addr)) {
+              setError("Address must include a House Number.");
               return;
           }
       }
@@ -332,63 +248,24 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
                                     value={tempDetails.address}
                                     onChange={(e) => {
                                         setTempDetails(prev => ({ ...prev, address: e.target.value }));
-                                        setSuggestedAddress(null); // Reset suggestion on type
                                         if (error) setError(null);
                                     }}
-                                    onBlur={() => verifyAddressWithGenAI()} // Verify on blur
-                                    onKeyDown={(e) => e.key === 'Enter' && verifyAddressWithGenAI()}
-                                    placeholder="Street + Number + Postal Code + City"
-                                    className="w-full p-3 pr-20 bg-white border-2 border-orange-100 rounded-xl outline-none focus:border-orange-500 transition-all text-sm font-medium"
+                                    placeholder="Street + House Nr, Postal Code + City"
+                                    className="w-full p-3 bg-white border-2 border-orange-100 rounded-xl outline-none focus:border-orange-500 transition-all text-sm font-medium"
                                 />
-                                
-                                {/* Verify Button inside input */}
-                                <button 
-                                    onClick={() => verifyAddressWithGenAI()}
-                                    disabled={isVerifying || !tempDetails.address}
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-orange-100 text-orange-700 hover:bg-orange-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed group/btn"
-                                    title="Check Address with Google Maps"
-                                >
-                                    {isVerifying ? <Sparkles className="w-4 h-4 animate-spin" /> : (
-                                        <div className="flex items-center gap-1">
-                                            <Search className="w-4 h-4" />
-                                            <span className="text-[10px] font-bold uppercase hidden group-hover/btn:inline">Check</span>
-                                        </div>
-                                    )}
-                                </button>
                             </div>
 
-                            <p className="text-[10px] text-orange-600 mt-2 flex items-start gap-1">
-                                <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
-                                Please include your Street, <strong>House Number</strong>, Postal Code and City.
-                            </p>
+                            <div className="flex gap-2 mt-3 text-[11px] text-orange-700 bg-orange-100/50 p-2 rounded-lg items-start">
+                                <MapPin className="w-4 h-4 shrink-0 mt-0.5" />
+                                <p className="leading-snug">
+                                    <strong>Important:</strong> Type your full address exactly as it appears on official documents.
+                                    <br/>
+                                    <span className="inline-block mt-1 font-mono text-xs bg-white px-2 py-0.5 rounded border border-orange-200 text-orange-800 shadow-sm">
+                                        Street Name 12, 1234AB City
+                                    </span>
+                                </p>
+                            </div>
                         </div>
-
-                        {/* Suggestion Box */}
-                        {suggestedAddress && (
-                            <div className="bg-white border border-green-200 rounded-xl p-3 shadow-md animate-in zoom-in-95 flex flex-col gap-2 ring-2 ring-green-100">
-                                <div className="flex items-start justify-between">
-                                    <div className="flex items-center gap-2 text-green-700 font-bold text-xs uppercase tracking-wider">
-                                        <Sparkles className="w-3 h-3" /> Did you mean?
-                                    </div>
-                                    {mapsLink && (
-                                        <a href={mapsLink} target="_blank" rel="noreferrer" className="text-[10px] text-blue-500 hover:underline flex items-center gap-1">
-                                            View Map <ExternalLink className="w-3 h-3" />
-                                        </a>
-                                    )}
-                                </div>
-                                
-                                <div className="flex gap-3 items-center">
-                                    <button 
-                                        onClick={applySuggestion}
-                                        className="flex-1 bg-green-50 hover:bg-green-100 p-2 rounded-lg text-sm font-medium text-green-900 border border-green-200 text-left transition-colors flex items-center justify-between group/suggestion"
-                                    >
-                                        <span>{suggestedAddress}</span>
-                                        <span className="bg-green-600 text-white text-[10px] px-2 py-1 rounded font-bold group-hover/suggestion:bg-green-700">USE THIS</span>
-                                    </button>
-                                </div>
-                                <p className="text-[10px] text-gray-400">Google Maps Verified Address</p>
-                            </div>
-                        )}
                     </div>
                 )}
             </div>
