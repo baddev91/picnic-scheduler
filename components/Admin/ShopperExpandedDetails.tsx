@@ -153,7 +153,7 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
                              <strong className="text-gray-900">{shopper.details?.nationality || 'N/A'}</strong>
                         </div>
 
-                        <span>Agency: <strong className={shopper.details?.isRandstad ? 'text-blue-600' : 'text-gray-900'}>{shopper.details?.isRandstad ? 'Randstad' : 'Picnic'}</strong></span>
+                        <span>Agency: <strong className={shopper.details?.isRandstad ? 'text-blue-600' : 'text-gray-900'}>{shopper.details?.isRandstad ? 'Randstad' : 'Payroll Select'}</strong></span>
                         <span>Gender: <strong>{shopper.details?.gender || 'N/D'}</strong></span>
                         
                         <span>Clothing: <strong>{shopper.details?.clothingSize}</strong></span>

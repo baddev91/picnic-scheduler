@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { CalendarRange, CheckCircle2, Circle, Lock, AlertCircle, Clock } from 'lucide-react';
+import { CalendarRange, CheckCircle2, Circle, Lock, AlertCircle, Clock, ArrowRight } from 'lucide-react';
 import { Button } from './Button';
 import { ShiftTime, ShiftType, WeeklyTemplate } from '../types';
 import { SHIFT_TIMES } from '../constants';
@@ -295,13 +295,17 @@ export const ShopperAAWizard: React.FC<ShopperAAWizardProps> = ({
                   <Button 
                       onClick={handleAAWizardSubmit}
                       disabled={completedCount !== 2}
-                      className={`w-full md:w-auto md:min-w-[320px] py-4 text-lg shadow-xl hover:-translate-y-1 transition-all duration-300 font-bold ${
-                        completedCount === 2
-                        ? 'shadow-red-200 hover:shadow-red-300' 
-                        : 'opacity-50 cursor-not-allowed'
-                      }`}
+                      className={`
+                        w-full md:w-auto md:min-w-[320px] py-4 text-lg font-black shadow-xl hover:-translate-y-1 transition-all duration-300 flex items-center justify-center gap-3
+                        ${completedCount === 2
+                            ? 'bg-red-600 hover:bg-red-700 text-white shadow-red-200 hover:shadow-red-300' 
+                            : 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-50 shadow-none'
+                        }
+                      `}
                   >
-                      Confirm AA Pattern
+                      {completedCount === 2 ? <Lock className="w-5 h-5" /> : null}
+                      Lock Weekly Pattern
+                      {completedCount === 2 ? <ArrowRight className="w-5 h-5" /> : null}
                   </Button>
               </div>
           </div>

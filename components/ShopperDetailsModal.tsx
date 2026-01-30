@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { X, Bus, Shirt, Heart, AlertCircle, User } from 'lucide-react';
+import { X, Bus, Shirt, Heart, AlertCircle, User, ArrowRight } from 'lucide-react';
 import { Button } from './Button';
 import { ShopperDetails } from '../types';
 import { calculateGloveSize } from '../utils/validation';
@@ -256,8 +256,8 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
          </div>
 
          <div className="p-4 border-t bg-gray-50">
-            <Button onClick={validateAndSubmit} fullWidth>
-               Save Profile
+            <Button onClick={validateAndSubmit} fullWidth className="py-4 text-base font-bold flex items-center justify-center gap-2">
+               Save & Preview <ArrowRight className="w-4 h-4" />
             </Button>
          </div>
       </div>

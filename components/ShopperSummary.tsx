@@ -1,5 +1,6 @@
+
 import React, { useState } from 'react';
-import { Camera, RefreshCw, CalendarDays, Shirt, Hand, Bus, Building2, Settings2, AlertTriangle, CheckCircle2, ArrowUp, Info, Star } from 'lucide-react';
+import { Camera, RefreshCw, CalendarDays, Shirt, Hand, Bus, Building2, Settings2, AlertTriangle, CheckCircle2, ArrowUp, Info, Star, Send } from 'lucide-react';
 import { format, endOfWeek, addWeeks } from 'date-fns';
 import { Button } from './Button';
 import { AppMode, ShiftType, ShopperData, BusConfig } from '../types';
@@ -226,16 +227,24 @@ export const ShopperSummary: React.FC<ShopperSummaryProps> = ({
                                >
                                   Edit
                                </Button>
-                               <Button 
+                               <button 
                                   onClick={handleSubmitData} 
                                   disabled={isSyncing}
-                                  className={`flex-1 py-4 text-base font-black uppercase tracking-wide shadow-xl transition-all ${
-                                      isSyncing ? 'bg-gray-400' : 'bg-gradient-to-r from-green-600 to-green-500 hover:to-green-400 hover:scale-[1.02]'
-                                  }`}
+                                  className={`
+                                    flex-1 relative overflow-hidden py-4 rounded-xl shadow-xl transition-all duration-300 group
+                                    ${isSyncing ? 'bg-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-green-600 to-emerald-600 hover:scale-[1.02] active:scale-[0.98] shadow-green-200'}
+                                  `}
                                >
-                                  {isSyncing ? 'Sending...' : 'Submit Schedule'}
-                                  {!isSyncing && <ArrowUp className="w-5 h-5 ml-2" />}
-                               </Button>
+                                  <div className="relative z-10 flex items-center justify-center gap-2 text-white font-black text-lg uppercase tracking-wide">
+                                      {isSyncing ? 'Sending...' : 'SUBMIT SCHEDULE'}
+                                      {!isSyncing && <Send className="w-5 h-5 group-hover:translate-x-1 transition-transform" />}
+                                  </div>
+                                  
+                                  {/* Shine Effect */}
+                                  {!isSyncing && (
+                                      <div className="absolute top-0 -left-[100%] w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-[-20deg] animate-[shimmer_2s_infinite]"></div>
+                                  )}
+                               </button>
                            </div>
                       </div>
                   )}

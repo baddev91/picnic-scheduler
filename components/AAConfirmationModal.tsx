@@ -39,10 +39,10 @@ export const AAConfirmationModal: React.FC<AAConfirmationModalProps> = ({
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md flex flex-col max-h-[85vh] overflow-hidden animate-in zoom-in-95 duration-300 border border-gray-100">
         
         {/* Header with Animation - Fixed */}
-        <div className="shrink-0 bg-gradient-to-br from-red-500 to-red-600 p-6 text-white text-center relative overflow-hidden">
+        <div className="shrink-0 bg-gradient-to-br from-red-600 to-red-700 p-6 text-white text-center relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-full bg-white/10 opacity-30 pattern-grid-lg"></div>
             <div className="relative z-10 flex flex-col items-center">
-                <div className="bg-white/20 p-4 rounded-full mb-3 backdrop-blur-md shadow-inner">
+                <div className="bg-white/20 p-4 rounded-full mb-3 backdrop-blur-md shadow-inner ring-4 ring-white/10">
                     <Repeat className="w-8 h-8 text-white animate-spin-slow" style={{ animationDuration: '3s' }} />
                 </div>
                 <h3 className="text-2xl font-black tracking-tight">Recurring Schedule</h3>
@@ -56,7 +56,7 @@ export const AAConfirmationModal: React.FC<AAConfirmationModalProps> = ({
             {/* The Explanation */}
             <div className="text-center space-y-2">
                 <p className="text-gray-600 text-sm leading-relaxed">
-                    You are choosing these 2 days to work <strong className="text-gray-900 bg-red-50 px-1 rounded">EVERY WEEK</strong>.
+                    You are choosing these 2 days to work <strong className="text-red-700 bg-red-50 px-1.5 py-0.5 rounded border border-red-100">EVERY WEEK</strong>.
                     <br/>This will be your fixed roster pattern.
                 </p>
             </div>
@@ -73,8 +73,8 @@ export const AAConfirmationModal: React.FC<AAConfirmationModalProps> = ({
                             <div className="w-1.5 absolute left-0 top-0 bottom-0 bg-red-500"></div>
                             
                             <div className="flex flex-col items-center justify-center w-12 h-12 bg-red-50 rounded-lg shrink-0">
-                                <span className="text-[10px] font-bold text-red-400 uppercase tracking-wider">{dayName.substring(0,3)}</span>
-                                <CalendarRange className="w-5 h-5 text-red-600" />
+                                <span className="text-[10px] font-bold text-red-600 uppercase tracking-wider">{dayName.substring(0,3)}</span>
+                                <CalendarRange className="w-5 h-5 text-red-500" />
                             </div>
                             
                             <div>
@@ -102,15 +102,15 @@ export const AAConfirmationModal: React.FC<AAConfirmationModalProps> = ({
             <Button 
                 onClick={onClose} 
                 variant="secondary" 
-                className="flex-1 py-3 border-gray-200 text-gray-600 hover:bg-white text-xs sm:text-sm"
+                className="flex-1 py-4 border-gray-300 text-gray-600 hover:bg-white text-sm font-bold active:scale-95 transition-all"
             >
                 <Edit2 className="w-4 h-4 mr-1.5" /> Change
             </Button>
             <Button 
                 onClick={onConfirm} 
-                className="flex-[2] py-3 bg-red-600 hover:bg-red-700 shadow-lg shadow-red-200 text-white text-xs sm:text-sm"
+                className="flex-[2] py-4 bg-red-600 hover:bg-red-700 shadow-xl shadow-red-200 text-white text-base font-black tracking-wide active:scale-[0.98] transition-all"
             >
-                Confirm <ArrowRight className="w-4 h-4 ml-1.5" />
+                YES, CONFIRM
             </Button>
         </div>
       </div>

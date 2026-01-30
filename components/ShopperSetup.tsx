@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { KeyRound, ArrowRight, User, Sparkles } from 'lucide-react';
+import { KeyRound, ArrowRight, User, Sparkles, ChevronRight } from 'lucide-react';
 import { Button } from './Button';
 import { AppMode } from '../types';
 
@@ -123,9 +124,20 @@ export const ShopperSetup: React.FC<ShopperSetupProps> = ({
              <button 
                disabled={!tempNameInput.trim() || tempNameInput.trim().split(' ').length < 2} 
                onClick={handleStartShopperClick}
-               className="w-full py-5 text-lg font-bold rounded-2xl text-white shadow-xl shadow-green-200 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 active:scale-[0.98] transition-all duration-200 disabled:opacity-50 disabled:shadow-none disabled:cursor-not-allowed flex items-center justify-center gap-2 group"
+               className={`
+                 w-full py-4 text-lg font-bold rounded-2xl text-white shadow-xl flex items-center justify-center gap-3 group relative overflow-hidden transition-all duration-300
+                 ${(!tempNameInput.trim() || tempNameInput.trim().split(' ').length < 2) 
+                    ? 'bg-gray-300 cursor-not-allowed opacity-50 shadow-none' 
+                    : 'bg-gradient-to-r from-[#E31837] to-red-600 hover:scale-[1.02] active:scale-[0.98] shadow-red-200'
+                 }
+               `}
              >
-               Start Scheduling <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                <span className="relative z-10">Start Scheduling</span>
+                <div className="bg-white/20 p-1.5 rounded-full relative z-10 group-hover:translate-x-1 transition-transform">
+                    <ArrowRight className="w-5 h-5" strokeWidth={3} />
+                </div>
+                {/* Shine Effect */}
+                <div className="absolute top-0 -left-[100%] w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-[-20deg] group-hover:animate-[shimmer_1.5s_infinite]"></div>
              </button>
 
              <div className="h-6">

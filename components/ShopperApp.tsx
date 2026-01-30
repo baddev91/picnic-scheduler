@@ -5,8 +5,8 @@ import { SHIFT_TIMES, formatDateKey, getShopperAllowedRange, getShopperMinDate }
 import { Button } from './Button';
 import { CalendarView } from './CalendarView';
 import { MobileInstructionModal } from './MobileInstructionModal';
-import { User, PlayCircle, CheckCircle, ArrowRight, Layers, CalendarCheck, Globe2 } from 'lucide-react';
-import { addDays, getDay, endOfWeek, addWeeks, isBefore } from 'date-fns';
+import { User, PlayCircle, CheckCircle, ArrowRight, Layers, CalendarCheck, Globe2, UserCircle2, Flag } from 'lucide-react';
+import { addDays, getDay, endOfWeek, addWeeks, isBefore, format } from 'date-fns';
 import { supabase } from '../supabaseClient';
 import { ShopperAAWizard } from './ShopperAAWizard';
 import { ShopperSummary } from './ShopperSummary';
@@ -527,6 +527,89 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
 
   const data = selections[0];
 
+  // LOGIC TO DETERMINE INSTRUCTION MODAL CONTENT
+  const getModalContent = () => {
+      if (step === 1) { // AA
+          return (
+              <div className="space-y-4 text-left">
+                  <div>
+                      <p className="font-bold text-gray-900">What are AA Shifts?</p>
+                      <p className="text-gray-600 text-sm mt-1 leading-relaxed">"AA" stands for <strong>Agreed Availability</strong>. These are the 2 specific days <u>every week</u> where you guarantee you can work.</p>
+                  </div>
+                  <div className="bg-red-50 p-4 rounded-xl border border-red-100">
+                      <p className="text-xs font-bold text-red-800 uppercase tracking-wider mb-3">Allowed Combinations:</p>
+                      <ul className="space-y-3 text-sm text-gray-800">
+                          <li className="flex items-center gap-3">
+                              <div className="w-6 h-6 rounded-full bg-white border border-red-200 text-red-600 flex items-center justify-center font-bold text-xs shadow-sm shrink-0">A</div>
+                              <span><strong>1 Weekday</strong> (Mon-Fri) <br/>+ <strong>1 Weekend</strong> (Sat/Sun)</span>
+                          </li>
+                          <li className="flex items-center gap-3">
+                               <div className="w-6 h-6 rounded-full bg-white border border-red-200 text-red-600 flex items-center justify-center font-bold text-xs shadow-sm shrink-0">B</div>
+                              <span><strong>Both Weekend Days</strong> (Sat + Sun)</span>
+                          </li>
+                      </ul>
+                      <p className="text-xs text-red-500 mt-3 font-medium border-t border-red-100 pt-2">
+                          ❌ You cannot choose 2 Weekdays.
+                      </p>
+                  </div>
+              </div>
+          );
+      }
+      if (step === 2) { // FWD
+          return "Please select the exact day you will have your first shift. It must be a Morning or Afternoon shift.";
+      }
+      if (step === 3) { // STANDARD
+          // CALCULATE DEADLINE
+          const fwdStr = data.details?.firstWorkingDay;
+          let deadlineText = "the end of Week 2";
+          
+          if (fwdStr) {
+              const start = getSafeDateFromKey(fwdStr);
+              // Monday of FWD week + 1 week -> End of that week (Sunday)
+              // This aligns with: "End Sunday of the week FOLLOWING the FWD's week"
+              const deadlineDate = endOfWeek(addWeeks(start, 1), { weekStartsOn: 1 });
+              deadlineText = format(deadlineDate, 'EEEE, MMM do');
+          }
+
+          return (
+              <div className="space-y-5 text-center">
+                  <div className="space-y-1">
+                      <p className="font-bold text-gray-900 text-lg">Goal:</p>
+                      <p className="text-sm text-gray-600 leading-relaxed">
+                          Scroll down. Select shifts until you reach this date:
+                      </p>
+                  </div>
+                  
+                  {/* VISUAL DEADLINE BOX */}
+                  <div className="bg-green-50 p-6 rounded-2xl border-2 border-green-200 shadow-sm relative overflow-hidden group">
+                      <div className="absolute top-0 right-0 w-24 h-24 bg-green-100 rounded-full blur-2xl -mr-10 -mt-10 opacity-50"></div>
+                      
+                      <div className="relative z-10">
+                          <span className="inline-flex items-center gap-2 text-xs font-black uppercase text-green-600 tracking-[0.2em] mb-2 bg-white/50 px-3 py-1 rounded-full border border-green-100/50">
+                              <Flag className="w-3 h-3 fill-green-600" /> Stop Here
+                          </span>
+                          <div className="text-3xl font-black text-gray-900 tracking-tight leading-none mt-1">
+                              {deadlineText}
+                          </div>
+                      </div>
+                  </div>
+
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">
+                      Your schedule must cover 2 full weeks.
+                  </p>
+              </div>
+          );
+      }
+      return "";
+  };
+
+  const getModalTitle = () => {
+      if (step === 1) return 'Set your 2 Fixed Days (AA)';
+      if (step === 2) return 'When do you start?';
+      if (step === 3) return 'Complete Schedule';
+      return '';
+  };
+
   if (viewMode === 'SUMMARY') {
       return (
           <ShopperSummary 
@@ -751,8 +834,8 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
                       <Button variant="secondary" onClick={() => setStep(ShopperStep.FWD_SELECTION)} className="px-6 border-gray-200">
                           Back
                       </Button>
-                      <Button onClick={openDetailsModal} className="flex-1 shadow-xl hover:shadow-2xl hover:-translate-y-0.5 transition-all bg-gray-900 hover:bg-black text-white py-3.5 rounded-xl flex items-center justify-center gap-2">
-                          <CalendarCheck className="w-5 h-5" /> Review & Finish <ArrowRight className="w-4 h-4" />
+                      <Button onClick={openDetailsModal} className="flex-1 shadow-xl hover:shadow-2xl hover:-translate-y-0.5 transition-all bg-gray-900 hover:bg-black text-white py-3.5 rounded-xl flex items-center justify-center gap-2 group">
+                          <UserCircle2 className="w-5 h-5 group-hover:scale-110 transition-transform" /> Complete Profile <ArrowRight className="w-4 h-4" />
                       </Button>
                   </div>
                </div>
@@ -764,42 +847,8 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
           isOpen={showMobileInstructions} 
           onClose={() => setShowMobileInstructions(false)} 
           step={step === 1 ? 'AA' : step === 2 ? 'FWD' : 'STANDARD'} 
-          title={step === 1 ? 'Set your 2 Fixed Days (AA)' : step === 2 ? 'When do you start?' : 'Select Your Shifts'} 
-          message={step === 1 
-              ? <div className="space-y-4 text-left">
-                  <div>
-                      <p className="font-bold text-gray-900">What are AA Shifts?</p>
-                      <p className="text-gray-600 text-sm mt-1 leading-relaxed">"AA" stands for <strong>Agreed Availability</strong>. These are the 2 specific days <u>every week</u> where you guarantee you can work.</p>
-                  </div>
-                  <div className="bg-red-50 p-4 rounded-xl border border-red-100">
-                      <p className="text-xs font-bold text-red-800 uppercase tracking-wider mb-3">Allowed Combinations:</p>
-                      <ul className="space-y-3 text-sm text-gray-800">
-                          <li className="flex items-center gap-3">
-                              <div className="w-6 h-6 rounded-full bg-white border border-red-200 text-red-600 flex items-center justify-center font-bold text-xs shadow-sm shrink-0">A</div>
-                              <span><strong>1 Weekday</strong> (Mon-Fri) <br/>+ <strong>1 Weekend</strong> (Sat/Sun)</span>
-                          </li>
-                          <li className="flex items-center gap-3">
-                               <div className="w-6 h-6 rounded-full bg-white border border-red-200 text-red-600 flex items-center justify-center font-bold text-xs shadow-sm shrink-0">B</div>
-                              <span><strong>Both Weekend Days</strong> (Sat + Sun)</span>
-                          </li>
-                      </ul>
-                      <p className="text-xs text-red-500 mt-3 font-medium border-t border-red-100 pt-2">
-                          ❌ You cannot choose 2 Weekdays.
-                      </p>
-                  </div>
-              </div>
-              : step === 2 ? "Please select the exact day you will have your first shift. It must be a Morning or Afternoon shift." 
-              : <div className="space-y-4 text-left">
-                  <div>
-                      <p className="font-bold text-gray-900 text-lg">Fill in the gaps!</p>
-                      <p className="text-sm text-gray-600 mt-1 leading-relaxed">Your <strong>First Working Day</strong> and your <strong>AA Shifts</strong> (Fixed Days) are already set and locked.</p>
-                  </div>
-                  <div className="bg-green-50 p-4 rounded-xl border border-green-100 text-sm text-green-800 leading-relaxed shadow-sm">
-                      <strong className="block mb-1 text-green-900 uppercase text-xs tracking-wider">Goal:</strong> 
-                      Please select your remaining <strong>Standard Shifts</strong> to complete your schedule for the <strong>first 2 weeks</strong> of work.
-                  </div>
-                </div>
-          } 
+          title={getModalTitle()} 
+          message={getModalContent()} 
       />
 
       {/* NEW AA Confirmation Modal */}
