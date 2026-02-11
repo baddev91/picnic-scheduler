@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { X, Bus, Shirt, Heart, AlertCircle, ArrowRight, Lock, Search, ExternalLink, MapPin } from 'lucide-react';
+import { X, Bus, Shirt, Heart, AlertCircle, ArrowRight, Lock, MapPin, Hash } from 'lucide-react';
 import { Button } from './Button';
 import { ShopperDetails } from '../types';
 import { calculateGloveSize } from '../utils/validation';
@@ -90,6 +90,19 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
 
          <div className="p-6 overflow-y-auto space-y-6">
             
+            {/* PN NUMBER SECTION - SIMPLE */}
+            <div className="space-y-3 pb-4 border-b">
+                <label className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                   <Hash className="w-4 h-4" /> PN Number (Optional)
+                </label>
+                <input 
+                    value={tempDetails.pnNumber || ''}
+                    onChange={(e) => setTempDetails(prev => ({ ...prev, pnNumber: e.target.value }))}
+                    placeholder="e.g. 123456"
+                    className="w-full p-3 bg-gray-50 border rounded-xl outline-none focus:ring-2 focus:ring-purple-500 font-mono text-sm"
+                />
+            </div>
+
             {/* Bus */}
             <div className="space-y-3">
                <label className="text-sm font-bold text-gray-700 flex items-center gap-2">

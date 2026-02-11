@@ -110,11 +110,4 @@ export const GOOGLE_SPREADSHEET_ID = '1qXTpVH_JQB1ru1W9NQEub4JgD4CdRqzFniXX6ODVy
 export const SHEET_TAB_NAME = 'Shift-Dashboard-proposal';
 
 // 4. (OPZIONALE) LINK CSV PUBBLICO
-// Se inserisci questo link, l'app NON chiederà più il login Google e userà questo file.
-// Istruzioni: 
-// 1. Nel foglio Google: File > Condividi > Pubblica sul Web
-// 2. Seleziona il foglio specifico (es. "Shift-Dashboard-proposal") invece di "Intero documento"
-// 3. Seleziona "Valori separati da virgola (.csv)" invece di "Pagina web"
-// 4. Clicca Pubblica e incolla qui il link generato.
-// Lascia stringa vuota '' per usare il metodo Login classico.
 export const GOOGLE_SHEET_CSV_URL = '';

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { ShopperRecord, TalkLogEntry, TalkType, PerformanceMetrics } from '../../types';
-import { X, User, Save, Clock, Calendar, MessageSquare, Check, AlertTriangle, TrendingUp, MoreHorizontal, Send, Zap, Target, Box, AlertOctagon, Heart, Flag, Briefcase, Star, Trash2 } from 'lucide-react';
+import { X, User, Save, Clock, Calendar, MessageSquare, Check, AlertTriangle, TrendingUp, MoreHorizontal, Send, Zap, Target, Box, AlertOctagon, Heart, Flag, Briefcase, Star, Trash2, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { supabase } from '../../supabaseClient';
 import { Button } from '../Button';
@@ -33,6 +33,9 @@ export const TalkModal: React.FC<TalkModalProps> = ({ shopper, onClose, onUpdate
   const [newLogType, setNewLogType] = useState<TalkType>('CHECK_IN');
   const [newLogNotes, setNewLogNotes] = useState('');
   const [leadName, setLeadName] = useState('');
+  
+  // State for Deleting
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const logs = (shopper.details?.talkLogs || []).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
@@ -75,6 +78,7 @@ export const TalkModal: React.FC<TalkModalProps> = ({ shopper, onClose, onUpdate
       if (newLogType === 'WELCOME') updatedProgress.welcomeTalk = 'DONE';
       if (newLogType === 'MID_TERM') updatedProgress.midTermEval = 'DONE';
       if (newLogType === 'END_TRIAL') updatedProgress.endOfTrialTalk = 'DONE';
+      if (newLogType === 'PROMOTION') updatedProgress.promotionDecision = 'TODO'; // Manual decision usually, but ensures init
       if (newLogType === 'CHECK_IN') updatedProgress.checkInToday = true;
 
       const updatedDetails = {
@@ -88,27 +92,67 @@ export const TalkModal: React.FC<TalkModalProps> = ({ shopper, onClose, onUpdate
       if (!error) {
           onUpdate({ ...shopper, details: updatedDetails });
           setNewLogNotes('');
-          setActiveTab('OVERVIEW'); // Go back to history
+          // Do NOT switch tab, stay on LOG_TALK so user sees history update
       } else {
           alert("Error saving log");
       }
   };
 
-  const deleteLog = async (logId: string) => {
+  const deleteLog = async (e: React.MouseEvent, logId: string) => {
+      e.stopPropagation(); // Prevent bubbling issues
+      
+      if (!logId) {
+          alert("Error: Log ID not found.");
+          return;
+      }
+
       if (!window.confirm("Are you sure you want to delete this log entry? This cannot be undone.")) return;
 
-      const updatedLogs = (shopper.details?.talkLogs || []).filter((l: TalkLogEntry) => l.id !== logId);
-      const updatedDetails = {
-          ...shopper.details,
-          talkLogs: updatedLogs
-      };
+      setDeletingId(logId);
 
-      const { error } = await supabase.from('shoppers').update({ details: updatedDetails }).eq('id', shopper.id);
+      try {
+          // 1. Identify the log being deleted
+          const logToDelete = (shopper.details?.talkLogs || []).find((l: TalkLogEntry) => l.id === logId);
+          
+          // 2. Remove it from the array
+          const updatedLogs = (shopper.details?.talkLogs || []).filter((l: TalkLogEntry) => l.id !== logId);
+          
+          // 3. Check if we need to revert progress flags
+          const currentProgress = shopper.details?.talkProgress || {};
+          const updatedProgress = { ...currentProgress };
 
-      if (!error) {
-          onUpdate({ ...shopper, details: updatedDetails });
-      } else {
-          alert("Error deleting log entry");
+          if (logToDelete) {
+              // Are there any other logs LEFT of this same type?
+              const hasRemainingLogsOfType = updatedLogs.some((l: TalkLogEntry) => l.type === logToDelete.type);
+
+              // If NO logs of this type remain, reset the status to TODO
+              if (!hasRemainingLogsOfType) {
+                  if (logToDelete.type === 'WELCOME') updatedProgress.welcomeTalk = 'TODO';
+                  if (logToDelete.type === 'MID_TERM') updatedProgress.midTermEval = 'TODO';
+                  if (logToDelete.type === 'END_TRIAL') updatedProgress.endOfTrialTalk = 'TODO';
+                  if (logToDelete.type === 'PROMOTION') updatedProgress.promotionDecision = 'TODO';
+                  if (logToDelete.type === 'CHECK_IN') updatedProgress.checkInToday = false;
+              }
+          }
+
+          const updatedDetails = {
+              ...shopper.details,
+              talkProgress: updatedProgress,
+              talkLogs: updatedLogs
+          };
+
+          const { error } = await supabase.from('shoppers').update({ details: updatedDetails }).eq('id', shopper.id);
+
+          if (!error) {
+              onUpdate({ ...shopper, details: updatedDetails });
+          } else {
+              alert("Error deleting log entry");
+          }
+      } catch (err) {
+          console.error(err);
+          alert("An unexpected error occurred.");
+      } finally {
+          setDeletingId(null);
       }
   };
 
@@ -352,11 +396,16 @@ export const TalkModal: React.FC<TalkModalProps> = ({ shopper, onClose, onUpdate
                                         {logs.map((log: TalkLogEntry) => (
                                             <div key={log.id} className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col gap-3 hover:shadow-md transition-shadow relative group">
                                                 <button 
-                                                    onClick={() => deleteLog(log.id)}
-                                                    className="absolute top-4 right-4 p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all md:opacity-0 md:group-hover:opacity-100"
+                                                    onClick={(e) => deleteLog(e, log.id)}
+                                                    disabled={deletingId === log.id}
+                                                    className={`absolute top-4 right-4 p-2 rounded-lg transition-all ${
+                                                        deletingId === log.id 
+                                                        ? 'text-red-500 bg-red-50 opacity-100' 
+                                                        : 'text-gray-300 hover:text-red-500 hover:bg-red-50 opacity-100' 
+                                                    }`}
                                                     title="Delete log entry"
                                                 >
-                                                    <Trash2 className="w-4 h-4" />
+                                                    {deletingId === log.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                                                 </button>
                                                 <div className="flex justify-between items-start pr-8">
                                                     <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider ${TALK_TYPES.find(t => t.id === log.type)?.color || 'bg-gray-100'}`}>

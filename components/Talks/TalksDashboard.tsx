@@ -29,7 +29,9 @@ const AVAILABLE_COLUMNS = [
     { id: 'BEHAVIOR', label: 'Behavior', group: 'Discipline' },
     { id: 'SPEED_AM', label: 'Speed AM', group: 'Performance' },
     { id: 'SPEED_CH', label: 'Speed CH', group: 'Performance' },
+    { id: 'PICKING_SCORE', label: 'Pick %', group: 'Performance' },
     { id: 'REPS', label: 'Reps', group: 'Performance' },
+    { id: 'MODULES', label: 'Modules', group: 'Performance' },
     { id: 'PIPELINE', label: 'Pipeline', group: 'Talks' },
     { id: 'TODAY', label: 'Checked In', group: 'Talks' },
 ];
@@ -69,13 +71,17 @@ const ShopperRow: React.FC<ShopperItemProps> = ({ shopper, onSelect, visibleColu
             case 'NSWC': return <span className={`font-bold px-2 py-1 rounded ${p.nswc ? 'bg-orange-50 text-orange-600' : 'text-gray-400'}`}>{p.nswc ?? '-'}</span>;
             case 'OW': return <span className={`font-bold px-2 py-1 rounded ${p.officialWarnings ? 'bg-purple-100 text-purple-700' : 'text-gray-400'}`}>{p.officialWarnings ?? '-'}</span>;
             case 'BEHAVIOR': return <span className={`font-bold ${p.behaviorScore !== undefined ? 'text-blue-600' : 'text-gray-400'}`}>{p.behaviorScore ?? '-'}</span>;
+            
+            // Performance Columns
             case 'SPEED_AM': return <span className="font-mono text-gray-700 font-bold">{p.speedAM ?? '-'}</span>;
             case 'SPEED_CH': return <span className="font-mono text-gray-700 font-bold">{p.speedCH ?? '-'}</span>;
+            case 'PICKING_SCORE': return <span className="font-bold text-gray-700">{p.pickingScore !== undefined ? `${p.pickingScore}%` : '-'}</span>;
             case 'REPS': return <span className="font-bold text-gray-600">{p.reps ?? '-'}</span>;
+            case 'MODULES': return <span className="text-[10px] text-gray-500 font-medium truncate max-w-[120px] block mx-auto" title={p.modules}>{p.modules || '-'}</span>;
+
             case 'PIPELINE': return (
                 <div className="flex items-center gap-1 justify-center">
                     <div className={`w-2.5 h-2.5 rounded-full ${getProgressColor(tp.welcomeTalk)}`} title="Welcome"></div>
-                    {/* Fixed syntax error: line 81 was missing backticks and had an extra brace */}
                     <div className={`w-2.5 h-2.5 rounded-full ${getProgressColor(tp.midTermEval)}`} title="Mid-Term"></div>
                     <div className={`w-2.5 h-2.5 rounded-full ${getProgressColor(tp.promotionDecision)}`} title="Promotion"></div>
                     <div className={`w-2.5 h-2.5 rounded-full ${getProgressColor(tp.endOfTrialTalk)}`} title="End Trial"></div>
@@ -164,6 +170,10 @@ export const TalksDashboard: React.FC<TalksDashboardProps> = ({ onBack }) => {
   // --- ADDED: handleUpdateShopper logic to fix missing name error ---
   const handleUpdateShopper = (updated: ShopperRecord) => {
     setShoppers(prev => prev.map(s => s.id === updated.id ? updated : s));
+    // CRITICAL: Update the selected shopper state as well so the Modal re-renders with fresh data
+    if (selectedShopper && selectedShopper.id === updated.id) {
+        setSelectedShopper(updated);
+    }
   };
 
   const handleSyncClick = () => {
