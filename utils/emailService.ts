@@ -67,7 +67,24 @@ function generateEmailHTML(emailData: EmailData): string {
     const date = new Date(dateStr + 'T00:00:00');
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-    return `${days[date.getDay()]}, ${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
+    return `${days[date.getDay()]}, ${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
+  };
+
+  // Format first working day with shift time
+  const formatFirstWorkingDay = (): string => {
+    if (!emailData.firstWorkingDay || emailData.shifts.length === 0) {
+      return 'TBD';
+    }
+
+    // Find the first shift
+    const firstShift = emailData.shifts.find(shift => shift.date === emailData.firstWorkingDay);
+    const formattedDate = formatShiftDate(emailData.firstWorkingDay);
+
+    if (firstShift) {
+      return `${formattedDate} - ${firstShift.time}`;
+    }
+
+    return formattedDate;
   };
 
   // Generate shift list HTML
@@ -170,8 +187,14 @@ function generateEmailHTML(emailData: EmailData): string {
 
     <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #667eea;">
       <h2 style="color: #667eea; margin-top: 0; font-size: 20px;">📅 Your Shift Schedule</h2>
-      <p style="margin: 10px 0 15px 0;"><strong>First Working Day:</strong> ${emailData.firstWorkingDay}</p>
+      <p style="margin: 10px 0 15px 0;"><strong>First Working Day:</strong> ${formatFirstWorkingDay()}</p>
       <p style="margin: 10px 0 15px 0;"><strong>Total Shifts:</strong> ${emailData.shifts.length}</p>
+
+      <div style="background: #e0e7ff; padding: 12px; border-radius: 6px; margin: 15px 0; border-left: 3px solid #667eea;">
+        <p style="margin: 0; font-size: 14px; color: #4338ca; font-weight: bold;">
+          ⏰ Important: Please arrive <strong>15 minutes before</strong> your shift start time.
+        </p>
+      </div>
 
       <table style="width: 100%; border-collapse: collapse; margin-top: 15px; background: white; border-radius: 8px; overflow: hidden;">
         <thead>
