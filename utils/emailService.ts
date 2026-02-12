@@ -113,16 +113,29 @@ function generateEmailHTML(emailData: EmailData): string {
   let busScheduleHTML = '';
   if (emailData.usePicnicBus && emailData.busConfig && emailData.busConfig.length > 0) {
     const busStopsHTML = emailData.busConfig.map(stop => {
-      const schedulesHTML = Object.entries(stop.schedules).map(([shiftTime, schedule]) => `
+      // Define the correct order for shift times
+      const shiftTimeOrder = [
+        'Opening (04:00 - 13:00)',
+        'Morning (06:00 - 15:00)',
+        'Noon (12:55 - 22:00)',
+        'Afternoon (14:55 - 00:00)'
+      ];
+
+      // Sort schedules by the defined order
+      const sortedSchedules = shiftTimeOrder
+        .filter(shiftTime => stop.schedules[shiftTime as keyof typeof stop.schedules])
+        .map(shiftTime => [shiftTime, stop.schedules[shiftTime as keyof typeof stop.schedules]]);
+
+      const schedulesHTML = sortedSchedules.map(([shiftTime, schedule]) => `
         <tr>
           <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; font-size: 14px;">
-            ${shiftTime.split('(')[0].trim()}
+            ${(shiftTime as string).split('(')[0].trim()}
           </td>
           <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; text-align: center; font-family: monospace; font-size: 14px;">
-            ${schedule.departure}
+            ${(schedule as any).departure}
           </td>
           <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; text-align: center; font-family: monospace; font-size: 14px;">
-            ${schedule.return}
+            ${(schedule as any).return}
           </td>
         </tr>
       `).join('');
