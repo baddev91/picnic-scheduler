@@ -361,25 +361,23 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
           const selectionForDay = aaSelections.find(s => s.dayIndex === dayIndex);
 
           if (selectionForDay && selectionForDay.time) {
-              // UPDATED AVAILABILITY CHECK: Supports Global Template now (via ShopperApp prop)
-              // We pass savedCloudTemplate as prop to ShopperApp, so we can use it here
-              // BUT: adminAvailability is date-specific.
-              // Logic: If NO specific override for date, check Template.
-              const checkAvailability = (t: ShiftTime) => {
-                  if (adminAvailability[dateStr]) {
-                      const config = adminAvailability[dateStr];
-                      return (!config[t] || config[t]?.includes(ShiftType.AA));
-                  }
-                  // Fallback to Template
-                  if (savedCloudTemplate && savedCloudTemplate[dayIndex]) {
-                      return savedCloudTemplate[dayIndex][t]?.includes(ShiftType.AA);
-                  }
-                  return true;
-              };
-              
-              if (checkAvailability(selectionForDay.time)) {
-                  newShifts.push({ date: dateStr, time: selectionForDay.time, type: ShiftType.AA });
-              }
+              // AA (Agreed Availability) shifts are GUARANTEED commitments from the shopper
+              // and should NOT be filtered by admin availability settings or templates.
+              // These shifts were already validated in handleAAWizardSubmit() to ensure:
+              // - Exactly 2 days selected
+              // - Maximum 1 weekday (Mon-Fri)
+              // - At least 1 weekend day
+              // - Rest rules compliance
+              // - Template availability at selection time
+              //
+              // Filtering AA shifts here based on adminAvailability or savedCloudTemplate
+              // can cause shoppers to end up with only 1 AA day instead of the required 2,
+              // which breaks the AA pattern validation and creates invalid schedules.
+
+              // Debug logging to monitor AA shift creation
+              console.log(`[AA] Adding shift for ${dateStr} (dayIndex: ${dayIndex}) - ${selectionForDay.time}`);
+
+              newShifts.push({ date: dateStr, time: selectionForDay.time, type: ShiftType.AA });
           }
           currentDate = addDays(currentDate, 1);
       }
