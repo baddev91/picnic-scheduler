@@ -85,7 +85,7 @@ export const ShopperSetup: React.FC<ShopperSetupProps> = ({
           {/* Logo Section */}
           <div className="text-center space-y-6">
              <h1 className="text-6xl font-black tracking-tighter text-[#E31837] select-none drop-shadow-sm">
-               PICNIC
+               STAFFYA
              </h1>
              
              <div className="relative inline-block">
