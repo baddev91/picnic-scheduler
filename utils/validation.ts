@@ -1,6 +1,7 @@
 
-import { addDays, isAfter, endOfWeek, addWeeks, format, isWeekend, differenceInHours, getDay } from 'date-fns';
+import { addDays, isAfter, endOfWeek, addWeeks, format, isWeekend, differenceInHours, getDay, isSameWeek } from 'date-fns';
 import startOfDay from 'date-fns/startOfDay';
+import startOfWeek from 'date-fns/startOfWeek';
 import { ShiftTime, ShiftType, ShopperShift } from '../types';
 import { formatDateKey, EUROPEAN_COUNTRIES, getShopperMinDate } from '../constants';
 
@@ -205,4 +206,43 @@ export const validateShopperSchedule = (shifts: ShopperShift[]): string[] => {
     });
 
     return issues;
+};
+
+// Check if adding a standard shift on dateStr would exceed 5 days in one week
+// Considering: FWD (if standard), AA shifts, and Standard shifts
+export const isWeeklyDaysViolation = (dateStr: string, currentShifts: ShopperShift[], firstWorkingDay?: string): boolean => {
+    if (!firstWorkingDay) return false;
+
+    const targetDate = getSafeDateFromKey(dateStr);
+    const weekStart = startOfWeek(targetDate, { weekStartsOn: 1 });
+    const weekEnd = endOfWeek(targetDate, { weekStartsOn: 1 });
+    
+    // Count distinct working days in this week
+    const workingDaysSet = new Set<string>();
+    
+    // 1. Include FWD if it's in the same week AND it's a standard shift
+    const fwdDate = getSafeDateFromKey(firstWorkingDay);
+    if (isSameWeek(fwdDate, targetDate, { weekStartsOn: 1 })) {
+        // Check if FWD has a standard shift or will have one
+        const fwdHasStandard = currentShifts.some(s => s.date === firstWorkingDay && s.type === ShiftType.STANDARD);
+        if (fwdHasStandard) {
+            workingDaysSet.add(firstWorkingDay);
+        }
+    }
+    
+    // 2. Include all AA shifts in the week
+    currentShifts
+        .filter(s => s.type === ShiftType.AA && isSameWeek(getSafeDateFromKey(s.date), targetDate, { weekStartsOn: 1 }))
+        .forEach(s => workingDaysSet.add(s.date));
+    
+    // 3. Include all Standard shifts in the week (including the one being proposed)
+    currentShifts
+        .filter(s => s.type === ShiftType.STANDARD && isSameWeek(getSafeDateFromKey(s.date), targetDate, { weekStartsOn: 1 }))
+        .forEach(s => workingDaysSet.add(s.date));
+    
+    // Add the proposed date (we're testing if it would violate)
+    workingDaysSet.add(dateStr);
+    
+    // If more than 5 distinct days in a week, it's a violation
+    return workingDaysSet.size > 5;
 };

@@ -20,6 +20,7 @@ export type WeeklyTemplate = Record<number, Record<ShiftTime, ShiftType[]>>;
 export interface StaffMember {
   name: string;
   isSuperAdmin: boolean;
+  isVisibleInPerformance?: boolean; // NEW: Controls visibility in recruitment performance section
 }
 
 export interface ShopperShift {

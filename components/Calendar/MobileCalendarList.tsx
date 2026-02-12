@@ -4,7 +4,7 @@ import { format, isWeekend } from 'date-fns';
 import { Lock, Star, Sun, Moon, Sunrise, Ban, AlertCircle, Clock, CalendarX, Plus, CheckCircle2, Info } from 'lucide-react';
 import { ShiftTime, ShiftType, ShopperShift } from '../../types';
 import { SHIFT_TIMES, formatDateKey } from '../../constants';
-import { isRestViolation, isConsecutiveDaysViolation, isOpeningShiftViolation } from '../../utils/validation';
+import { isRestViolation, isConsecutiveDaysViolation, isOpeningShiftViolation, isWeeklyDaysViolation } from '../../utils/validation';
 
 interface MobileCalendarListProps {
   daysToList: Date[];
@@ -98,7 +98,10 @@ export const MobileCalendarList: React.FC<MobileCalendarListProps> = ({
                             disabledReason = { text: 'Rest Rule (11h)', colorClass: 'text-gray-500', icon: <Clock className="w-3 h-3" /> };
                         } else if (isConsecutiveDaysViolation(dateKey, currentShopperShifts)) {
                             isActionDisabled = true;
-                            disabledReason = { text: 'Max 5 Days', colorClass: 'text-gray-500', icon: <CalendarX className="w-3 h-3" /> };
+                            disabledReason = { text: 'Max 5 Consecutive', colorClass: 'text-gray-500', icon: <CalendarX className="w-3 h-3" /> };
+                        } else if (isWeeklyDaysViolation(dateKey, currentShopperShifts, firstWorkingDay)) {
+                            isActionDisabled = true;
+                            disabledReason = { text: 'Max 5/Week', colorClass: 'text-gray-500', icon: <CalendarX className="w-3 h-3" /> };
                         } else if (isOpeningShiftViolation(dateKey, shift, currentShopperShifts, firstWorkingDay)) { // Passed firstWorkingDay
                             isActionDisabled = true;
                             disabledReason = { text: 'Needs 2 prior shifts', colorClass: 'text-orange-600', icon: <AlertCircle className="w-3 h-3" /> };

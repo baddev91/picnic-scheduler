@@ -13,7 +13,7 @@ import { ShopperSummary } from './ShopperSummary';
 import { ShopperDetailsModal } from './ShopperDetailsModal';
 import { FWDConfirmationModal } from './FWDConfirmationModal';
 import { AAConfirmationModal } from './AAConfirmationModal'; // NEW IMPORT
-import { getSafeDateFromKey, isRestViolation, isConsecutiveDaysViolation, isOpeningShiftViolation, validateShopperRange, calculateMinStartDate } from '../utils/validation';
+import { getSafeDateFromKey, isRestViolation, isConsecutiveDaysViolation, isOpeningShiftViolation, validateShopperRange, calculateMinStartDate, isWeeklyDaysViolation } from '../utils/validation';
 
 interface ShopperAppProps {
   shopperName: string;
@@ -508,6 +508,7 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
           if (isBefore(getSafeDateFromKey(dateStr), getSafeDateFromKey(fwd))) { alert("Cannot select before First Day."); return; }
           if (isRestViolation(dateStr, shift, testShifts)) { alert("Rest Violation (11h rule)."); return; }
           if (isConsecutiveDaysViolation(dateStr, testShifts)) { alert("Max 5 consecutive days."); return; }
+          if (isWeeklyDaysViolation(dateStr, testShifts, fwd)) { alert("Max 5 days per week (considering AA + First Working Day + Standard shifts)."); return; }
           if (isOpeningShiftViolation(dateStr, shift, testShifts, fwd)) {
               alert("You can only select an OPENING shift after you have worked at least 2 shifts.");
               return;

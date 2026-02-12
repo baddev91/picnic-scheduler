@@ -2,13 +2,16 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../supabaseClient';
 import { StaffMember } from '../types';
-import { Users, TrendingUp, Award, CalendarCheck, Loader2, Filter, UserCheck, Briefcase } from 'lucide-react';
+import { Users, TrendingUp, Award, CalendarCheck, Loader2, Filter, UserCheck, Briefcase, Settings2 } from 'lucide-react';
 import { endOfWeek, format, isSameWeek } from 'date-fns';
 import startOfWeek from 'date-fns/startOfWeek';
 import parseISO from 'date-fns/parseISO';
+import { PerformanceVisibilityModal } from './PerformanceVisibilityModal';
 
 interface RecruiterStatsProps {
   staffList: StaffMember[];
+  isSuperAdmin?: boolean;
+  onSaveVisibility?: (updatedStaffList: StaffMember[]) => void;
 }
 
 interface RecruiterMetric {
@@ -16,6 +19,8 @@ interface RecruiterMetric {
   hires: number; // Submissions
   shiftsFilled: number; // Impact
   lastActive: string | null;
+  activeSessions: number; // Number of distinct days with hires
+  avgHiresPerSession: number; // Average hires per session (per day)
 }
 
 interface RawShopperData {
@@ -26,10 +31,11 @@ interface RawShopperData {
     shifts: { id: string }[];
 }
 
-export const RecruiterStats: React.FC<RecruiterStatsProps> = ({ staffList }) => {
+export const RecruiterStats: React.FC<RecruiterStatsProps> = ({ staffList, isSuperAdmin = false, onSaveVisibility }) => {
   const [loading, setLoading] = useState(true);
   const [rawShoppers, setRawShoppers] = useState<RawShopperData[]>([]);
   const [selectedWeek, setSelectedWeek] = useState<string>('ALL'); // 'ALL' or 'YYYY-MM-DD' (start of week)
+  const [showVisibilityModal, setShowVisibilityModal] = useState(false);
 
   // 1. Fetch Data Once
   useEffect(() => {
@@ -62,19 +68,27 @@ export const RecruiterStats: React.FC<RecruiterStatsProps> = ({ staffList }) => 
 
   // 3. Filter & Aggregate Data based on Selection
   const stats = useMemo(() => {
-      // Initialize map with current staff (so they appear even with 0 stats)
+      // Initialize map with current staff that are VISIBLE (so they appear even with 0 stats)
       const map: Record<string, RecruiterMetric> = {};
+      const dayMaps: Record<string, Set<string>> = {}; // Track distinct days per recruiter for session counting
       
       staffList.forEach(member => {
-          map[member.name] = { 
-              name: member.name, 
-              hires: 0, 
-              shiftsFilled: 0, 
-              lastActive: null 
-          };
+          // Only include staff members that should be visible in performance section
+          const isVisible = member.isVisibleInPerformance !== false; // Default to true if not set
+          if (isVisible) {
+              map[member.name] = { 
+                  name: member.name, 
+                  hires: 0, 
+                  shiftsFilled: 0, 
+                  lastActive: null,
+                  activeSessions: 0,
+                  avgHiresPerSession: 0
+              };
+              dayMaps[member.name] = new Set<string>();
+          }
       });
 
-      // Filter Data
+      // Filter Data - but we'll still track all weeks for avg calculation
       const filteredShoppers = rawShoppers.filter(s => {
           if (selectedWeek === 'ALL') return true;
           if (!s.created_at) return false;
@@ -92,12 +106,20 @@ export const RecruiterStats: React.FC<RecruiterStatsProps> = ({ staffList }) => 
           let matchKey = Object.keys(map).find(k => k.toLowerCase() === rawName.trim().toLowerCase());
           
           if (!matchKey) {
-              // If recruiter not in staff list, add them dynamically
-              matchKey = rawName.trim();
-              map[matchKey] = { name: matchKey, hires: 0, shiftsFilled: 0, lastActive: null };
+              // If recruiter not in staff list, only add if visible in settings
+              // Since they're not in staff list, we'll check if there's a matching visible member
+              const visibleMember = staffList.find(m => m.name.toLowerCase() === rawName.trim().toLowerCase() && m.isVisibleInPerformance !== false);
+              if (visibleMember) {
+                  matchKey = visibleMember.name;
+              } else {
+                  // Don't add recruiters not in staff list or not marked as visible
+                  return;
+              }
           }
 
           const entry = map[matchKey];
+          if (!entry) return; // Skip if not visible
+          
           entry.hires += 1;
           entry.shiftsFilled += s.shifts?.length || 0;
           
@@ -105,11 +127,25 @@ export const RecruiterStats: React.FC<RecruiterStatsProps> = ({ staffList }) => 
           if (!entry.lastActive || new Date(s.created_at) > new Date(entry.lastActive)) {
               entry.lastActive = s.created_at;
           }
+
+          // Track day for session count (each distinct day = 1 session, even if multiple times that day)
+          if (s.created_at) {
+              const dayKey = format(parseISO(s.created_at), 'yyyy-MM-dd');
+              dayMaps[matchKey].add(dayKey);
+          }
+      });
+
+      // Calculate activeSessions and avgHiresPerSession
+      Object.keys(map).forEach(key => {
+          const entry = map[key];
+          const activeSessions = dayMaps[key].size || 1; // Each distinct day is a session
+          entry.activeSessions = activeSessions;
+          entry.avgHiresPerSession = activeSessions > 0 ? entry.hires / activeSessions : 0;
       });
 
       // Convert to array and sort
       return Object.values(map)
-        .filter(item => item.hires > 0 || staffList.some(s => s.name === item.name))
+        .filter(item => item.hires > 0 || staffList.some(s => s.name === item.name && s.isVisibleInPerformance !== false))
         .sort((a, b) => b.hires - a.hires); // Sort by Hires Descending
 
   }, [rawShoppers, staffList, selectedWeek]);
@@ -190,6 +226,17 @@ export const RecruiterStats: React.FC<RecruiterStatsProps> = ({ staffList }) => 
                         })}
                     </select>
                 </div>
+
+                {/* Settings Button - Super Admin Only */}
+                {isSuperAdmin && (
+                    <button
+                        onClick={() => setShowVisibilityModal(true)}
+                        className="flex items-center gap-2 px-3 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold rounded-lg border border-purple-200 shadow-sm transition-all hover:shadow-md text-xs"
+                    >
+                        <Settings2 className="w-4 h-4" />
+                        <span className="hidden sm:inline">Settings</span>
+                    </button>
+                )}
             </div>
         </div>
 
@@ -238,12 +285,20 @@ export const RecruiterStats: React.FC<RecruiterStatsProps> = ({ staffList }) => 
                                 </div>
 
                                 {/* Detailed Stats Row */}
-                                <div className="flex items-center gap-2 pt-2 border-t border-gray-50">
-                                    <div className="flex-1 bg-gray-50 rounded px-2 py-1.5 flex items-center justify-between">
+                                <div className="flex items-center gap-2 pt-2 border-t border-gray-50 flex-wrap">
+                                    <div className="flex-1 min-w-[120px] bg-gray-50 rounded px-2 py-1.5 flex items-center justify-between">
                                         <span className="text-[9px] font-bold text-gray-400 uppercase">Impact</span>
                                         <div className="flex items-center gap-1 text-xs font-bold text-gray-700">
                                             <CalendarCheck className="w-3 h-3 text-green-500" />
                                             {recruiter.shiftsFilled} <span className="text-[9px] font-normal text-gray-400">shifts</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex-1 min-w-[120px] bg-blue-50 rounded px-2 py-1.5 flex items-center justify-between">
+                                        <span className="text-[9px] font-bold text-blue-400 uppercase">Avg/Day</span>
+                                        <div className="flex items-center gap-1 text-xs font-bold text-blue-700">
+                                            <Users className="w-3 h-3 text-blue-500" />
+                                            {recruiter.avgHiresPerSession.toFixed(1)} <span className="text-[9px] font-normal text-blue-400">hires</span>
                                         </div>
                                     </div>
                                 </div>
@@ -259,6 +314,16 @@ export const RecruiterStats: React.FC<RecruiterStatsProps> = ({ staffList }) => 
                 )}
             </div>
         </div>
+
+        {/* Visibility Modal */}
+        <PerformanceVisibilityModal
+            isOpen={showVisibilityModal}
+            onClose={() => setShowVisibilityModal(false)}
+            staffList={staffList}
+            onSave={(updatedStaffList) => {
+                onSaveVisibility?.(updatedStaffList);
+            }}
+        />
     </div>
   );
 };

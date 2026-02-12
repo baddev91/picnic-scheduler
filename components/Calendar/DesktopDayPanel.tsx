@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import { X, Lock, Check, Star, Sun, Moon, Sunrise, Ban, AlertCircle, Clock, CalendarX, AlertTriangle, Coffee } from 'lucide-react';
 import { ShiftTime, ShiftType, ShopperShift } from '../../types';
 import { SHIFT_TIMES, formatDateKey } from '../../constants';
-import { isRestViolation, isConsecutiveDaysViolation, isOpeningShiftViolation } from '../../utils/validation';
+import { isRestViolation, isConsecutiveDaysViolation, isOpeningShiftViolation, isWeeklyDaysViolation } from '../../utils/validation';
 
 interface DesktopDayPanelProps {
   selectedDay: Date | null;
@@ -147,7 +147,11 @@ export const DesktopDayPanel: React.FC<DesktopDayPanelProps> = ({
                           } else if (isConsecutiveDaysViolation(dateKey, currentShopperShifts)) {
                               isActionDisabled = true;
                               // NEUTRAL GREY for 5 days
-                              disabledReason = { text: 'Max 5 Days', icon: <CalendarX className="w-3 h-3" />, colorClass: 'bg-gray-100 text-gray-400', borderClass: 'border-gray-200' };
+                              disabledReason = { text: 'Max 5 Consecutive', icon: <CalendarX className="w-3 h-3" />, colorClass: 'bg-gray-100 text-gray-400', borderClass: 'border-gray-200' };
+                          } else if (isWeeklyDaysViolation(dateKey, currentShopperShifts, firstWorkingDay)) {
+                              isActionDisabled = true;
+                              // NEUTRAL GREY for weekly limit
+                              disabledReason = { text: 'Max 5 Days/Week', icon: <CalendarX className="w-3 h-3" />, colorClass: 'bg-gray-100 text-gray-400', borderClass: 'border-gray-200' };
                           } else if (isOpeningShiftViolation(dateKey, shift, currentShopperShifts, firstWorkingDay)) { // Passed FWD
                               isActionDisabled = true;
                               // ORANGE for Opening Violation

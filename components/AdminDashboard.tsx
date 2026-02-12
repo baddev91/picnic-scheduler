@@ -130,7 +130,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       if (!name) return;
       if (staffList.some(s => s.name === name)) { alert("Name already exists"); return; }
       
-      const newList = [...staffList, { name, isSuperAdmin: isNewStaffSuper }].sort((a, b) => a.name.localeCompare(b.name));
+      const newList = [...staffList, { name, isSuperAdmin: isNewStaffSuper, isVisibleInPerformance: true }].sort((a, b) => a.name.localeCompare(b.name));
       saveStaffList(newList);
       setNewStaffName('');
       setIsNewStaffSuper(false);
@@ -386,6 +386,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                  <span>Max <strong>5 Consecutive</strong> days (FWD+AA+Std).</span>
                              </li>
                              <li className="flex items-start gap-2">
+                                 <AlertTriangle className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
+                                 <span>Max <strong>5 Days Per Week</strong> (FWD + AA + Standard shifts combined).</span>
+                             </li>
+                             <li className="flex items-start gap-2">
                                  <Info className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
                                  <span><strong>OPENING Shift:</strong> Allowed only after completing 2 shifts.</span>
                              </li>
@@ -453,7 +457,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           {/* RECRUITER STATS (Available to All Admins) */}
           <div className="animate-in slide-in-from-bottom-3">
-              <RecruiterStats staffList={staffList} />
+              <RecruiterStats 
+                  staffList={staffList}
+                  isSuperAdmin={isSuperAdmin}
+                  onSaveVisibility={saveStaffList}
+              />
           </div>
 
           {/* CONFIGURATION SECTION - HYBRID ACCESS */}
