@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, Pencil, User, MapPin, Save, Calendar, AlertCircle, Trash2, Plus, Hash, Check, Star } from 'lucide-react';
+import { X, Pencil, User, MapPin, Save, Calendar, AlertCircle, Trash2, Plus, Hash, Check, Star, Mail } from 'lucide-react';
 import { format } from 'date-fns';
 import { supabase } from '../supabaseClient';
 import { Button } from './Button';
@@ -230,14 +230,28 @@ export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onC
                             <label className="text-xs font-semibold text-gray-500 flex items-center gap-1">
                                 <Hash className="w-3 h-3" /> PN Number
                             </label>
-                            <input 
+                            <input
                                 value={details.pnNumber || ''}
                                 onChange={e => setDetails({...details, pnNumber: e.target.value})}
                                 placeholder="PN123456"
                                 className="w-full p-2 rounded border border-gray-300 focus:ring-2 focus:ring-purple-500 outline-none text-sm font-mono placeholder:text-gray-300 uppercase"
                             />
                         </div>
-                        
+
+                        {/* EMAIL INPUT */}
+                        <div className="space-y-1">
+                            <label className="text-xs font-semibold text-gray-500 flex items-center gap-1">
+                                <Mail className="w-3 h-3" /> Email Address
+                            </label>
+                            <input
+                                type="email"
+                                value={details.email || ''}
+                                onChange={e => setDetails({...details, email: e.target.value})}
+                                placeholder="shopper@example.com"
+                                className="w-full p-2 rounded border border-gray-300 focus:ring-2 focus:ring-purple-500 outline-none text-sm placeholder:text-gray-300"
+                            />
+                        </div>
+
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1">
                                 <label className="text-xs font-semibold text-gray-500">Clothing</label>

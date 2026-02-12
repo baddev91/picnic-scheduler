@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { X, Bus, Shirt, Heart, AlertCircle, ArrowRight, Lock, MapPin, Hash } from 'lucide-react';
+import { X, Bus, Shirt, Heart, AlertCircle, ArrowRight, Lock, MapPin, Hash, Mail } from 'lucide-react';
 import { Button } from './Button';
 import { ShopperDetails } from '../types';
 import { calculateGloveSize } from '../utils/validation';
@@ -36,19 +36,32 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
 
   const validateAndSubmit = () => {
       setError(null);
-      
+
       if (tempDetails.usePicnicBus === null) {
           setError("Please select how you will travel to work.");
           return;
       }
-      
+
       if (!tempDetails.civilStatus) {
           setError("Please select your Civil Status.");
           return;
       }
-      
+
       if (!tempDetails.gender) {
           setError("Please select your Gender.");
+          return;
+      }
+
+      // Email validation
+      const email = (tempDetails.email || '').trim();
+      if (!email) {
+          setError("Email address is required.");
+          return;
+      }
+      // Basic email format validation
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+          setError("Please enter a valid email address.");
           return;
       }
 
@@ -75,8 +88,9 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
   const GLOVE_SIZES = ['6 (XS)', '7 (S)', '8 (M)', '9 (L)', '10 (XL)', '11 (XXL)', '12 (3XL)', '12 (4XL)'];
   const CLOTHING_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '4XL', '5XL', '6XL'];
 
-  // Check if the current error is related to the address field
+  // Check if the current error is related to specific fields
   const isAddressError = error && (error.toLowerCase().includes('address') || error.toLowerCase().includes('house number'));
+  const isEmailError = error && error.toLowerCase().includes('email');
 
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
@@ -98,7 +112,7 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
                   <Bus className="w-4 h-4" /> Transport
                </label>
                
-               {error && !isAddressError && (
+               {error && !isAddressError && !isEmailError && (
                    <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center justify-between gap-2 animate-pulse">
                        <div className="flex items-center gap-2 text-sm text-red-600 font-medium">
                            <AlertCircle className="w-4 h-4 shrink-0" /> <span>{error}</span>
@@ -179,7 +193,7 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
                 <div className="grid grid-cols-2 gap-4">
                     <div>
                         <label className="text-xs text-gray-500 mb-1 block">Civil Status</label>
-                        <select 
+                        <select
                             value={tempDetails.civilStatus || ''}
                             onChange={(e) => setTempDetails(prev => ({ ...prev, civilStatus: e.target.value }))}
                             className="w-full p-3 bg-gray-50 border rounded-xl outline-none focus:ring-2 focus:ring-purple-500"
@@ -198,7 +212,7 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
                     </div>
                     <div>
                         <label className="text-xs text-gray-500 mb-1 block">Gender</label>
-                        <select 
+                        <select
                             value={tempDetails.gender || ''}
                             onChange={(e) => setTempDetails(prev => ({ ...prev, gender: e.target.value }))}
                             className="w-full p-3 bg-gray-50 border rounded-xl outline-none focus:ring-2 focus:ring-purple-500"
@@ -209,6 +223,52 @@ export const ShopperDetailsModal: React.FC<ShopperDetailsModalProps> = ({
                             <option value="N/D">N/D</option>
                         </select>
                     </div>
+                </div>
+            </div>
+
+            {/* Email Address */}
+            <div className="space-y-3">
+                <label className="text-sm font-bold text-gray-700 flex items-center gap-2">
+                   <Mail className="w-4 h-4" /> Email Address
+                </label>
+                <div className={`p-4 rounded-xl border relative transition-all duration-300 ${
+                    isEmailError
+                    ? 'bg-red-50 border-red-300 ring-2 ring-red-100'
+                    : 'bg-blue-50/50 border-blue-100 focus-within:ring-2 focus-within:ring-blue-200'
+                }`}>
+                    <div className="relative">
+                        <input
+                            type="email"
+                            value={tempDetails.email || ''}
+                            onChange={(e) => {
+                                setTempDetails(prev => ({ ...prev, email: e.target.value }));
+                                if (isEmailError) setError(null);
+                            }}
+                            placeholder="your.email@example.com"
+                            className={`w-full p-3 rounded-xl outline-none transition-all text-sm font-medium border-2 ${
+                                isEmailError
+                                ? 'bg-white border-red-300 text-red-900 placeholder:text-red-300'
+                                : 'bg-white border-blue-100 focus:border-blue-500'
+                            }`}
+                        />
+                    </div>
+
+                    {/* Email Error Message */}
+                    {isEmailError && (
+                        <div className="flex items-start gap-2 mt-2 text-xs font-bold text-red-600 animate-in slide-in-from-top-1">
+                            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                            <span>{error}</span>
+                        </div>
+                    )}
+
+                    {!isEmailError && (
+                        <div className="flex gap-2 mt-3 text-[11px] text-blue-700 bg-blue-100/50 p-2 rounded-lg items-start">
+                            <Mail className="w-4 h-4 shrink-0 mt-0.5" />
+                            <p className="leading-snug">
+                                We'll send you a confirmation email with your shift schedule details.
+                            </p>
+                        </div>
+                    )}
                 </div>
             </div>
 

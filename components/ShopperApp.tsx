@@ -14,6 +14,7 @@ import { ShopperDetailsModal } from './ShopperDetailsModal';
 import { FWDConfirmationModal } from './FWDConfirmationModal';
 import { AAConfirmationModal } from './AAConfirmationModal'; // NEW IMPORT
 import { getSafeDateFromKey, isRestViolation, isConsecutiveDaysViolation, isOpeningShiftViolation, validateShopperRange, calculateMinStartDate, isWeeklyDaysViolation } from '../utils/validation';
+import { sendConfirmationEmail } from '../utils/emailService';
 
 interface ShopperAppProps {
   shopperName: string;
@@ -81,15 +82,15 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
               if (parsed.selections) return parsed.selections;
           } catch(e) {}
       }
-      return [{ 
-          name: shopperName, 
-          shifts: [], 
-          details: { 
+      return [{
+          name: shopperName,
+          shifts: [],
+          details: {
               nationality: '', // Initialize empty
-              usePicnicBus: null, civilStatus: '', gender: '', clothingSize: 'M', 
-              shoeSize: '40', gloveSize: '8 (M)', isRandstad: false, address: '',
+              usePicnicBus: null, civilStatus: '', gender: '', clothingSize: 'M',
+              shoeSize: '40', gloveSize: '8 (M)', isRandstad: false, address: '', email: '',
               recruiter: recruiterName // Persist Recruiter Name
-          } 
+          }
       }];
   });
   
@@ -619,6 +620,21 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
         }
         setSyncStatus('success');
         localStorage.removeItem(STORAGE_KEY);
+
+        // Send confirmation email (non-blocking)
+        if (shopper.details?.email) {
+            sendConfirmationEmail({
+                to: shopper.details.email,
+                shopperName: shopper.name,
+                firstWorkingDay: shopper.details.firstWorkingDay || 'TBD',
+                shifts: finalShifts,
+                usePicnicBus: shopper.details.usePicnicBus === true,
+                busConfig: busConfig,
+            }).catch(err => {
+                // Log error but don't block the success flow
+                console.error('Email sending failed (non-critical):', err);
+            });
+        }
     } catch (error: any) { 
         setSyncStatus('error'); 
         
@@ -638,11 +654,11 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
 
   const openDetailsModal = () => {
       // Fallback details if corrupted session
-      const existingDetails = selections[0].details || { 
-          nationality: '', usePicnicBus: null, civilStatus: '', gender: '', 
-          clothingSize: 'M', shoeSize: '40', gloveSize: '8 (M)', isRandstad: false, address: ''
+      const existingDetails = selections[0].details || {
+          nationality: '', usePicnicBus: null, civilStatus: '', gender: '',
+          clothingSize: 'M', shoeSize: '40', gloveSize: '8 (M)', isRandstad: false, address: '', email: ''
       };
-      
+
       setTempDetails(existingDetails);
       setShowDetailsModal(true);
   };

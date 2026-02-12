@@ -88,13 +88,14 @@ export interface ShopperDetails {
   gloveSize: string; // Auto-calculated
   isRandstad: boolean;
   address?: string; // Required if isRandstad is true
+  email?: string; // Email address for notifications
   firstWorkingDay?: string; // YYYY-MM-DD
   pnNumber?: string; // e.g. PN123456
   firstDayStatus?: 'PENDING' | 'SHOWED_UP' | 'NO_SHOW'; // New Attendance Tracking
   notes?: string; // NEW: Admin Notes
   ignoreCompliance?: boolean; // NEW: Flag to ignore compliance checks
   isHiddenFromMainView?: boolean; // NEW: If true, hides from Shift Scheduler View (imported from sheets)
-  
+
   recruiter?: string; // NEW: Staff member who conducted the SER
 
   // FROZEN SPECIFIC FIELDS

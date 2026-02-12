@@ -1,13 +1,15 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, MapPin, Sheet, Copy, FileSpreadsheet, Calendar, Star, CheckCircle, CheckCircle2, XCircle, Clock, AlertTriangle, X, Check, Globe, FileText, Save, Snowflake, Building2, MessageSquare, TrendingUp, UserCheck } from 'lucide-react';
+import { User, MapPin, Sheet, Copy, FileSpreadsheet, Calendar, Star, CheckCircle, CheckCircle2, XCircle, Clock, AlertTriangle, X, Check, Globe, FileText, Save, Snowflake, Building2, MessageSquare, TrendingUp, UserCheck, Mail, Send } from 'lucide-react';
 import { format } from 'date-fns';
 import { supabase } from '../../supabaseClient';
 import { ShopperRecord, ShiftType } from '../../types';
-import { 
-    generateSpreadsheetRow, 
+import {
+    generateSpreadsheetRow,
     generateHRSpreadsheetRow
 } from '../../utils/clipboardExport';
+import { sendConfirmationEmail } from '../../utils/emailService';
+import { DEFAULT_BUS_CONFIG } from '../../constants';
 
 interface ShopperExpandedDetailsProps {
     shopper: ShopperRecord;
@@ -19,7 +21,7 @@ interface ShopperExpandedDetailsProps {
 export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ shopper, onStatusUpdate, onUpdateShopper, currentUser }) => {
     // Local state for confirmation flow
     const [pendingStatus, setPendingStatus] = useState<'PENDING' | 'SHOWED_UP' | 'NO_SHOW' | null>(null);
-    
+
     // Notes State
     const [notes, setNotes] = useState(shopper.details?.notes || '');
     const [isSavingNotes, setIsSavingNotes] = useState(false);
@@ -29,15 +31,66 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
     const [isFrozenEligible, setIsFrozenEligible] = useState(shopper.details?.isFrozenEligible || false);
     const [pendingFrozenToggle, setPendingFrozenToggle] = useState(false);
 
+    // Email Resend State
+    const [isResendingEmail, setIsResendingEmail] = useState(false);
+    const [emailResent, setEmailResent] = useState(false);
+
     // Reset pending status if shopper data updates externally
     useEffect(() => {
         setPendingStatus(null);
         setPendingFrozenToggle(false);
         setNotes(shopper.details?.notes || '');
         setIsFrozenEligible(shopper.details?.isFrozenEligible || false);
+        setEmailResent(false);
     }, [shopper.details?.firstDayStatus, shopper.id, shopper.details?.isFrozenEligible]);
-    
+
     const hasNoteChanged = notes !== (shopper.details?.notes || '');
+
+    // --- RESEND EMAIL HANDLER ---
+    const handleResendEmail = async () => {
+        if (!shopper.details?.email) {
+            alert('No email address found for this shopper. Please add an email address first.');
+            return;
+        }
+
+        if (!shopper.shifts || shopper.shifts.length === 0) {
+            alert('No shifts found for this shopper. Cannot send email without shift data.');
+            return;
+        }
+
+        const confirmed = window.confirm(
+            `Send shift confirmation email to:\n\n${shopper.details.email}\n\nThis will send an email with all shift details and bus information.`
+        );
+
+        if (!confirmed) return;
+
+        setIsResendingEmail(true);
+        setEmailResent(false);
+
+        try {
+            const success = await sendConfirmationEmail({
+                to: shopper.details.email,
+                shopperName: shopper.name,
+                firstWorkingDay: shopper.details.firstWorkingDay || 'TBD',
+                shifts: shopper.shifts,
+                usePicnicBus: shopper.details.usePicnicBus === true,
+                busConfig: DEFAULT_BUS_CONFIG,
+            });
+
+            if (success) {
+                setEmailResent(true);
+                setTimeout(() => setEmailResent(false), 3000);
+                alert(`✅ Email sent successfully to ${shopper.details.email}!`);
+            } else {
+                throw new Error('Email sending failed');
+            }
+        } catch (error: any) {
+            console.error('Failed to resend email:', error);
+            alert(`❌ Failed to send email: ${error.message || 'Unknown error'}\n\nPlease check the console for details.`);
+        } finally {
+            setIsResendingEmail(false);
+        }
+    };
 
     // --- COPY HANDLERS (Local to the item) ---
     const handleCopyForSheet = (weekOffset: number) => {
@@ -190,6 +243,18 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
                             </span>
                         )}
 
+                        {/* EMAIL DISPLAY */}
+                        {shopper.details?.email && (
+                            <div className="col-span-2 mt-2 p-2.5 bg-purple-50/50 rounded-lg border border-purple-100 text-xs">
+                                <span className="block font-bold text-purple-700 mb-1 flex items-center gap-1 uppercase tracking-wider">
+                                    <Mail className="w-3 h-3"/> Email Address
+                                </span>
+                                <span className="text-gray-800 font-medium leading-relaxed block select-all break-all">
+                                    {shopper.details.email}
+                                </span>
+                            </div>
+                        )}
+
                         {/* ADDRESS DISPLAY FOR RANDSTAD USERS */}
                         {shopper.details?.isRandstad && shopper.details?.address && (
                             <div className="col-span-2 mt-2 p-2.5 bg-blue-50/50 rounded-lg border border-blue-100 text-xs">
@@ -207,7 +272,7 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
                     <div className="mt-4 pt-4 border-t space-y-3">
                         <h5 className="font-bold text-gray-900 text-xs uppercase flex items-center gap-2"><Sheet className="w-3 h-3 text-green-600" /> Google Sheets Export</h5>
                         <div className="grid grid-cols-3 gap-3">
-                            <button 
+                            <button
                                 onClick={(e) => { e.stopPropagation(); handleCopyForSheet(0); }}
                                 className="flex flex-col items-center justify-center p-3 bg-white border border-gray-200 rounded-xl hover:border-green-500 hover:bg-green-50/30 hover:shadow-md transition-all group text-center"
                             >
@@ -217,7 +282,7 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
                                 <span className="text-xs font-bold text-gray-700 group-hover:text-green-800">Copy Week 1</span>
                             </button>
 
-                            <button 
+                            <button
                                 onClick={(e) => { e.stopPropagation(); handleCopyForSheet(1); }}
                                 className="flex flex-col items-center justify-center p-3 bg-white border border-gray-200 rounded-xl hover:border-green-500 hover:bg-green-50/30 hover:shadow-md transition-all group text-center"
                             >
@@ -227,7 +292,7 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
                                 <span className="text-xs font-bold text-gray-700 group-hover:text-green-800">Copy Week 2</span>
                             </button>
 
-                            <button 
+                            <button
                                 onClick={(e) => { e.stopPropagation(); handleCopyLSInflow(); }}
                                 className="flex flex-col items-center justify-center p-3 bg-white border border-gray-200 rounded-xl hover:border-blue-500 hover:bg-blue-50/30 hover:shadow-md transition-all group text-center"
                             >
@@ -237,6 +302,48 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
                                 <span className="text-xs font-bold text-gray-700 group-hover:text-green-800">Copy LS Inflow</span>
                             </button>
                         </div>
+                    </div>
+
+                    {/* RESEND EMAIL BUTTON */}
+                    <div className="mt-4 pt-4 border-t space-y-3">
+                        <h5 className="font-bold text-gray-900 text-xs uppercase flex items-center gap-2">
+                            <Mail className="w-3 h-3 text-purple-600" /> Email Actions
+                        </h5>
+                        <button
+                            onClick={(e) => { e.stopPropagation(); handleResendEmail(); }}
+                            disabled={isResendingEmail || !shopper.details?.email}
+                            className={`w-full flex items-center justify-center gap-2 p-3 rounded-xl transition-all font-bold text-sm ${
+                                emailResent
+                                    ? 'bg-green-500 text-white border-green-600'
+                                    : !shopper.details?.email
+                                    ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                                    : isResendingEmail
+                                    ? 'bg-purple-100 text-purple-600 border-purple-200 cursor-wait'
+                                    : 'bg-white text-purple-600 border border-purple-200 hover:border-purple-500 hover:bg-purple-50/50 hover:shadow-md'
+                            }`}
+                        >
+                            {emailResent ? (
+                                <>
+                                    <Check className="w-4 h-4" />
+                                    Email Sent!
+                                </>
+                            ) : isResendingEmail ? (
+                                <>
+                                    <div className="w-4 h-4 border-2 border-purple-600 border-t-transparent rounded-full animate-spin" />
+                                    Sending...
+                                </>
+                            ) : (
+                                <>
+                                    <Send className="w-4 h-4" />
+                                    {shopper.details?.email ? 'Resend Shift Email' : 'No Email Address'}
+                                </>
+                            )}
+                        </button>
+                        {!shopper.details?.email && (
+                            <p className="text-xs text-gray-500 text-center">
+                                Add an email address in the edit modal to enable this feature
+                            </p>
+                        )}
                     </div>
                 </div>
 
