@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { supabase } from '../supabaseClient';
-import { Download, Search, RefreshCw, SaveAll, Copy, FileSpreadsheet, Check, Sun, Sunset, Bell, ArrowUpCircle, Pencil, Trash2, ChevronDown, ChevronUp, CalendarRange, Clock, AlertCircle, Users, ArrowRight, Calendar, Sunrise, Moon, Stethoscope, Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { Download, Search, RefreshCw, SaveAll, Copy, FileSpreadsheet, Check, Sun, Sunset, Bell, ArrowUpCircle, Pencil, Trash2, ChevronDown, ChevronUp, CalendarRange, Clock, AlertCircle, Users, ArrowRight, Calendar, Sunrise, Moon, Stethoscope, Loader2, CheckCircle2, XCircle, FileText } from 'lucide-react';
 import { format, isValid, addWeeks, addDays } from 'date-fns';
 import startOfWeek from 'date-fns/startOfWeek';
 import { ShopperRecord, ShiftType } from '../types';
@@ -10,9 +10,10 @@ import { EditShopperModal } from './EditShopperModal';
 import { ShopperTableRow } from './Admin/ShopperTableRow';
 import { ShopperExpandedDetails } from './Admin/ShopperExpandedDetails';
 import { ComplianceReportModal } from './ComplianceReportModal';
+import { SERReportModal } from './SERReportModal';
 import { validateShopperSchedule, getSafeDateFromKey } from '../utils/validation';
-import { 
-    generateSpreadsheetRow, 
+import {
+    generateSpreadsheetRow,
     generateBulkHRSpreadsheetRow
 } from '../utils/clipboardExport';
 
@@ -87,6 +88,10 @@ export const AdminDataView: React.FC<AdminDataViewProps> = ({ currentUser }) => 
   const [checkStatus, setCheckStatus] = useState<'IDLE' | 'CHECKING' | 'SUCCESS' | 'ISSUES'>('IDLE');
   const [activeIssueCount, setActiveIssueCount] = useState(0); // Count of NON-IGNORED issues
   const [showComplianceModal, setShowComplianceModal] = useState(false); // NEW MODAL STATE
+
+  // SER Report Modal State
+  const [showSERReportModal, setShowSERReportModal] = useState(false);
+  const [serReportData, setSERReportData] = useState<{ shoppers: ShopperRecord[], sessionDate: string, sessionType: 'MORNING' | 'AFTERNOON', totalHiredThisWeek: number } | null>(null);
 
   // Refs for Scroll to Today Logic
   const groupRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -314,11 +319,34 @@ export const AdminDataView: React.FC<AdminDataViewProps> = ({ currentUser }) => 
       } catch (e: any) { alert("Bulk copy failed: " + e.message); }
   };
 
+  const handleOpenSERReport = (shoppers: ShopperRecord[], sessionKey: string) => {
+      // Extract date and session type from sessionKey (format: "2026-02-13_0_MORNING" or "2026-02-13_1_AFTERNOON")
+      const parts = sessionKey.split('_');
+      const sessionDate = parts[0];
+      const sessionType = parts[2] as 'MORNING' | 'AFTERNOON';
+
+      // Calculate total hired for the week (Monday to Sunday)
+      const date = new Date(sessionDate);
+      const weekStart = startOfWeek(date, { weekStartsOn: 1 }); // Monday
+      const weekEnd = addDays(weekStart, 6); // Sunday
+      const weekStartKey = format(weekStart, 'yyyy-MM-dd');
+      const weekEndKey = format(weekEnd, 'yyyy-MM-dd');
+
+      // Count all shoppers whose firstWorkingDay falls within this week
+      const totalHiredThisWeek = data.filter(s => {
+          const fwd = s.details?.firstWorkingDay;
+          return fwd && fwd >= weekStartKey && fwd <= weekEndKey;
+      }).length;
+
+      setSERReportData({ shoppers, sessionDate, sessionType, totalHiredThisWeek });
+      setShowSERReportModal(true);
+  };
+
   const handleBulkCopyLSInflow = async (shoppers: ShopperRecord[], feedbackKey: string) => {
       try {
           // LOGIC: Check for missing recruiters and stamp with currentUser
           const updates: { id: string, details: any }[] = [];
-          
+
           const updatedShoppers = shoppers.map(s => {
               // Only update if recruiter is missing AND we have a logged in user
               if (!s.details?.recruiter && currentUser) {
@@ -334,7 +362,7 @@ export const AdminDataView: React.FC<AdminDataViewProps> = ({ currentUser }) => 
               for (const update of updates) {
                   await supabase.from('shoppers').update({ details: update.details }).eq('id', update.id);
               }
-              
+
               // Reflect update in local state immediately
               setData(prev => prev.map(item => {
                   const updated = updates.find(u => u.id === item.id);
@@ -570,10 +598,18 @@ export const AdminDataView: React.FC<AdminDataViewProps> = ({ currentUser }) => 
                     </div>
 
                     <div className="flex flex-col md:flex-row items-start md:items-center gap-4 w-full xl:w-auto xl:justify-end">
-                        <button onClick={() => handleBulkCopyLSInflow(items, `${fullGroupKey}-LS`)} className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md group whitespace-nowrap ${copyFeedback[`${fullGroupKey}-LS`] ? 'bg-blue-700 text-white shadow-blue-200' : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-100 hover:shadow-blue-200'}`}>
-                            {copyFeedback[`${fullGroupKey}-LS`] ? <Check className="w-4 h-4" /> : <FileSpreadsheet className="w-4 h-4 group-hover:scale-110 transition-transform" />} 
-                            {copyFeedback[`${fullGroupKey}-LS`] ? 'LS Data Copied!' : 'Copy LS Data'}
-                        </button>
+                        <div className="flex gap-2 items-center">
+                            <button
+                                onClick={() => handleOpenSERReport(items, fullGroupKey)}
+                                className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-200"
+                            >
+                                Report
+                            </button>
+                            <button onClick={() => handleBulkCopyLSInflow(items, `${fullGroupKey}-LS`)} className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md group whitespace-nowrap ${copyFeedback[`${fullGroupKey}-LS`] ? 'bg-blue-700 text-white shadow-blue-200' : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-100 hover:shadow-blue-200'}`}>
+                                {copyFeedback[`${fullGroupKey}-LS`] ? <Check className="w-4 h-4" /> : <FileSpreadsheet className="w-4 h-4 group-hover:scale-110 transition-transform" />}
+                                {copyFeedback[`${fullGroupKey}-LS`] ? 'LS Data Copied!' : 'Copy LS Data'}
+                            </button>
+                        </div>
                         <div className="hidden md:block w-px h-8 bg-gray-300/50 mx-2"></div>
                         <div className="flex flex-wrap gap-2 items-center">
                              {calendarKeys.length === 0 ? <span className="text-xs text-gray-400 italic px-2">No dates set</span> : calendarKeys.map((mondayKey) => {
@@ -684,15 +720,27 @@ export const AdminDataView: React.FC<AdminDataViewProps> = ({ currentUser }) => 
       </div>
 
       <EditShopperModal shopper={editingShopper} onClose={() => setEditingShopper(null)} onUpdate={(updated) => setData(prev => prev.map(i => i.id === updated.id ? updated : i))} onRefresh={fetchData} />
-      
+
       {/* NEW COMPLIANCE REPORT MODAL */}
-      <ComplianceReportModal 
+      <ComplianceReportModal
           isOpen={showComplianceModal}
           onClose={() => setShowComplianceModal(false)}
           issues={complianceIssues}
           shoppers={data}
           onToggleIgnore={handleToggleComplianceException}
       />
+
+      {/* SER REPORT MODAL */}
+      {serReportData && (
+        <SERReportModal
+          isOpen={showSERReportModal}
+          onClose={() => setShowSERReportModal(false)}
+          shoppers={serReportData.shoppers}
+          sessionDate={serReportData.sessionDate}
+          sessionType={serReportData.sessionType}
+          totalHiredThisWeek={serReportData.totalHiredThisWeek}
+        />
+      )}
     </div>
   );
 };
