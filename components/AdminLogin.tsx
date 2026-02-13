@@ -52,11 +52,21 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin, onCancel, authE
     <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
       <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm space-y-6">
         <div className="text-center">
-          <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 transition-colors ${isLocked ? 'bg-red-100' : (isSuperAdmin ? 'bg-purple-100' : 'bg-gray-100')}`}>
-            {isLocked ? <Clock className="w-8 h-8 text-red-600 animate-pulse" /> : (
-                isSuperAdmin ? <ShieldCheck className="w-8 h-8 text-purple-600" /> : <Lock className="w-8 h-8 text-gray-600" />
-            )}
+          {/* Logo */}
+          <div className="mb-6">
+            <img
+              src="/staffya-logo.jpg"
+              alt="Staffya Logo"
+              className="w-32 h-32 mx-auto rounded-2xl shadow-md object-cover"
+            />
           </div>
+
+          {(isLocked || isSuperAdmin) && (
+            <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 transition-colors ${isLocked ? 'bg-red-100' : 'bg-purple-100'}`}>
+              {isLocked ? <Clock className="w-8 h-8 text-red-600 animate-pulse" /> : <ShieldCheck className="w-8 h-8 text-purple-600" />}
+            </div>
+          )}
+
           <h2 className="text-2xl font-bold text-gray-900">
               {isLocked ? 'System Locked' : (isSuperAdmin ? 'Super Admin Access' : 'Staff Access')}
           </h2>

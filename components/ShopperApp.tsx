@@ -797,13 +797,19 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
     <div className="h-[100dvh] bg-gray-50 flex flex-col overflow-hidden">
       {/* Header */}
       <div className="bg-white px-6 py-4 shadow-sm border-b sticky top-0 z-20 flex justify-between items-start shrink-0">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            <button onClick={onExit} className="hover:text-red-500 transition-colors outline-none cursor-default active:scale-95" title="Exit to Setup">
-                <User className="w-5 h-5 text-gray-400" />
-            </button>
-            {shopperName}
-          </h2>
+        <div className="flex items-center gap-4">
+          <img
+            src="/staffya-logo.jpg"
+            alt="Staffya Logo"
+            className="w-12 h-12 rounded-lg shadow-sm object-cover shrink-0"
+          />
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <button onClick={onExit} className="hover:text-red-500 transition-colors outline-none cursor-default active:scale-95" title="Exit to Setup">
+                  <User className="w-5 h-5 text-gray-400" />
+              </button>
+              {shopperName}
+            </h2>
           
           {recruiterName && (
               <div className="flex items-center gap-1.5 text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-1 ml-1">
@@ -844,8 +850,9 @@ export const ShopperApp: React.FC<ShopperAppProps> = ({
                   Setup Profile
               </div>
           )}
+          </div>
         </div>
-        
+
         {step >= 1 && (
             <div className="flex gap-3 pt-1">
                 <div className="hidden md:flex gap-4 text-xs font-medium text-gray-500 items-center border-l pl-4">

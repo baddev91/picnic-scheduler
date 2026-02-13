@@ -103,9 +103,11 @@ export const FrozenList: React.FC<FrozenListProps> = ({ onLogout, isSuperAdmin =
         {/* Header */}
         <div className="bg-white border-b border-cyan-100 sticky top-0 z-20 shadow-sm px-4 md:px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
             <div className="flex items-center gap-3 w-full md:w-auto">
-                <div className="p-2 bg-cyan-100 text-cyan-600 rounded-lg shrink-0">
-                    <Snowflake className="w-6 h-6 animate-pulse" />
-                </div>
+                <img
+                  src="/staffya-logo.jpg"
+                  alt="Staffya Logo"
+                  className="w-12 h-12 rounded-lg shadow-sm object-cover shrink-0"
+                />
                 <div>
                     <h1 className="text-xl font-black text-cyan-900 tracking-tight leading-none">FROZEN <span className="text-cyan-600/60 font-medium">DEPT</span></h1>
                     <p className="text-xs text-cyan-600 font-bold">Eligible Candidates List</p>

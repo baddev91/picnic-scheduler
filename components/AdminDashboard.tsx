@@ -151,14 +151,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   return (
       <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
-          
+
           {/* HEADER SECTION */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-              <div>
-                  <h1 className="text-3xl font-black text-gray-900 tracking-tight">Dashboard</h1>
-                  <p className="text-gray-500 mt-1">
-                      {isSuperAdmin ? 'Full Access: Manage schedules, settings and staff.' : 'Manage schedules and view submissions.'}
-                  </p>
+              <div className="flex items-center gap-4">
+                  <img
+                    src="/staffya-logo.jpg"
+                    alt="Staffya Logo"
+                    className="w-16 h-16 rounded-xl shadow-md object-cover"
+                  />
+                  <div>
+                      <h1 className="text-3xl font-black text-gray-900 tracking-tight">Dashboard</h1>
+                      <p className="text-gray-500 mt-1">
+                          {isSuperAdmin ? 'Full Access: Manage schedules, settings and staff.' : 'Manage schedules and view submissions.'}
+                      </p>
+                  </div>
               </div>
               <div className="flex gap-2">
                  {isSuperAdmin && (

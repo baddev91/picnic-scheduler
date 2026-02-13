@@ -84,17 +84,12 @@ export const ShopperSetup: React.FC<ShopperSetupProps> = ({
           
           {/* Logo Section */}
           <div className="text-center space-y-6">
-             <h1 className="text-6xl font-black tracking-tighter text-[#E31837] select-none drop-shadow-sm">
-               STAFFYA
-             </h1>
-             
-             <div className="relative inline-block">
-                 <div className="w-24 h-24 bg-gradient-to-b from-red-50 to-white rounded-full flex items-center justify-center mx-auto border border-red-100 shadow-sm relative z-10">
-                    <User className="w-10 h-10 text-[#E31837]" strokeWidth={2.5} />
-                 </div>
-                 <div className="absolute -top-1 -right-1 z-20 bg-yellow-400 rounded-full p-1.5 border-2 border-white shadow-sm animate-pulse">
-                     <Sparkles className="w-4 h-4 text-yellow-900" />
-                 </div>
+             <div className="flex justify-center mb-4">
+               <img
+                 src="/staffya-logo.jpg"
+                 alt="Staffya Logo"
+                 className="w-40 h-40 rounded-3xl shadow-2xl object-cover border-4 border-white"
+               />
              </div>
 
              <div className="space-y-2">
