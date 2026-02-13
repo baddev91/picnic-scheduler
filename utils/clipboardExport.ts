@@ -171,9 +171,9 @@ const getHRRowValues = (shopper: ShopperRecord): string[] => {
       '',                                           // Col N: Re-hire?
       '',                                           // Col O: Onboard sheet?
       '',                                           // Col P: Score cards?
-      '',                                           // Col Q: Leadership fit?
-      '',                                           // Col R: RT?
-      shopper.details?.recruiter || ''              // Col S: Recruiter (NEW)
+      shopper.details?.recruiter || '',             // Col Q: Recruiter (MOVED from S)
+      '',                                           // Col R: Leadership fit?
+      ''                                            // Col S: RT?
   ];
 };
 
