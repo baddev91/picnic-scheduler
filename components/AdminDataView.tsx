@@ -507,8 +507,8 @@ export const AdminDataView: React.FC<AdminDataViewProps> = ({ currentUser, isSup
     if (existingTime) {
       setTempStartTime(existingTime);
     } else {
-      // Default times: Morning = 09:00, Afternoon = 14:00 (but user can select up to 15:30)
-      const defaultTime = sessionType === 'MORNING' ? '09:00' : '14:00';
+      // Default times: Morning = 09:00, Afternoon = 15:30 (but user can select up to 15:30)
+      const defaultTime = sessionType === 'MORNING' ? '09:00' : '15:30';
       setTempStartTime(defaultTime);
     }
     setEditingStartTime(sessionKey);
