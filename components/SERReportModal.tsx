@@ -359,7 +359,7 @@ export const SERReportModal: React.FC<SERReportModalProps> = ({
 
     // Notes from Submissions
     if (submissionNotes.trim()) {
-      report += `📝 *Submission Notes:*\n${submissionNotes}\n\n`;
+      report += `📝 *Shoppers Notes:*\n${submissionNotes}\n\n`;
     }
 
     // Additional Notes
@@ -688,10 +688,10 @@ export const SERReportModal: React.FC<SERReportModalProps> = ({
             </div>
           </div>
 
-          {/* Submission Notes (Editable) */}
+          {/* Shoppers Notes (Editable) */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5">
             <h4 className="text-xs sm:text-sm font-bold text-gray-700 uppercase tracking-wider mb-3 sm:mb-4 flex items-center gap-2">
-              <FileText className="w-4 h-4 text-blue-600" /> Submission Notes
+              <FileText className="w-4 h-4 text-blue-600" /> Shoppers Notes
             </h4>
             <textarea
               value={submissionNotes}
