@@ -97,9 +97,9 @@ export const RecruiterStats: React.FC<RecruiterStatsProps> = ({ staffList, isSup
         // Parse custom start time (format: "HH:MM")
         [startHour, startMinute] = customStartTime.split(':').map(Number);
       } else {
-        // Default start times: Morning = 09:00, Afternoon = 14:00
-        startHour = sessionType === 'MORNING' ? 9 : 14;
-        startMinute = 0;
+        // Default start times: Morning = 09:00, Afternoon = 15:30
+        startHour = sessionType === 'MORNING' ? 9 : 15;
+        startMinute = 30;
       }
 
       // Parse end time (format: "HH:MM")
