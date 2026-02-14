@@ -860,7 +860,7 @@ export const AdminDataView: React.FC<AdminDataViewProps> = ({ currentUser, isSup
                                     title={sessionStartTimes[fullGroupKey] ? `Start: ${sessionStartTimes[fullGroupKey]}` : 'Set start time'}
                                 >
                                     <Clock className="w-3.5 h-3.5 inline mr-1" />
-                                    {sessionStartTimes[fullGroupKey] || (fullGroupKey.includes('MORNING') ? '09:00' : '14:00')}
+                                    {sessionStartTimes[fullGroupKey] || (fullGroupKey.includes('MORNING') ? '09:00' : '15:30')}
                                 </button>
                             )}
 
