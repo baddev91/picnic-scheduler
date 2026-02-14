@@ -383,14 +383,17 @@ export const RecruiterStats: React.FC<RecruiterStatsProps> = ({ staffList, isSup
 
                             <div className="space-y-3">
                                 {/* Hires Bar */}
-                                <div>
+                                <div
+                                    className="cursor-help"
+                                    title="HIRES: Total number of successful recruitment submissions completed by this recruiter during the selected period. This is the primary metric for measuring recruitment output."
+                                >
                                     <div className="flex justify-between text-xs mb-1">
                                         <span className="font-bold text-gray-500 flex items-center gap-1"><Users className="w-3 h-3" /> Hires</span>
                                         <span className="font-black text-gray-900">{recruiter.hires}</span>
                                     </div>
                                     <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
-                                        <div 
-                                            className={`h-full rounded-full transition-all duration-1000 ${isTop ? 'bg-yellow-400' : 'bg-purple-600'}`} 
+                                        <div
+                                            className={`h-full rounded-full transition-all duration-1000 ${isTop ? 'bg-yellow-400' : 'bg-purple-600'}`}
                                             style={{ width: `${percentage}%` }}
                                         />
                                     </div>
@@ -398,7 +401,10 @@ export const RecruiterStats: React.FC<RecruiterStatsProps> = ({ staffList, isSup
 
                                 {/* Detailed Stats Row */}
                                 <div className="flex items-center gap-2 pt-2 border-t border-gray-50 flex-wrap">
-                                    <div className="flex-1 min-w-[120px] bg-gray-50 rounded px-2 py-1.5 flex items-center justify-between">
+                                    <div
+                                        className="flex-1 min-w-[120px] bg-gray-50 rounded px-2 py-1.5 flex items-center justify-between cursor-help transition-all hover:bg-gray-100 hover:shadow-sm"
+                                        title="IMPACT: Total number of work shifts scheduled and filled by this recruiter. Higher numbers indicate greater contribution to staffing needs."
+                                    >
                                         <span className="text-[9px] font-bold text-gray-400 uppercase">Impact</span>
                                         <div className="flex items-center gap-1 text-xs font-bold text-gray-700">
                                             <CalendarCheck className="w-3 h-3 text-green-500" />
@@ -406,7 +412,10 @@ export const RecruiterStats: React.FC<RecruiterStatsProps> = ({ staffList, isSup
                                         </div>
                                     </div>
 
-                                    <div className="flex-1 min-w-[120px] bg-blue-50 rounded px-2 py-1.5 flex items-center justify-between">
+                                    <div
+                                        className="flex-1 min-w-[120px] bg-blue-50 rounded px-2 py-1.5 flex items-center justify-between cursor-help transition-all hover:bg-blue-100 hover:shadow-sm"
+                                        title="AVG/DAY: Average number of successful hires completed per active working day. This shows daily productivity and hiring rate efficiency."
+                                    >
                                         <span className="text-[9px] font-bold text-blue-400 uppercase">Avg/Day</span>
                                         <div className="flex items-center gap-1 text-xs font-bold text-blue-700">
                                             <Users className="w-3 h-3 text-blue-500" />
@@ -416,7 +425,10 @@ export const RecruiterStats: React.FC<RecruiterStatsProps> = ({ staffList, isSup
 
                                     {/* Average Session Duration */}
                                     {recruiter.avgSessionDuration > 0 && (
-                                        <div className="flex-1 min-w-[120px] bg-orange-50 rounded px-2 py-1.5 flex items-center justify-between">
+                                        <div
+                                            className="flex-1 min-w-[120px] bg-orange-50 rounded px-2 py-1.5 flex items-center justify-between cursor-help transition-all hover:bg-orange-100 hover:shadow-sm"
+                                            title="AVG TIME: Average duration of working sessions in hours. This measures how long it typically takes to complete recruitment activities. Lower values may indicate faster processing."
+                                        >
                                             <span className="text-[9px] font-bold text-orange-400 uppercase">Avg Time</span>
                                             <div className="flex items-center gap-1 text-xs font-bold text-orange-700">
                                                 <Clock className="w-3 h-3 text-orange-500" />
@@ -427,7 +439,10 @@ export const RecruiterStats: React.FC<RecruiterStatsProps> = ({ staffList, isSup
 
                                     {/* Efficiency Score (C-Score) */}
                                     {recruiter.efficiencyScore > 0 && (
-                                        <div className="flex-1 min-w-[120px] bg-purple-50 rounded px-2 py-1.5 flex items-center justify-between">
+                                        <div
+                                            className="flex-1 min-w-[120px] bg-purple-50 rounded px-2 py-1.5 flex items-center justify-between cursor-help transition-all hover:bg-purple-100 hover:shadow-sm"
+                                            title="C-SCORE: Composite efficiency score calculated as hires per hour (h/hr). This metric shows overall recruitment efficiency - higher values indicate more hires completed per hour worked."
+                                        >
                                             <span className="text-[9px] font-bold text-purple-400 uppercase">C-Score</span>
                                             <div className="flex items-center gap-1 text-xs font-bold text-purple-700">
                                                 <Zap className="w-3 h-3 text-purple-500" />
