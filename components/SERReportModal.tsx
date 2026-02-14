@@ -77,11 +77,17 @@ export const SERReportModal: React.FC<SERReportModalProps> = ({
 
   // Default rejection reasons + custom reasons
   const defaultRejectionReasons = [
-    'Poor communication skills',
-    'Lack of motivation',
-    'Failed background check',
-    'Not physically fit for the role',
-    'Unreliable availability'
+    'Availability',
+    'Behavioural',
+    'No Motivation',
+    'Hard Skills - Driving / Languages / Physical',
+    'Legal requirements',
+    'Location Accessibility',
+    'Not Eligible for rehire',
+    'Process Abandoned Without Reason',
+    'Rejected us - Compensation',
+    '30 day backlog',
+    'Accepted Another offer'
   ];
   const availableRejectionReasons = [...defaultRejectionReasons, ...customRejectionReasons];
 
@@ -90,8 +96,8 @@ export const SERReportModal: React.FC<SERReportModalProps> = ({
     'Candidate requested different date',
     'Scheduling conflict',
     'Incomplete documentation',
-    'Need more time to prepare',
-    'Session fully booked'
+    'Need more time',
+    'Language barrier'
   ];
   const availableRescheduleReasons = [...defaultRescheduleReasons, ...customRescheduleReasons];
 
