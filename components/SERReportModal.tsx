@@ -52,9 +52,13 @@ export const SERReportModal: React.FC<SERReportModalProps> = ({
   // Custom options state
   const [customTasks, setCustomTasks] = useState<string[]>([]);
   const [customItProblems, setCustomItProblems] = useState<string[]>([]);
+  const [customRejectionReasons, setCustomRejectionReasons] = useState<string[]>([]);
+  const [customRescheduleReasons, setCustomRescheduleReasons] = useState<string[]>([]);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [newTaskInput, setNewTaskInput] = useState('');
   const [newItProblemInput, setNewItProblemInput] = useState('');
+  const [newRejectionReasonInput, setNewRejectionReasonInput] = useState('');
+  const [newRescheduleReasonInput, setNewRescheduleReasonInput] = useState('');
 
   const hired = shoppers.length;
 
@@ -70,6 +74,26 @@ export const SERReportModal: React.FC<SERReportModalProps> = ({
     'Didn\'t receive email to join Slack workspace'
   ];
   const commonItProblems = [...defaultItProblems, ...customItProblems];
+
+  // Default rejection reasons + custom reasons
+  const defaultRejectionReasons = [
+    'Poor communication skills',
+    'Lack of motivation',
+    'Failed background check',
+    'Not physically fit for the role',
+    'Unreliable availability'
+  ];
+  const availableRejectionReasons = [...defaultRejectionReasons, ...customRejectionReasons];
+
+  // Default reschedule reasons + custom reasons
+  const defaultRescheduleReasons = [
+    'Candidate requested different date',
+    'Scheduling conflict',
+    'Incomplete documentation',
+    'Need more time to prepare',
+    'Session fully booked'
+  ];
+  const availableRescheduleReasons = [...defaultRescheduleReasons, ...customRescheduleReasons];
 
   // Get day of week
   const dayOfWeek = format(new Date(sessionDate), 'EEEE');
@@ -95,6 +119,26 @@ export const SERReportModal: React.FC<SERReportModalProps> = ({
 
       if (!itProblemsError && itProblemsData?.value && Array.isArray(itProblemsData.value)) {
         setCustomItProblems(itProblemsData.value);
+      }
+
+      const { data: rejectionReasonsData, error: rejectionReasonsError } = await supabase
+        .from('app_settings')
+        .select('value')
+        .eq('id', 'custom_rejection_reasons')
+        .maybeSingle();
+
+      if (!rejectionReasonsError && rejectionReasonsData?.value && Array.isArray(rejectionReasonsData.value)) {
+        setCustomRejectionReasons(rejectionReasonsData.value);
+      }
+
+      const { data: rescheduleReasonsData, error: rescheduleReasonsError } = await supabase
+        .from('app_settings')
+        .select('value')
+        .eq('id', 'custom_reschedule_reasons')
+        .maybeSingle();
+
+      if (!rescheduleReasonsError && rescheduleReasonsData?.value && Array.isArray(rescheduleReasonsData.value)) {
+        setCustomRescheduleReasons(rescheduleReasonsData.value);
       }
     };
 
@@ -205,6 +249,34 @@ export const SERReportModal: React.FC<SERReportModalProps> = ({
     const updated = customItProblems.filter(p => p !== problem);
     setCustomItProblems(updated);
     await supabase.from('app_settings').upsert({ id: 'custom_it_problems', value: updated });
+  };
+
+  const handleAddRejectionReason = async () => {
+    if (!newRejectionReasonInput.trim()) return;
+    const updated = [...customRejectionReasons, newRejectionReasonInput.trim()];
+    setCustomRejectionReasons(updated);
+    await supabase.from('app_settings').upsert({ id: 'custom_rejection_reasons', value: updated });
+    setNewRejectionReasonInput('');
+  };
+
+  const handleRemoveRejectionReason = async (reason: string) => {
+    const updated = customRejectionReasons.filter(r => r !== reason);
+    setCustomRejectionReasons(updated);
+    await supabase.from('app_settings').upsert({ id: 'custom_rejection_reasons', value: updated });
+  };
+
+  const handleAddRescheduleReason = async () => {
+    if (!newRescheduleReasonInput.trim()) return;
+    const updated = [...customRescheduleReasons, newRescheduleReasonInput.trim()];
+    setCustomRescheduleReasons(updated);
+    await supabase.from('app_settings').upsert({ id: 'custom_reschedule_reasons', value: updated });
+    setNewRescheduleReasonInput('');
+  };
+
+  const handleRemoveRescheduleReason = async (reason: string) => {
+    const updated = customRescheduleReasons.filter(r => r !== reason);
+    setCustomRescheduleReasons(updated);
+    await supabase.from('app_settings').upsert({ id: 'custom_reschedule_reasons', value: updated });
   };
 
   const generateReport = () => {
@@ -410,22 +482,25 @@ export const SERReportModal: React.FC<SERReportModalProps> = ({
             ) : (
               <div className="space-y-2 sm:space-y-3">
                 {rejectedCandidates.map((candidate, index) => (
-                  <div key={index} className="flex flex-col sm:flex-row gap-2">
+                  <div key={index} className="flex flex-col gap-2">
                     <input
                       type="text"
                       value={candidate.name}
                       onChange={(e) => updateRejectedCandidate(index, 'name', e.target.value)}
                       placeholder="Candidate name"
-                      className="flex-1 p-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-red-500 outline-none text-sm"
+                      className="w-full p-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-red-500 outline-none text-sm"
                     />
                     <div className="flex gap-2">
-                      <input
-                        type="text"
+                      <select
                         value={candidate.reason}
                         onChange={(e) => updateRejectedCandidate(index, 'reason', e.target.value)}
-                        placeholder="Reason (optional)"
                         className="flex-1 p-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-red-500 outline-none text-sm"
-                      />
+                      >
+                        <option value="">Select reason or type custom...</option>
+                        {availableRejectionReasons.map(reason => (
+                          <option key={reason} value={reason}>{reason}</option>
+                        ))}
+                      </select>
                       <button
                         onClick={() => removeRejectedCandidate(index)}
                         className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors shrink-0"
@@ -433,6 +508,16 @@ export const SERReportModal: React.FC<SERReportModalProps> = ({
                         <X className="w-4 h-4" />
                       </button>
                     </div>
+                    {/* Allow custom reason input if not in dropdown */}
+                    {candidate.reason && !availableRejectionReasons.includes(candidate.reason) && (
+                      <input
+                        type="text"
+                        value={candidate.reason}
+                        onChange={(e) => updateRejectedCandidate(index, 'reason', e.target.value)}
+                        placeholder="Custom reason"
+                        className="w-full p-2 bg-red-50 border border-red-300 rounded-lg focus:ring-2 focus:ring-red-500 outline-none text-sm"
+                      />
+                    )}
                   </div>
                 ))}
               </div>
@@ -457,22 +542,25 @@ export const SERReportModal: React.FC<SERReportModalProps> = ({
             ) : (
               <div className="space-y-2 sm:space-y-3">
                 {rescheduledCandidates.map((candidate, index) => (
-                  <div key={index} className="flex flex-col sm:flex-row gap-2">
+                  <div key={index} className="flex flex-col gap-2">
                     <input
                       type="text"
                       value={candidate.name}
                       onChange={(e) => updateRescheduledCandidate(index, 'name', e.target.value)}
                       placeholder="Candidate name"
-                      className="flex-1 p-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none text-sm"
+                      className="w-full p-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none text-sm"
                     />
                     <div className="flex gap-2">
-                      <input
-                        type="text"
+                      <select
                         value={candidate.reason}
                         onChange={(e) => updateRescheduledCandidate(index, 'reason', e.target.value)}
-                        placeholder="Reason (optional)"
                         className="flex-1 p-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none text-sm"
-                      />
+                      >
+                        <option value="">Select reason or type custom...</option>
+                        {availableRescheduleReasons.map(reason => (
+                          <option key={reason} value={reason}>{reason}</option>
+                        ))}
+                      </select>
                       <button
                         onClick={() => removeRescheduledCandidate(index)}
                         className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors shrink-0"
@@ -480,6 +568,16 @@ export const SERReportModal: React.FC<SERReportModalProps> = ({
                         <X className="w-4 h-4" />
                       </button>
                     </div>
+                    {/* Allow custom reason input if not in dropdown */}
+                    {candidate.reason && !availableRescheduleReasons.includes(candidate.reason) && (
+                      <input
+                        type="text"
+                        value={candidate.reason}
+                        onChange={(e) => updateRescheduledCandidate(index, 'reason', e.target.value)}
+                        placeholder="Custom reason"
+                        className="w-full p-2 bg-orange-50 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none text-sm"
+                      />
+                    )}
                   </div>
                 ))}
               </div>
@@ -662,7 +760,7 @@ export const SERReportModal: React.FC<SERReportModalProps> = ({
                   <X className="w-5 h-5" />
                 </button>
               </div>
-              <p className="text-indigo-100 text-sm mt-2">Manage custom tasks and IT problems for SER reports</p>
+              <p className="text-indigo-100 text-sm mt-2">Manage custom tasks, IT problems, rejection reasons, and reschedule reasons for SER reports</p>
             </div>
 
             {/* Settings Content */}
@@ -772,6 +870,120 @@ export const SERReportModal: React.FC<SERReportModalProps> = ({
                           <button
                             onClick={() => handleRemoveItProblem(problem)}
                             className="p-0.5 hover:bg-red-200 rounded transition-colors"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Custom Rejection Reasons Section */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-4 flex items-center gap-2">
+                  <XCircle className="w-4 h-4 text-red-600" /> Rejection Reasons
+                </h4>
+
+                {/* Add New Rejection Reason */}
+                <div className="flex gap-2 mb-4">
+                  <input
+                    type="text"
+                    value={newRejectionReasonInput}
+                    onChange={(e) => setNewRejectionReasonInput(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleAddRejectionReason()}
+                    placeholder="Enter new rejection reason..."
+                    className="flex-1 p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-red-500 outline-none text-sm"
+                  />
+                  <button
+                    onClick={handleAddRejectionReason}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition-colors flex items-center gap-2"
+                  >
+                    <Plus className="w-4 h-4" /> Add
+                  </button>
+                </div>
+
+                {/* Default Rejection Reasons (Read-only) */}
+                <div className="mb-3">
+                  <p className="text-xs font-bold text-gray-500 mb-2">Default Reasons (cannot be removed):</p>
+                  <div className="flex flex-wrap gap-2">
+                    {defaultRejectionReasons.map(reason => (
+                      <div key={reason} className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium border border-gray-200">
+                        {reason}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Custom Rejection Reasons (Removable) */}
+                {customRejectionReasons.length > 0 && (
+                  <div>
+                    <p className="text-xs font-bold text-gray-500 mb-2">Custom Reasons:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {customRejectionReasons.map(reason => (
+                        <div key={reason} className="flex items-center gap-2 px-3 py-1.5 bg-red-50 text-red-700 rounded-lg text-sm font-medium border border-red-200">
+                          {reason}
+                          <button
+                            onClick={() => handleRemoveRejectionReason(reason)}
+                            className="p-0.5 hover:bg-red-200 rounded transition-colors"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Custom Reschedule Reasons Section */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-4 flex items-center gap-2">
+                  <RefreshCw className="w-4 h-4 text-orange-600" /> Reschedule Reasons
+                </h4>
+
+                {/* Add New Reschedule Reason */}
+                <div className="flex gap-2 mb-4">
+                  <input
+                    type="text"
+                    value={newRescheduleReasonInput}
+                    onChange={(e) => setNewRescheduleReasonInput(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleAddRescheduleReason()}
+                    placeholder="Enter new reschedule reason..."
+                    className="flex-1 p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none text-sm"
+                  />
+                  <button
+                    onClick={handleAddRescheduleReason}
+                    className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-medium transition-colors flex items-center gap-2"
+                  >
+                    <Plus className="w-4 h-4" /> Add
+                  </button>
+                </div>
+
+                {/* Default Reschedule Reasons (Read-only) */}
+                <div className="mb-3">
+                  <p className="text-xs font-bold text-gray-500 mb-2">Default Reasons (cannot be removed):</p>
+                  <div className="flex flex-wrap gap-2">
+                    {defaultRescheduleReasons.map(reason => (
+                      <div key={reason} className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium border border-gray-200">
+                        {reason}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Custom Reschedule Reasons (Removable) */}
+                {customRescheduleReasons.length > 0 && (
+                  <div>
+                    <p className="text-xs font-bold text-gray-500 mb-2">Custom Reasons:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {customRescheduleReasons.map(reason => (
+                        <div key={reason} className="flex items-center gap-2 px-3 py-1.5 bg-orange-50 text-orange-700 rounded-lg text-sm font-medium border border-orange-200">
+                          {reason}
+                          <button
+                            onClick={() => handleRemoveRescheduleReason(reason)}
+                            className="p-0.5 hover:bg-orange-200 rounded transition-colors"
                           >
                             <Trash2 className="w-3 h-3" />
                           </button>
