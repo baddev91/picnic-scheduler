@@ -409,6 +409,56 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
                             </p>
                         )}
                     </div>
+
+                    {/* FROZEN LIST TOGGLE */}
+                    <div className="mt-4 pt-4 border-t space-y-3">
+                        <h5 className="font-bold text-gray-900 text-xs uppercase flex items-center gap-2">
+                            <Snowflake className="w-3 h-3 text-cyan-600" /> Frozen List
+                        </h5>
+
+                        {pendingFrozenToggle ? (
+                            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 animate-in slide-in-from-bottom-2">
+                                <div className="flex items-center justify-between gap-2 mb-2">
+                                    <span className="text-xs font-bold text-yellow-800 flex items-center gap-1">
+                                        <AlertTriangle className="w-3 h-3" />
+                                        {isFrozenEligible ? 'Remove from Frozen List?' : 'Add to Frozen List?'}
+                                    </span>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); setPendingFrozenToggle(false); }}
+                                        className="flex-1 py-2 px-3 rounded-lg text-xs font-bold bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 transition-all flex items-center justify-center gap-1"
+                                    >
+                                        <X className="w-3 h-3" /> Cancel
+                                    </button>
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); handleConfirmFrozenToggle(); }}
+                                        className="flex-1 py-2 px-3 rounded-lg text-xs font-bold bg-gray-900 text-white hover:bg-black transition-all flex items-center justify-center gap-1 shadow-sm"
+                                    >
+                                        <Check className="w-3 h-3" /> Confirm
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setPendingFrozenToggle(true); }}
+                                className={`w-full flex items-center justify-center gap-2 p-3 rounded-xl transition-all font-bold text-sm border ${
+                                    isFrozenEligible
+                                        ? 'bg-cyan-50 text-cyan-700 border-cyan-200 hover:bg-cyan-100 hover:border-cyan-300 hover:shadow-md'
+                                        : 'bg-white text-cyan-600 border-cyan-200 hover:border-cyan-500 hover:bg-cyan-50/50 hover:shadow-md'
+                                }`}
+                            >
+                                <Snowflake className="w-4 h-4" />
+                                {isFrozenEligible ? 'Remove from Frozen List' : 'Add to Frozen List'}
+                            </button>
+                        )}
+
+                        {isFrozenEligible && (
+                            <p className="text-xs text-cyan-700 bg-cyan-50 p-2 rounded-lg text-center font-medium">
+                                ✓ This shopper is in the Frozen List
+                            </p>
+                        )}
+                    </div>
                 </div>
 
                 {/* RIGHT COL: Shifts Grid + Notes */}
