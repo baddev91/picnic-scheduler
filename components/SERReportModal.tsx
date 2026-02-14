@@ -151,8 +151,14 @@ export const SERReportModal: React.FC<SERReportModalProps> = ({
     loadCustomOptions();
   }, []);
 
+  // Use a ref to track the initial shoppers when modal opens
+  const initialShoppersRef = React.useRef<ShopperRecord[]>([]);
+
   useEffect(() => {
     if (isOpen) {
+      // Store initial shoppers snapshot when modal opens
+      initialShoppersRef.current = shoppers;
+
       // Reset state when modal opens
       setScheduled(0);
       setShowedUp(0);
@@ -166,7 +172,7 @@ export const SERReportModal: React.FC<SERReportModalProps> = ({
       setCustomItProblem('');
       setCopied(false);
 
-      // Auto-collect notes from submissions with names
+      // Auto-collect notes from submissions with names (using initial snapshot)
       const notes = shoppers
         .map(s => {
           const note = s.details?.notes?.trim();
@@ -176,7 +182,7 @@ export const SERReportModal: React.FC<SERReportModalProps> = ({
         .join('\n');
       setSubmissionNotes(notes);
     }
-  }, [isOpen, shoppers, prefilledEndTime]);
+  }, [isOpen, prefilledEndTime]); // Removed shoppers from dependencies
 
   const toggleTask = (task: string) => {
     setTasksDone(prev =>
