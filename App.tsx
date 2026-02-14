@@ -645,8 +645,8 @@ export default function App() {
                       />
                   )}
                   
-                  {/* PASS currentUser TO ADMIN DATA VIEW */}
-                  {adminWizardStep === AdminWizardStep.VIEW_SUBMISSIONS && <AdminDataView currentUser={selectedRecruiter} />}
+                  {/* PASS currentUser AND isSuperAdmin TO ADMIN DATA VIEW */}
+                  {adminWizardStep === AdminWizardStep.VIEW_SUBMISSIONS && <AdminDataView currentUser={selectedRecruiter} isSuperAdmin={isCurrentSuperAdmin} />}
                   
                   {adminWizardStep === AdminWizardStep.BUS_CONFIG && (
                       <AdminBusConfig 

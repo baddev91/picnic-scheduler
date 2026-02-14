@@ -58,9 +58,10 @@ const getFWDGroupKey = (shopper: ShopperRecord) => {
 
 interface AdminDataViewProps {
     currentUser?: string;
+    isSuperAdmin?: boolean;
 }
 
-export const AdminDataView: React.FC<AdminDataViewProps> = ({ currentUser }) => {
+export const AdminDataView: React.FC<AdminDataViewProps> = ({ currentUser, isSuperAdmin = false }) => {
   const [data, setData] = useState<ShopperRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -91,7 +92,23 @@ export const AdminDataView: React.FC<AdminDataViewProps> = ({ currentUser }) => 
 
   // SER Report Modal State
   const [showSERReportModal, setShowSERReportModal] = useState(false);
-  const [serReportData, setSERReportData] = useState<{ shoppers: ShopperRecord[], sessionDate: string, sessionType: 'MORNING' | 'AFTERNOON', totalHiredThisWeek: number } | null>(null);
+  const [serReportData, setSERReportData] = useState<{
+    shoppers: ShopperRecord[],
+    sessionDate: string,
+    sessionType: 'MORNING' | 'AFTERNOON',
+    totalHiredThisWeek: number,
+    prefilledEndTime: string
+  } | null>(null);
+
+  // Session end times state
+  const [sessionEndTimes, setSessionEndTimes] = useState<Record<string, string>>({});
+  const [editingEndTime, setEditingEndTime] = useState<string | null>(null);
+  const [tempEndTime, setTempEndTime] = useState<string>('');
+
+  // Session start times state
+  const [sessionStartTimes, setSessionStartTimes] = useState<Record<string, string>>({});
+  const [editingStartTime, setEditingStartTime] = useState<string | null>(null);
+  const [tempStartTime, setTempStartTime] = useState<string>('');
 
   // Refs for Scroll to Today Logic
   const groupRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -124,8 +141,41 @@ export const AdminDataView: React.FC<AdminDataViewProps> = ({ currentUser }) => 
     setLoading(false);
   };
 
-  useEffect(() => { 
-      fetchData(); 
+  // Load session end times and start times from Supabase
+  useEffect(() => {
+    const loadSessionTimes = async () => {
+      try {
+        // Load end times
+        const { data: endTimesData } = await supabase
+          .from('app_settings')
+          .select('value')
+          .eq('id', 'session_end_times')
+          .single();
+
+        if (endTimesData?.value) {
+          setSessionEndTimes(endTimesData.value);
+        }
+
+        // Load start times
+        const { data: startTimesData } = await supabase
+          .from('app_settings')
+          .select('value')
+          .eq('id', 'session_start_times')
+          .single();
+
+        if (startTimesData?.value) {
+          setSessionStartTimes(startTimesData.value);
+        }
+      } catch (e) {
+        console.error('Error loading session times:', e);
+      }
+    };
+
+    loadSessionTimes();
+  }, []);
+
+  useEffect(() => {
+      fetchData();
 
       const channel = supabase
         .channel('shoppers_changes')
@@ -144,7 +194,7 @@ export const AdminDataView: React.FC<AdminDataViewProps> = ({ currentUser }) => 
                         .select('*, shifts(*)')
                         .eq('id', newId)
                         .single();
-                    
+
                     if (fullRecord && !fullRecord.details?.isHiddenFromMainView) {
                         setPendingShoppers(prev => {
                             if (prev.find(p => p.id === fullRecord.id)) return prev;
@@ -319,6 +369,135 @@ export const AdminDataView: React.FC<AdminDataViewProps> = ({ currentUser }) => 
       } catch (e: any) { alert("Bulk copy failed: " + e.message); }
   };
 
+  // Save session end times to Supabase
+  const saveSessionEndTime = async (sessionKey: string, endTime: string) => {
+    try {
+      const updatedTimes = { ...sessionEndTimes, [sessionKey]: endTime };
+      const { error } = await supabase
+        .from('app_settings')
+        .upsert({ id: 'session_end_times', value: updatedTimes });
+
+      if (!error) {
+        setSessionEndTimes(updatedTimes);
+      } else {
+        alert('Error saving end time');
+      }
+    } catch (e) {
+      console.error('Error saving session end time:', e);
+      alert('Error saving end time');
+    }
+  };
+
+  // Hold timer for editing already-set end times
+  const holdTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [isHolding, setIsHolding] = useState(false);
+
+  const handleSetEndTime = (sessionKey: string) => {
+    // If not set yet, open immediately with current time
+    if (!sessionEndTimes[sessionKey]) {
+      const now = new Date();
+      const hours = now.getHours().toString().padStart(2, '0');
+      const minutes = now.getMinutes().toString().padStart(2, '0');
+      const currentTime = `${hours}:${minutes}`;
+      setTempEndTime(currentTime);
+      setEditingEndTime(sessionKey);
+    }
+    // If already set, do nothing on click (requires hold)
+  };
+
+  const handleMouseDown = (sessionKey: string) => {
+    // If already set, start hold timer
+    if (sessionEndTimes[sessionKey]) {
+      setIsHolding(true);
+      holdTimerRef.current = setTimeout(() => {
+        // After 800ms hold, allow editing
+        const currentTime = sessionEndTimes[sessionKey] || '';
+        setTempEndTime(currentTime);
+        setEditingEndTime(sessionKey);
+        setIsHolding(false);
+      }, 800);
+    }
+  };
+
+  const handleMouseUp = () => {
+    // Clear hold timer if released early
+    if (holdTimerRef.current) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+    setIsHolding(false);
+  };
+
+  const handleMouseLeave = () => {
+    // Clear hold timer if mouse leaves button
+    if (holdTimerRef.current) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+    setIsHolding(false);
+  };
+
+  const handleSaveEndTime = async (sessionKey: string) => {
+    if (tempEndTime.trim()) {
+      await saveSessionEndTime(sessionKey, tempEndTime.trim());
+    }
+    setEditingEndTime(null);
+    setTempEndTime('');
+  };
+
+  const handleCancelEndTime = () => {
+    setEditingEndTime(null);
+    setTempEndTime('');
+  };
+
+  // Save session start times to Supabase
+  const saveSessionStartTime = async (sessionKey: string, startTime: string) => {
+    try {
+      const updatedTimes = { ...sessionStartTimes, [sessionKey]: startTime };
+      const { error } = await supabase
+        .from('app_settings')
+        .upsert({ id: 'session_start_times', value: updatedTimes });
+
+      if (!error) {
+        setSessionStartTimes(updatedTimes);
+      } else {
+        alert('Error saving start time');
+      }
+    } catch (e) {
+      console.error('Error saving session start time:', e);
+      alert('Error saving start time');
+    }
+  };
+
+  const handleSetStartTime = (sessionKey: string) => {
+    // Extract session type from key
+    const sessionType = sessionKey.includes('MORNING') ? 'MORNING' : 'AFTERNOON';
+
+    // Get existing start time or default
+    const existingTime = sessionStartTimes[sessionKey];
+    if (existingTime) {
+      setTempStartTime(existingTime);
+    } else {
+      // Default times
+      const defaultTime = sessionType === 'MORNING' ? '09:00' : '15:30';
+      setTempStartTime(defaultTime);
+    }
+    setEditingStartTime(sessionKey);
+  };
+
+  const handleSaveStartTime = async (sessionKey: string) => {
+    if (tempStartTime.trim()) {
+      await saveSessionStartTime(sessionKey, tempStartTime.trim());
+    }
+    setEditingStartTime(null);
+    setTempStartTime('');
+  };
+
+  const handleCancelStartTime = () => {
+    setEditingStartTime(null);
+    setTempStartTime('');
+  };
+
   const handleOpenSERReport = (shoppers: ShopperRecord[], sessionKey: string) => {
       // Extract date and session type from sessionKey (format: "2026-02-13_0_MORNING" or "2026-02-13_1_AFTERNOON")
       const parts = sessionKey.split('_');
@@ -338,7 +517,10 @@ export const AdminDataView: React.FC<AdminDataViewProps> = ({ currentUser }) => 
           return fwd && fwd >= weekStartKey && fwd <= weekEndKey;
       }).length;
 
-      setSERReportData({ shoppers, sessionDate, sessionType, totalHiredThisWeek });
+      // Get pre-filled end time if available
+      const prefilledEndTime = sessionEndTimes[sessionKey] || '';
+
+      setSERReportData({ shoppers, sessionDate, sessionType, totalHiredThisWeek, prefilledEndTime });
       setShowSERReportModal(true);
   };
 
@@ -598,7 +780,103 @@ export const AdminDataView: React.FC<AdminDataViewProps> = ({ currentUser }) => 
                     </div>
 
                     <div className="flex flex-col md:flex-row items-start md:items-center gap-4 w-full xl:w-auto xl:justify-end">
-                        <div className="flex gap-2 items-center">
+                        <div className="flex gap-2 items-center flex-wrap">
+                            {/* Start Time Button */}
+                            {editingStartTime === fullGroupKey ? (
+                                <div className="flex gap-1 items-center">
+                                    <select
+                                        value={tempStartTime}
+                                        onChange={(e) => setTempStartTime(e.target.value)}
+                                        className="px-2 py-1 rounded-lg text-xs border border-blue-300 focus:ring-2 focus:ring-blue-500 outline-none"
+                                        autoFocus
+                                    >
+                                        {fullGroupKey.includes('MORNING') ? (
+                                            // Morning: 9:00 AM to 10:00 AM
+                                            <>
+                                                <option value="09:00">09:00</option>
+                                                <option value="09:15">09:15</option>
+                                                <option value="09:30">09:30</option>
+                                                <option value="09:45">09:45</option>
+                                                <option value="10:00">10:00</option>
+                                            </>
+                                        ) : (
+                                            // Afternoon: 1:00 PM to 3:30 PM
+                                            <>
+                                                <option value="13:00">13:00</option>
+                                                <option value="13:30">13:30</option>
+                                                <option value="14:00">14:00</option>
+                                                <option value="14:30">14:30</option>
+                                                <option value="15:00">15:00</option>
+                                                <option value="15:30">15:30</option>
+                                            </>
+                                        )}
+                                    </select>
+                                    <button
+                                        onClick={() => handleSaveStartTime(fullGroupKey)}
+                                        className="px-2 py-1 rounded-lg text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white transition-all"
+                                    >
+                                        <Check className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                        onClick={handleCancelStartTime}
+                                        className="px-2 py-1 rounded-lg text-xs font-medium bg-gray-300 hover:bg-gray-400 text-gray-700 transition-all"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+                            ) : (
+                                <button
+                                    onClick={() => handleSetStartTime(fullGroupKey)}
+                                    className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap border bg-blue-50 text-blue-700 border-blue-300 cursor-pointer hover:bg-blue-100"
+                                    title={sessionStartTimes[fullGroupKey] ? `Start: ${sessionStartTimes[fullGroupKey]}` : 'Set start time'}
+                                >
+                                    <Clock className="w-3.5 h-3.5 inline mr-1" />
+                                    {sessionStartTimes[fullGroupKey] || (fullGroupKey.includes('MORNING') ? '09:00' : '15:30')}
+                                </button>
+                            )}
+
+                            {/* End Time Button */}
+                            {editingEndTime === fullGroupKey ? (
+                                <div className="flex gap-1 items-center">
+                                    <input
+                                        type="time"
+                                        value={tempEndTime}
+                                        onChange={(e) => setTempEndTime(e.target.value)}
+                                        className="px-2 py-1 rounded-lg text-xs border border-blue-300 focus:ring-2 focus:ring-blue-500 outline-none"
+                                        autoFocus
+                                    />
+                                    <button
+                                        onClick={() => handleSaveEndTime(fullGroupKey)}
+                                        className="px-2 py-1 rounded-lg text-xs font-medium bg-green-600 hover:bg-green-700 text-white transition-all"
+                                    >
+                                        <Check className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                        onClick={handleCancelEndTime}
+                                        className="px-2 py-1 rounded-lg text-xs font-medium bg-gray-300 hover:bg-gray-400 text-gray-700 transition-all"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+                            ) : (
+                                <button
+                                    onClick={() => handleSetEndTime(fullGroupKey)}
+                                    onMouseDown={() => handleMouseDown(fullGroupKey)}
+                                    onMouseUp={handleMouseUp}
+                                    onMouseLeave={handleMouseLeave}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap border ${
+                                        isHolding && editingEndTime === fullGroupKey
+                                            ? 'bg-green-600 text-white border-green-700 animate-pulse'
+                                            : sessionEndTimes[fullGroupKey]
+                                            ? 'bg-green-50 text-green-700 border-green-300 cursor-pointer hover:bg-green-100'
+                                            : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border-gray-200 cursor-pointer'
+                                    }`}
+                                    title={sessionEndTimes[fullGroupKey] ? `Hold to edit: ${sessionEndTimes[fullGroupKey]}` : 'Set end time'}
+                                >
+                                    <Clock className="w-3.5 h-3.5 inline mr-1" />
+                                    {isHolding && editingEndTime === fullGroupKey ? 'Hold...' : (sessionEndTimes[fullGroupKey] || 'Set End Time')}
+                                </button>
+                            )}
                             <button
                                 onClick={() => handleOpenSERReport(items, fullGroupKey)}
                                 className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-200"
@@ -739,6 +1017,8 @@ export const AdminDataView: React.FC<AdminDataViewProps> = ({ currentUser }) => 
           sessionDate={serReportData.sessionDate}
           sessionType={serReportData.sessionType}
           totalHiredThisWeek={serReportData.totalHiredThisWeek}
+          prefilledEndTime={serReportData.prefilledEndTime}
+          isSuperAdmin={isSuperAdmin}
         />
       )}
     </div>

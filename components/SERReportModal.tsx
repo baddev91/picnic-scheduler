@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, FileText, Users, CheckCircle, XCircle, Clock, ClipboardCheck, AlertTriangle, Copy, Check } from 'lucide-react';
+import { X, FileText, Users, CheckCircle, XCircle, Clock, ClipboardCheck, AlertTriangle, Copy, Check, Settings, Plus, Trash2 } from 'lucide-react';
 import { ShopperRecord } from '../types';
 import { format } from 'date-fns';
+import { supabase } from '../supabaseClient';
 
 interface SERReportModalProps {
   isOpen: boolean;
@@ -11,6 +12,8 @@ interface SERReportModalProps {
   sessionDate: string; // e.g., "2026-02-13"
   sessionType: 'MORNING' | 'AFTERNOON';
   totalHiredThisWeek: number;
+  prefilledEndTime?: string;
+  isSuperAdmin?: boolean;
 }
 
 interface RejectedCandidate {
@@ -24,7 +27,9 @@ export const SERReportModal: React.FC<SERReportModalProps> = ({
   shoppers,
   sessionDate,
   sessionType,
-  totalHiredThisWeek
+  totalHiredThisWeek,
+  prefilledEndTime = '',
+  isSuperAdmin = false
 }) => {
   const [scheduled, setScheduled] = useState<number>(0);
   const [showedUp, setShowedUp] = useState<number>(0);
@@ -33,20 +38,62 @@ export const SERReportModal: React.FC<SERReportModalProps> = ({
   const [additionalNotes, setAdditionalNotes] = useState<string>('');
   const [tasksDone, setTasksDone] = useState<string[]>([]);
   const [tasksPostponed, setTasksPostponed] = useState<string[]>([]);
-  const [itProblems, setItProblems] = useState<string>('');
+  const [selectedItProblems, setSelectedItProblems] = useState<string[]>([]);
+  const [customItProblem, setCustomItProblem] = useState<string>('');
+  const [submissionNotes, setSubmissionNotes] = useState<string>('');
   const [copied, setCopied] = useState(false);
 
-  const hired = shoppers.length;
-  const availableTasks = ['Bags', 'Tags', 'Scorecards', 'Admin', 'Callshift'];
+  // Custom options state
+  const [customTasks, setCustomTasks] = useState<string[]>([]);
+  const [customItProblems, setCustomItProblems] = useState<string[]>([]);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [newTaskInput, setNewTaskInput] = useState('');
+  const [newItProblemInput, setNewItProblemInput] = useState('');
 
-  // Auto-collect notes from submissions
-  const submissionNotes = shoppers
-    .map(s => s.details?.notes)
-    .filter(note => note && note.trim() !== '')
-    .join('\n');
+  const hired = shoppers.length;
+
+  // Default tasks + custom tasks
+  const defaultTasks = ['Bags', 'Tags', 'Scorecards', 'Admin', 'Callshift'];
+  const availableTasks = [...defaultTasks, ...customTasks];
+
+  // Common IT problems + custom problems
+  const defaultItProblems = [
+    'Unable to login on Slack',
+    'Didn\'t receive Datachecker email',
+    'Didn\'t receive emails to create Slack and Teamwork account',
+    'Didn\'t receive email to join Slack workspace'
+  ];
+  const commonItProblems = [...defaultItProblems, ...customItProblems];
 
   // Get day of week
   const dayOfWeek = format(new Date(sessionDate), 'EEEE');
+
+  // Load custom options from Supabase
+  useEffect(() => {
+    const loadCustomOptions = async () => {
+      const { data: tasksData } = await supabase
+        .from('app_settings')
+        .select('value')
+        .eq('id', 'custom_ser_tasks')
+        .single();
+
+      if (tasksData?.value && Array.isArray(tasksData.value)) {
+        setCustomTasks(tasksData.value);
+      }
+
+      const { data: itProblemsData } = await supabase
+        .from('app_settings')
+        .select('value')
+        .eq('id', 'custom_it_problems')
+        .single();
+
+      if (itProblemsData?.value && Array.isArray(itProblemsData.value)) {
+        setCustomItProblems(itProblemsData.value);
+      }
+    };
+
+    loadCustomOptions();
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
@@ -54,14 +101,25 @@ export const SERReportModal: React.FC<SERReportModalProps> = ({
       setScheduled(0);
       setShowedUp(0);
       setRejectedCandidates([]);
-      setEndTime('');
+      setEndTime(prefilledEndTime); // Use prefilled end time if available
       setAdditionalNotes('');
       setTasksDone([]);
       setTasksPostponed([]);
-      setItProblems('');
+      setSelectedItProblems([]);
+      setCustomItProblem('');
       setCopied(false);
+
+      // Auto-collect notes from submissions with names
+      const notes = shoppers
+        .map(s => {
+          const note = s.details?.notes?.trim();
+          return note ? `${s.name}: ${note}` : '';
+        })
+        .filter(note => note !== '')
+        .join('\n');
+      setSubmissionNotes(notes);
     }
-  }, [isOpen]);
+  }, [isOpen, shoppers, prefilledEndTime]);
 
   const toggleTask = (task: string) => {
     setTasksDone(prev =>
@@ -72,6 +130,12 @@ export const SERReportModal: React.FC<SERReportModalProps> = ({
   const togglePostponedTask = (task: string) => {
     setTasksPostponed(prev =>
       prev.includes(task) ? prev.filter(t => t !== task) : [...prev, task]
+    );
+  };
+
+  const toggleItProblem = (problem: string) => {
+    setSelectedItProblems(prev =>
+      prev.includes(problem) ? prev.filter(p => p !== problem) : [...prev, problem]
     );
   };
 
@@ -89,6 +153,35 @@ export const SERReportModal: React.FC<SERReportModalProps> = ({
 
   const removeRejectedCandidate = (index: number) => {
     setRejectedCandidates(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Custom options management
+  const handleAddTask = async () => {
+    if (!newTaskInput.trim()) return;
+    const updated = [...customTasks, newTaskInput.trim()];
+    setCustomTasks(updated);
+    await supabase.from('app_settings').upsert({ id: 'custom_ser_tasks', value: updated });
+    setNewTaskInput('');
+  };
+
+  const handleRemoveTask = async (task: string) => {
+    const updated = customTasks.filter(t => t !== task);
+    setCustomTasks(updated);
+    await supabase.from('app_settings').upsert({ id: 'custom_ser_tasks', value: updated });
+  };
+
+  const handleAddItProblem = async () => {
+    if (!newItProblemInput.trim()) return;
+    const updated = [...customItProblems, newItProblemInput.trim()];
+    setCustomItProblems(updated);
+    await supabase.from('app_settings').upsert({ id: 'custom_it_problems', value: updated });
+    setNewItProblemInput('');
+  };
+
+  const handleRemoveItProblem = async (problem: string) => {
+    const updated = customItProblems.filter(p => p !== problem);
+    setCustomItProblems(updated);
+    await supabase.from('app_settings').upsert({ id: 'custom_it_problems', value: updated });
   };
 
   const generateReport = () => {
@@ -139,8 +232,17 @@ export const SERReportModal: React.FC<SERReportModalProps> = ({
     }
 
     // IT Problems
-    if (itProblems.trim()) {
-      report += `⚠️ *IT Issues:*\n${itProblems}\n\n`;
+    const allItProblems = [...selectedItProblems];
+    if (customItProblem.trim()) {
+      allItProblems.push(customItProblem.trim());
+    }
+
+    if (allItProblems.length > 0) {
+      report += `⚠️ *IT Issues:*\n`;
+      allItProblems.forEach(problem => {
+        report += `• ${problem}\n`;
+      });
+      report += `\n`;
     }
 
     // Notes from Submissions
@@ -188,12 +290,23 @@ export const SERReportModal: React.FC<SERReportModalProps> = ({
                 </p>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-white/20 rounded-full transition-colors shrink-0"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            <div className="flex items-center gap-2">
+              {isSuperAdmin && (
+                <button
+                  onClick={() => setShowSettingsModal(true)}
+                  className="p-2 hover:bg-white/20 rounded-full transition-colors shrink-0"
+                  title="Manage custom options"
+                >
+                  <Settings className="w-5 h-5" />
+                </button>
+              )}
+              <button
+                onClick={onClose}
+                className="p-2 hover:bg-white/20 rounded-full transition-colors shrink-0"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -362,25 +475,46 @@ export const SERReportModal: React.FC<SERReportModalProps> = ({
             <h4 className="text-xs sm:text-sm font-bold text-gray-700 uppercase tracking-wider mb-3 sm:mb-4 flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-orange-600" /> IT Issues
             </h4>
-            <textarea
-              value={itProblems}
-              onChange={(e) => setItProblems(e.target.value)}
-              placeholder="Describe any IT problems encountered..."
-              className="w-full p-2.5 sm:p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none text-sm min-h-[80px] resize-none"
-            />
+            <div className="space-y-3">
+              <div className="flex flex-wrap gap-2">
+                {commonItProblems.map(problem => {
+                  const isSelected = selectedItProblems.includes(problem);
+                  return (
+                    <button
+                      key={problem}
+                      onClick={() => toggleItProblem(problem)}
+                      className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-bold transition-all border ${
+                        isSelected
+                          ? 'bg-red-100 text-red-700 border-red-300 shadow-sm'
+                          : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      {problem}
+                    </button>
+                  );
+                })}
+              </div>
+              <textarea
+                value={customItProblem}
+                onChange={(e) => setCustomItProblem(e.target.value)}
+                placeholder="Other IT problems (optional)..."
+                className="w-full p-2.5 sm:p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none text-sm min-h-[60px] resize-none"
+              />
+            </div>
           </div>
 
-          {/* Submission Notes (Auto-collected) */}
-          {submissionNotes.trim() && (
-            <div className="bg-blue-50 rounded-xl border border-blue-200 p-4 sm:p-5">
-              <h4 className="text-xs sm:text-sm font-bold text-blue-700 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <FileText className="w-4 h-4" /> Submission Notes (Auto-collected)
-              </h4>
-              <div className="text-xs sm:text-sm text-blue-900 whitespace-pre-wrap bg-white p-2.5 sm:p-3 rounded-lg border border-blue-100">
-                {submissionNotes}
-              </div>
-            </div>
-          )}
+          {/* Submission Notes (Editable) */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5">
+            <h4 className="text-xs sm:text-sm font-bold text-gray-700 uppercase tracking-wider mb-3 sm:mb-4 flex items-center gap-2">
+              <FileText className="w-4 h-4 text-blue-600" /> Submission Notes
+            </h4>
+            <textarea
+              value={submissionNotes}
+              onChange={(e) => setSubmissionNotes(e.target.value)}
+              placeholder="Notes from hired candidates..."
+              className="w-full p-2.5 sm:p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm min-h-[100px] resize-none"
+            />
+          </div>
 
           {/* Additional Notes */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5">
@@ -428,6 +562,158 @@ export const SERReportModal: React.FC<SERReportModalProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Settings Modal for Super Admin */}
+      {showSettingsModal && isSuperAdmin && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Settings Header */}
+            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 text-white">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Settings className="w-6 h-6" />
+                  <h3 className="text-2xl font-black">Custom Options</h3>
+                </div>
+                <button
+                  onClick={() => setShowSettingsModal(false)}
+                  className="p-2 hover:bg-white/20 rounded-full transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <p className="text-indigo-100 text-sm mt-2">Manage custom tasks and IT problems for SER reports</p>
+            </div>
+
+            {/* Settings Content */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-gray-50">
+
+              {/* Custom Tasks Section */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-4 flex items-center gap-2">
+                  <ClipboardCheck className="w-4 h-4 text-green-600" /> Custom Tasks
+                </h4>
+
+                {/* Add New Task */}
+                <div className="flex gap-2 mb-4">
+                  <input
+                    type="text"
+                    value={newTaskInput}
+                    onChange={(e) => setNewTaskInput(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleAddTask()}
+                    placeholder="Enter new task name..."
+                    className="flex-1 p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 outline-none text-sm"
+                  />
+                  <button
+                    onClick={handleAddTask}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium transition-colors flex items-center gap-2"
+                  >
+                    <Plus className="w-4 h-4" /> Add
+                  </button>
+                </div>
+
+                {/* Default Tasks (Read-only) */}
+                <div className="mb-3">
+                  <p className="text-xs font-bold text-gray-500 mb-2">Default Tasks (cannot be removed):</p>
+                  <div className="flex flex-wrap gap-2">
+                    {defaultTasks.map(task => (
+                      <div key={task} className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium border border-gray-200">
+                        {task}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Custom Tasks (Removable) */}
+                {customTasks.length > 0 && (
+                  <div>
+                    <p className="text-xs font-bold text-gray-500 mb-2">Custom Tasks:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {customTasks.map(task => (
+                        <div key={task} className="flex items-center gap-2 px-3 py-1.5 bg-green-50 text-green-700 rounded-lg text-sm font-medium border border-green-200">
+                          {task}
+                          <button
+                            onClick={() => handleRemoveTask(task)}
+                            className="p-0.5 hover:bg-green-200 rounded transition-colors"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Custom IT Problems Section */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+                <h4 className="text-sm font-bold text-gray-700 uppercase tracking-wider mb-4 flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-red-600" /> Custom IT Problems
+                </h4>
+
+                {/* Add New IT Problem */}
+                <div className="flex gap-2 mb-4">
+                  <input
+                    type="text"
+                    value={newItProblemInput}
+                    onChange={(e) => setNewItProblemInput(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleAddItProblem()}
+                    placeholder="Enter new IT problem..."
+                    className="flex-1 p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-red-500 outline-none text-sm"
+                  />
+                  <button
+                    onClick={handleAddItProblem}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition-colors flex items-center gap-2"
+                  >
+                    <Plus className="w-4 h-4" /> Add
+                  </button>
+                </div>
+
+                {/* Default IT Problems (Read-only) */}
+                <div className="mb-3">
+                  <p className="text-xs font-bold text-gray-500 mb-2">Default IT Problems (cannot be removed):</p>
+                  <div className="flex flex-wrap gap-2">
+                    {defaultItProblems.map(problem => (
+                      <div key={problem} className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium border border-gray-200">
+                        {problem}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Custom IT Problems (Removable) */}
+                {customItProblems.length > 0 && (
+                  <div>
+                    <p className="text-xs font-bold text-gray-500 mb-2">Custom IT Problems:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {customItProblems.map(problem => (
+                        <div key={problem} className="flex items-center gap-2 px-3 py-1.5 bg-red-50 text-red-700 rounded-lg text-sm font-medium border border-red-200">
+                          {problem}
+                          <button
+                            onClick={() => handleRemoveItProblem(problem)}
+                            className="p-0.5 hover:bg-red-200 rounded transition-colors"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Settings Footer */}
+            <div className="p-4 bg-gray-100 border-t border-gray-200">
+              <button
+                onClick={() => setShowSettingsModal(false)}
+                className="w-full px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-bold transition-colors"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

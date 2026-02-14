@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../supabaseClient';
 import { StaffMember } from '../types';
-import { Users, TrendingUp, Award, CalendarCheck, Loader2, Filter, UserCheck, Briefcase, Settings2 } from 'lucide-react';
+import { Users, TrendingUp, Award, CalendarCheck, Loader2, Filter, UserCheck, Briefcase, Settings2, Clock, Zap } from 'lucide-react';
 import { endOfWeek, format, isSameWeek } from 'date-fns';
 import startOfWeek from 'date-fns/startOfWeek';
 import parseISO from 'date-fns/parseISO';
@@ -21,6 +21,8 @@ interface RecruiterMetric {
   lastActive: string | null;
   activeSessions: number; // Number of distinct days with hires
   avgHiresPerSession: number; // Average hires per session (per day)
+  avgSessionDuration: number; // Average session duration in hours
+  efficiencyScore: number; // Hires per hour (C-Score)
 }
 
 interface RawShopperData {
@@ -36,11 +38,15 @@ export const RecruiterStats: React.FC<RecruiterStatsProps> = ({ staffList, isSup
   const [rawShoppers, setRawShoppers] = useState<RawShopperData[]>([]);
   const [selectedWeek, setSelectedWeek] = useState<string>('ALL'); // 'ALL' or 'YYYY-MM-DD' (start of week)
   const [showVisibilityModal, setShowVisibilityModal] = useState(false);
+  const [sessionEndTimes, setSessionEndTimes] = useState<Record<string, string>>({});
+  const [sessionStartTimes, setSessionStartTimes] = useState<Record<string, string>>({});
 
   // 1. Fetch Data Once
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
+
+      // Fetch shoppers
       const { data: shoppers, error } = await supabase
         .from('shoppers')
         .select('created_at, details, shifts(id)')
@@ -49,6 +55,29 @@ export const RecruiterStats: React.FC<RecruiterStatsProps> = ({ staffList, isSup
       if (!error && shoppers) {
           setRawShoppers(shoppers);
       }
+
+      // Fetch session end times
+      const { data: endTimesData } = await supabase
+        .from('app_settings')
+        .select('value')
+        .eq('id', 'session_end_times')
+        .single();
+
+      if (endTimesData?.value) {
+        setSessionEndTimes(endTimesData.value);
+      }
+
+      // Fetch session start times
+      const { data: startTimesData } = await supabase
+        .from('app_settings')
+        .select('value')
+        .eq('id', 'session_start_times')
+        .single();
+
+      if (startTimesData?.value) {
+        setSessionStartTimes(startTimesData.value);
+      }
+
       setLoading(false);
     };
 
@@ -76,13 +105,15 @@ export const RecruiterStats: React.FC<RecruiterStatsProps> = ({ staffList, isSup
           // Only include staff members that should be visible in performance section
           const isVisible = member.isVisibleInPerformance !== false; // Default to true if not set
           if (isVisible) {
-              map[member.name] = { 
-                  name: member.name, 
-                  hires: 0, 
-                  shiftsFilled: 0, 
+              map[member.name] = {
+                  name: member.name,
+                  hires: 0,
+                  shiftsFilled: 0,
                   lastActive: null,
                   activeSessions: 0,
-                  avgHiresPerSession: 0
+                  avgHiresPerSession: 0,
+                  avgSessionDuration: 0,
+                  efficiencyScore: 0
               };
               dayMaps[member.name] = new Set<string>();
           }
@@ -135,20 +166,76 @@ export const RecruiterStats: React.FC<RecruiterStatsProps> = ({ staffList, isSup
           }
       });
 
-      // Calculate activeSessions and avgHiresPerSession
+      // Calculate activeSessions, avgHiresPerSession, avgSessionDuration, and efficiencyScore
       Object.keys(map).forEach(key => {
           const entry = map[key];
           const activeSessions = dayMaps[key].size || 1; // Each distinct day is a session
           entry.activeSessions = activeSessions;
           entry.avgHiresPerSession = activeSessions > 0 ? entry.hires / activeSessions : 0;
+
+          // Calculate average session duration from session end times
+          const sessionDurations: number[] = [];
+          dayMaps[key].forEach(dayKey => {
+              // Check both morning and afternoon sessions for this day
+              const morningKey = `${dayKey}_0_MORNING`;
+              const afternoonKey = `${dayKey}_1_AFTERNOON`;
+
+              if (sessionEndTimes[morningKey]) {
+                  const endTime = sessionEndTimes[morningKey];
+                  const startTime = sessionStartTimes[morningKey];
+                  const duration = calculateSessionDuration('MORNING', endTime, startTime);
+                  if (duration > 0) sessionDurations.push(duration);
+              }
+
+              if (sessionEndTimes[afternoonKey]) {
+                  const endTime = sessionEndTimes[afternoonKey];
+                  const startTime = sessionStartTimes[afternoonKey];
+                  const duration = calculateSessionDuration('AFTERNOON', endTime, startTime);
+                  if (duration > 0) sessionDurations.push(duration);
+              }
+          });
+
+          // Calculate average duration
+          if (sessionDurations.length > 0) {
+              const totalDuration = sessionDurations.reduce((sum, d) => sum + d, 0);
+              entry.avgSessionDuration = totalDuration / sessionDurations.length;
+
+              // Calculate efficiency score (hires per hour)
+              const totalHours = totalDuration * sessionDurations.length;
+              entry.efficiencyScore = totalHours > 0 ? entry.hires / totalHours : 0;
+          }
       });
 
-      // Convert to array and sort
+      // Convert to array and sort by efficiency score (C-Score)
       return Object.values(map)
         .filter(item => item.hires > 0 || staffList.some(s => s.name === item.name && s.isVisibleInPerformance !== false))
-        .sort((a, b) => b.hires - a.hires); // Sort by Hires Descending
+        .sort((a, b) => b.efficiencyScore - a.efficiencyScore); // Sort by Efficiency Score Descending
 
-  }, [rawShoppers, staffList, selectedWeek]);
+  }, [rawShoppers, staffList, selectedWeek, sessionEndTimes, sessionStartTimes]);
+
+  // Helper function to calculate session duration in hours
+  const calculateSessionDuration = (sessionType: 'MORNING' | 'AFTERNOON', endTime: string, customStartTime?: string): number => {
+      // Use custom start time if provided, otherwise use defaults
+      let startHour: number;
+      let startMinute: number = 0;
+
+      if (customStartTime) {
+        // Parse custom start time (format: "HH:MM")
+        [startHour, startMinute] = customStartTime.split(':').map(Number);
+      } else {
+        // Default start times: Morning = 09:00, Afternoon = 15:30
+        startHour = sessionType === 'MORNING' ? 9 : 15;
+        startMinute = sessionType === 'MORNING' ? 0 : 30;
+      }
+
+      // Parse end time (format: "HH:MM")
+      const [endHour, endMinute] = endTime.split(':').map(Number);
+
+      // Calculate duration in hours
+      const duration = (endHour + endMinute / 60) - (startHour + startMinute / 60);
+
+      return duration > 0 ? duration : 0;
+  };
 
   // 4. Calculate Total Hires for current view
   const totalHires = useMemo(() => {
@@ -301,6 +388,28 @@ export const RecruiterStats: React.FC<RecruiterStatsProps> = ({ staffList, isSup
                                             {recruiter.avgHiresPerSession.toFixed(1)} <span className="text-[9px] font-normal text-blue-400">hires</span>
                                         </div>
                                     </div>
+
+                                    {/* Average Session Duration */}
+                                    {recruiter.avgSessionDuration > 0 && (
+                                        <div className="flex-1 min-w-[120px] bg-orange-50 rounded px-2 py-1.5 flex items-center justify-between">
+                                            <span className="text-[9px] font-bold text-orange-400 uppercase">Avg Time</span>
+                                            <div className="flex items-center gap-1 text-xs font-bold text-orange-700">
+                                                <Clock className="w-3 h-3 text-orange-500" />
+                                                {recruiter.avgSessionDuration.toFixed(1)} <span className="text-[9px] font-normal text-orange-400">hrs</span>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Efficiency Score (C-Score) */}
+                                    {recruiter.efficiencyScore > 0 && (
+                                        <div className="flex-1 min-w-[120px] bg-purple-50 rounded px-2 py-1.5 flex items-center justify-between">
+                                            <span className="text-[9px] font-bold text-purple-400 uppercase">C-Score</span>
+                                            <div className="flex items-center gap-1 text-xs font-bold text-purple-700">
+                                                <Zap className="w-3 h-3 text-purple-500" />
+                                                {recruiter.efficiencyScore.toFixed(2)} <span className="text-[9px] font-normal text-purple-400">h/hr</span>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
