@@ -77,6 +77,13 @@ export interface TalkProgress {
   checkInToday?: boolean;
 }
 
+export interface NoteEntry {
+  id: string;
+  content: string;
+  author: string; // Recruiter/staff member name
+  timestamp: string; // ISO String
+}
+
 export interface ShopperDetails {
   nationality?: string; // New Field
   workPermitStatus?: 'VALID' | 'WAITING' | 'NOT_REQUIRED'; // NEW: Track permit status
@@ -92,7 +99,8 @@ export interface ShopperDetails {
   firstWorkingDay?: string; // YYYY-MM-DD
   pnNumber?: string; // e.g. PN123456
   firstDayStatus?: 'PENDING' | 'SHOWED_UP' | 'NO_SHOW'; // New Attendance Tracking
-  notes?: string; // NEW: Admin Notes
+  notes?: string; // NEW: Admin Notes (legacy - kept for backward compatibility)
+  noteHistory?: NoteEntry[]; // NEW: Structured note history with author and timestamp
   ignoreCompliance?: boolean; // NEW: Flag to ignore compliance checks
   isHiddenFromMainView?: boolean; // NEW: If true, hides from Shift Scheduler View (imported from sheets)
 

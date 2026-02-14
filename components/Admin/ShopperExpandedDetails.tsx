@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, MapPin, Sheet, Copy, FileSpreadsheet, Calendar, Star, CheckCircle, CheckCircle2, XCircle, Clock, AlertTriangle, X, Check, Globe, FileText, Save, Snowflake, Building2, MessageSquare, TrendingUp, UserCheck, Mail, Send } from 'lucide-react';
+import { User, MapPin, Sheet, Copy, FileSpreadsheet, Calendar, Star, CheckCircle, CheckCircle2, XCircle, Clock, AlertTriangle, X, Check, Globe, FileText, Save, Snowflake, Building2, MessageSquare, TrendingUp, UserCheck, Mail, Send, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { supabase } from '../../supabaseClient';
-import { ShopperRecord, ShiftType } from '../../types';
+import { ShopperRecord, ShiftType, NoteEntry } from '../../types';
 import {
     generateSpreadsheetRow,
     generateHRSpreadsheetRow
@@ -16,9 +16,10 @@ interface ShopperExpandedDetailsProps {
     onStatusUpdate?: (id: string, status: 'PENDING' | 'SHOWED_UP' | 'NO_SHOW') => void;
     onUpdateShopper?: (shopper: ShopperRecord) => void;
     currentUser?: string; // ADDED PROP
+    isSuperAdmin?: boolean; // ADDED PROP FOR DELETE PERMISSION
 }
 
-export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ shopper, onStatusUpdate, onUpdateShopper, currentUser }) => {
+export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ shopper, onStatusUpdate, onUpdateShopper, currentUser, isSuperAdmin = false }) => {
     // Local state for confirmation flow
     const [pendingStatus, setPendingStatus] = useState<'PENDING' | 'SHOWED_UP' | 'NO_SHOW' | null>(null);
 
@@ -26,6 +27,7 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
     const [notes, setNotes] = useState(shopper.details?.notes || '');
     const [isSavingNotes, setIsSavingNotes] = useState(false);
     const [noteSaved, setNoteSaved] = useState(false);
+    const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null); // For delete confirmation
 
     // Frozen State
     const [isFrozenEligible, setIsFrozenEligible] = useState(shopper.details?.isFrozenEligible || false);
@@ -132,10 +134,29 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
 
     // --- NOTE SAVING ---
     const handleSaveNote = async () => {
+        if (!notes.trim()) return; // Don't save empty notes
+
         setIsSavingNotes(true);
         try {
-            const newDetails = { ...shopper.details, notes: notes };
-            
+            // Create new note entry
+            const newNoteEntry: NoteEntry = {
+                id: crypto.randomUUID(),
+                content: notes.trim(),
+                author: currentUser || 'Unknown',
+                timestamp: new Date().toISOString()
+            };
+
+            // Get existing note history or initialize empty array
+            const existingNoteHistory = shopper.details?.noteHistory || [];
+            const updatedNoteHistory = [newNoteEntry, ...existingNoteHistory];
+
+            // Update details with new note history
+            const newDetails = {
+                ...shopper.details,
+                noteHistory: updatedNoteHistory,
+                notes: notes.trim() // Keep legacy field for backward compatibility
+            };
+
             const { error } = await supabase
                 .from('shoppers')
                 .update({ details: newDetails })
@@ -147,7 +168,9 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
             if (onUpdateShopper) {
                 onUpdateShopper({ ...shopper, details: newDetails });
             }
-            
+
+            // Clear the input after successful save
+            setNotes('');
             setNoteSaved(true);
             setTimeout(() => setNoteSaved(false), 2000);
         } catch (err: any) {
@@ -199,6 +222,41 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
 
     const cancelStatusChange = () => {
         setPendingStatus(null);
+    };
+
+    // --- DELETE NOTE HANDLER (SUPER ADMIN ONLY) ---
+    const handleDeleteNote = async (noteId: string) => {
+        if (!isSuperAdmin) return; // Safety check
+
+        try {
+            // Filter out the note to delete
+            const updatedNoteHistory = (shopper.details?.noteHistory || []).filter(
+                (note: NoteEntry) => note.id !== noteId
+            );
+
+            const newDetails = {
+                ...shopper.details,
+                noteHistory: updatedNoteHistory
+            };
+
+            // Update database
+            const { error } = await supabase
+                .from('shoppers')
+                .update({ details: newDetails })
+                .eq('id', shopper.id);
+
+            if (error) throw error;
+
+            // Update local state
+            if (onUpdateShopper) {
+                onUpdateShopper({ ...shopper, details: newDetails });
+            }
+
+            setDeletingNoteId(null);
+        } catch (err: any) {
+            alert("Failed to delete note: " + err.message);
+            setDeletingNoteId(null);
+        }
     };
 
     const formatDateDisplay = (dateStr: string) => {
@@ -469,41 +527,107 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
                             </div>
                         </div>
 
-                        {/* NEW CLEAN ADMIN NOTES DESIGN */}
-                        <div className="w-full lg:w-64 shrink-0 mt-4 lg:mt-0 flex flex-col">
-                             <div className="bg-white border border-gray-200 rounded-xl shadow-sm flex flex-col h-full overflow-hidden focus-within:ring-2 focus-within:ring-purple-500/10 focus-within:border-purple-300 transition-all">
-                                <div className="bg-gray-50/50 px-3 py-2 border-b border-gray-100 flex items-center justify-between">
-                                    <h5 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
-                                        <FileText className="w-3 h-3" /> Notes
+                        {/* ENHANCED ADMIN NOTES WITH HISTORY */}
+                        <div className="w-full lg:w-80 shrink-0 mt-4 lg:mt-0 flex flex-col">
+                             <div className="bg-white border border-gray-200 rounded-xl shadow-sm flex flex-col h-full overflow-hidden">
+                                <div className="bg-gradient-to-r from-purple-50 to-blue-50 px-3 py-2 border-b border-gray-200 flex items-center justify-between">
+                                    <h5 className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+                                        <FileText className="w-3.5 h-3.5 text-purple-600" /> Notes
                                     </h5>
                                     {hasNoteChanged && (
                                         <span className="text-[10px] text-orange-500 font-bold animate-pulse">Unsaved</span>
                                     )}
                                 </div>
-                                
-                                <textarea 
-                                    className="w-full flex-1 bg-white p-3 text-sm text-gray-700 placeholder:text-gray-300 outline-none resize-none min-h-[100px] leading-relaxed"
-                                    placeholder="Add specific instructions or observations here..."
-                                    value={notes}
-                                    onChange={(e) => setNotes(e.target.value)}
-                                />
-                                
-                                {hasNoteChanged && (
-                                    <div className="p-2 bg-gray-50 border-t border-gray-100 animate-in slide-in-from-bottom-2 fade-in">
-                                        <button 
-                                            onClick={handleSaveNote}
-                                            disabled={isSavingNotes}
-                                            className={`w-full py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm ${
-                                                noteSaved 
-                                                ? 'bg-green-50 text-white' 
-                                                : 'bg-gray-900 text-white hover:bg-black'
-                                            }`}
-                                        >
-                                            {noteSaved ? <Check className="w-3 h-3" /> : <Save className="w-3 h-3" />}
-                                            {noteSaved ? 'Saved' : 'Save Changes'}
-                                        </button>
-                                    </div>
-                                )}
+
+                                {/* Note Input Area */}
+                                <div className="border-b border-gray-200 focus-within:ring-2 focus-within:ring-purple-500/10 focus-within:border-purple-300 transition-all">
+                                    <textarea
+                                        className="w-full bg-white p-3 text-sm text-gray-700 placeholder:text-gray-400 outline-none resize-none min-h-[80px] leading-relaxed"
+                                        placeholder="Add a new note..."
+                                        value={notes}
+                                        onChange={(e) => setNotes(e.target.value)}
+                                    />
+
+                                    {hasNoteChanged && (
+                                        <div className="px-3 pb-3 animate-in slide-in-from-bottom-2 fade-in">
+                                            <button
+                                                onClick={handleSaveNote}
+                                                disabled={isSavingNotes}
+                                                className={`w-full py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm ${
+                                                    noteSaved
+                                                    ? 'bg-green-600 text-white'
+                                                    : 'bg-gradient-to-r from-purple-600 to-blue-600 text-white hover:from-purple-700 hover:to-blue-700'
+                                                }`}
+                                            >
+                                                {noteSaved ? <Check className="w-3 h-3" /> : <Save className="w-3 h-3" />}
+                                                {noteSaved ? 'Saved!' : 'Save Note'}
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Note History */}
+                                <div className="flex-1 overflow-y-auto bg-gray-50/50">
+                                    {shopper.details?.noteHistory && shopper.details.noteHistory.length > 0 ? (
+                                        <div className="p-3 space-y-2">
+                                            {shopper.details.noteHistory.map((note: NoteEntry) => (
+                                                <div key={note.id} className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow group relative">
+                                                    <div className="flex items-start justify-between gap-2 mb-2">
+                                                        <div className="flex items-center gap-1.5 min-w-0">
+                                                            <User className="w-3 h-3 text-purple-600 shrink-0" />
+                                                            <span className="text-xs font-bold text-purple-700 truncate">{note.author}</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-2 shrink-0">
+                                                            <div className="flex items-center gap-1">
+                                                                <Clock className="w-3 h-3 text-gray-400" />
+                                                                <span className="text-[10px] text-gray-500 whitespace-nowrap">
+                                                                    {format(new Date(note.timestamp), 'MMM d, HH:mm')}
+                                                                </span>
+                                                            </div>
+                                                            {/* DELETE BUTTON - SUPER ADMIN ONLY */}
+                                                            {isSuperAdmin && (
+                                                                deletingNoteId === note.id ? (
+                                                                    <div className="flex items-center gap-1">
+                                                                        <button
+                                                                            onClick={() => setDeletingNoteId(null)}
+                                                                            className="p-1 rounded hover:bg-gray-100 transition-colors"
+                                                                            title="Cancel"
+                                                                        >
+                                                                            <X className="w-3 h-3 text-gray-500" />
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => handleDeleteNote(note.id)}
+                                                                            className="p-1 rounded bg-red-600 hover:bg-red-700 transition-colors"
+                                                                            title="Confirm Delete"
+                                                                        >
+                                                                            <Check className="w-3 h-3 text-white" />
+                                                                        </button>
+                                                                    </div>
+                                                                ) : (
+                                                                    <button
+                                                                        onClick={() => setDeletingNoteId(note.id)}
+                                                                        className="p-1 rounded hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
+                                                                        title="Delete Note (Super Admin)"
+                                                                    >
+                                                                        <Trash2 className="w-3 h-3 text-red-600" />
+                                                                    </button>
+                                                                )
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap break-words">
+                                                        {note.content}
+                                                    </p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="p-6 text-center">
+                                            <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                                            <p className="text-xs text-gray-400 italic">No notes yet</p>
+                                        </div>
+                                    )}
+                                </div>
                              </div>
                         </div>
                     </div>

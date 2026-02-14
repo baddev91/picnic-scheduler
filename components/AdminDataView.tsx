@@ -280,18 +280,44 @@ export const AdminDataView: React.FC<AdminDataViewProps> = ({ currentUser, isSup
 
   // --- ATTENDANCE STATUS UPDATE ---
   const handleStatusUpdate = async (id: string, status: 'PENDING' | 'SHOWED_UP' | 'NO_SHOW') => {
+      const shopper = data.find(s => s.id === id);
+      if (!shopper) return;
+
+      // Create a note entry for the status change
+      const statusLabels = {
+          'PENDING': 'Pending',
+          'SHOWED_UP': 'Showed Up ✅',
+          'NO_SHOW': 'No Show ❌'
+      };
+
+      const noteEntry = {
+          id: crypto.randomUUID(),
+          content: `First Day Attendance: ${statusLabels[status]}`,
+          author: currentUser || 'System',
+          timestamp: new Date().toISOString()
+      };
+
+      // Get existing note history or initialize empty array
+      const existingNoteHistory = shopper.details?.noteHistory || [];
+      const updatedNoteHistory = [noteEntry, ...existingNoteHistory];
+
+      // Update details with new status and note
+      const newDetails = {
+          ...shopper.details,
+          firstDayStatus: status,
+          noteHistory: updatedNoteHistory
+      };
+
+      // Optimistic UI update
       setData(prev => prev.map(s => {
           if (s.id === id) {
-              return { ...s, details: { ...s.details, firstDayStatus: status } };
+              return { ...s, details: newDetails };
           }
           return s;
       }));
 
-      const shopper = data.find(s => s.id === id);
-      if (shopper) {
-          const newDetails = { ...shopper.details, firstDayStatus: status };
-          await supabase.from('shoppers').update({ details: newDetails }).eq('id', id);
-      }
+      // Persist to database
+      await supabase.from('shoppers').update({ details: newDetails }).eq('id', id);
   };
 
   const handleUpdateShopper = (updatedShopper: ShopperRecord) => {
@@ -934,11 +960,12 @@ export const AdminDataView: React.FC<AdminDataViewProps> = ({ currentUser, isSup
                                     {expandedRow === item.id && (
                                         <tr>
                                             <td colSpan={6}>
-                                                <ShopperExpandedDetails 
-                                                    shopper={item} 
+                                                <ShopperExpandedDetails
+                                                    shopper={item}
                                                     onStatusUpdate={handleStatusUpdate}
-                                                    onUpdateShopper={handleUpdateShopper} 
+                                                    onUpdateShopper={handleUpdateShopper}
                                                     currentUser={currentUser} // PASS CURRENT USER FOR SINGLE COPY
+                                                    isSuperAdmin={isSuperAdmin} // PASS SUPER ADMIN STATUS
                                                 />
                                             </td>
                                         </tr>
@@ -983,11 +1010,12 @@ export const AdminDataView: React.FC<AdminDataViewProps> = ({ currentUser, isSup
 
                              {expandedRow === item.id && (
                                  <div className="border-t pt-3 mt-1">
-                                     <ShopperExpandedDetails 
-                                         shopper={item} 
-                                         onStatusUpdate={handleStatusUpdate} 
+                                     <ShopperExpandedDetails
+                                         shopper={item}
+                                         onStatusUpdate={handleStatusUpdate}
                                          onUpdateShopper={handleUpdateShopper}
                                          currentUser={currentUser} // PASS CURRENT USER
+                                         isSuperAdmin={isSuperAdmin} // PASS SUPER ADMIN STATUS
                                      />
                                  </div>
                              )}

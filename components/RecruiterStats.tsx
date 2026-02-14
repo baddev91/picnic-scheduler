@@ -122,12 +122,26 @@ export const RecruiterStats: React.FC<RecruiterStatsProps> = ({ staffList, isSup
       return Array.from(weeks).sort().reverse(); // Newest first
   }, [rawShoppers]);
 
+  // Helper to determine session key based on 12:30 cutoff (Submission Time)
+  const getSessionGroupKey = (createdAt: string) => {
+      const date = new Date(createdAt);
+      const dateStr = format(date, 'yyyy-MM-dd');
+
+      // Calculate minutes from midnight
+      const minutes = date.getHours() * 60 + date.getMinutes();
+      // 12:30 PM = 12 * 60 + 30 = 750 minutes
+      const suffix = minutes < 750 ? '0_MORNING' : '1_AFTERNOON';
+
+      return `${dateStr}_${suffix}`;
+  };
+
   // 3. Filter & Aggregate Data based on Selection
   const stats = useMemo(() => {
       // Initialize map with current staff that are VISIBLE (so they appear even with 0 stats)
       const map: Record<string, RecruiterMetric> = {};
       const dayMaps: Record<string, Set<string>> = {}; // Track distinct days per recruiter for session counting
-      
+      const hiresWithEndTime: Record<string, number> = {}; // Track hires that have session end times
+
       staffList.forEach(member => {
           // Only include staff members that should be visible in performance section
           const isVisible = member.isVisibleInPerformance !== false; // Default to true if not set
@@ -143,6 +157,7 @@ export const RecruiterStats: React.FC<RecruiterStatsProps> = ({ staffList, isSup
                   efficiencyScore: 0
               };
               dayMaps[member.name] = new Set<string>();
+              hiresWithEndTime[member.name] = 0;
           }
       });
 
@@ -177,10 +192,10 @@ export const RecruiterStats: React.FC<RecruiterStatsProps> = ({ staffList, isSup
 
           const entry = map[matchKey];
           if (!entry) return; // Skip if not visible
-          
+
           entry.hires += 1;
           entry.shiftsFilled += s.shifts?.length || 0;
-          
+
           // Update last active (only if it's the most recent seen in this filter context)
           if (!entry.lastActive || new Date(s.created_at) > new Date(entry.lastActive)) {
               entry.lastActive = s.created_at;
@@ -190,6 +205,12 @@ export const RecruiterStats: React.FC<RecruiterStatsProps> = ({ staffList, isSup
           if (s.created_at) {
               const dayKey = format(parseISO(s.created_at), 'yyyy-MM-dd');
               dayMaps[matchKey].add(dayKey);
+
+              // Check if this hire has a session end time (for C-Score calculation)
+              const sessionKey = getSessionGroupKey(s.created_at);
+              if (sessionEndTimes[sessionKey]) {
+                  hiresWithEndTime[matchKey] = (hiresWithEndTime[matchKey] || 0) + 1;
+              }
           }
       });
 
@@ -227,9 +248,10 @@ export const RecruiterStats: React.FC<RecruiterStatsProps> = ({ staffList, isSup
               const totalDuration = sessionDurations.reduce((sum, d) => sum + d, 0);
               entry.avgSessionDuration = totalDuration / sessionDurations.length;
 
-              // Calculate efficiency score (hires per hour)
+              // Calculate efficiency score (hires per hour) - ONLY for sessions with end times
               const totalHours = totalDuration * sessionDurations.length;
-              entry.efficiencyScore = totalHours > 0 ? entry.hires / totalHours : 0;
+              const hiresForCScore = hiresWithEndTime[key] || 0;
+              entry.efficiencyScore = totalHours > 0 ? hiresForCScore / totalHours : 0;
           }
       });
 

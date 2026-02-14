@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, FileText, Users, CheckCircle, XCircle, Clock, ClipboardCheck, AlertTriangle, Copy, Check, Settings, Plus, Trash2 } from 'lucide-react';
+import { X, FileText, Users, CheckCircle, XCircle, Clock, ClipboardCheck, AlertTriangle, Copy, Check, Settings, Plus, Trash2, RefreshCw } from 'lucide-react';
 import { ShopperRecord } from '../types';
 import { format } from 'date-fns';
 import { supabase } from '../supabaseClient';
@@ -21,6 +21,11 @@ interface RejectedCandidate {
   reason: string;
 }
 
+interface RescheduledCandidate {
+  name: string;
+  reason: string;
+}
+
 export const SERReportModal: React.FC<SERReportModalProps> = ({
   isOpen,
   onClose,
@@ -34,6 +39,7 @@ export const SERReportModal: React.FC<SERReportModalProps> = ({
   const [scheduled, setScheduled] = useState<number>(0);
   const [showedUp, setShowedUp] = useState<number>(0);
   const [rejectedCandidates, setRejectedCandidates] = useState<RejectedCandidate[]>([]);
+  const [rescheduledCandidates, setRescheduledCandidates] = useState<RescheduledCandidate[]>([]);
   const [endTime, setEndTime] = useState<string>('');
   const [additionalNotes, setAdditionalNotes] = useState<string>('');
   const [tasksDone, setTasksDone] = useState<string[]>([]);
@@ -71,23 +77,23 @@ export const SERReportModal: React.FC<SERReportModalProps> = ({
   // Load custom options from Supabase
   useEffect(() => {
     const loadCustomOptions = async () => {
-      const { data: tasksData } = await supabase
+      const { data: tasksData, error: tasksError } = await supabase
         .from('app_settings')
         .select('value')
         .eq('id', 'custom_ser_tasks')
-        .single();
+        .maybeSingle();
 
-      if (tasksData?.value && Array.isArray(tasksData.value)) {
+      if (!tasksError && tasksData?.value && Array.isArray(tasksData.value)) {
         setCustomTasks(tasksData.value);
       }
 
-      const { data: itProblemsData } = await supabase
+      const { data: itProblemsData, error: itProblemsError } = await supabase
         .from('app_settings')
         .select('value')
         .eq('id', 'custom_it_problems')
-        .single();
+        .maybeSingle();
 
-      if (itProblemsData?.value && Array.isArray(itProblemsData.value)) {
+      if (!itProblemsError && itProblemsData?.value && Array.isArray(itProblemsData.value)) {
         setCustomItProblems(itProblemsData.value);
       }
     };
@@ -101,6 +107,7 @@ export const SERReportModal: React.FC<SERReportModalProps> = ({
       setScheduled(0);
       setShowedUp(0);
       setRejectedCandidates([]);
+      setRescheduledCandidates([]);
       setEndTime(prefilledEndTime); // Use prefilled end time if available
       setAdditionalNotes('');
       setTasksDone([]);
@@ -155,6 +162,22 @@ export const SERReportModal: React.FC<SERReportModalProps> = ({
     setRejectedCandidates(prev => prev.filter((_, i) => i !== index));
   };
 
+  const addRescheduledCandidate = () => {
+    setRescheduledCandidates(prev => [...prev, { name: '', reason: '' }]);
+  };
+
+  const updateRescheduledCandidate = (index: number, field: 'name' | 'reason', value: string) => {
+    setRescheduledCandidates(prev =>
+      prev.map((candidate, i) =>
+        i === index ? { ...candidate, [field]: value } : candidate
+      )
+    );
+  };
+
+  const removeRescheduledCandidate = (index: number) => {
+    setRescheduledCandidates(prev => prev.filter((_, i) => i !== index));
+  };
+
   // Custom options management
   const handleAddTask = async () => {
     if (!newTaskInput.trim()) return;
@@ -201,6 +224,17 @@ export const SERReportModal: React.FC<SERReportModalProps> = ({
     if (rejectedCandidates.length > 0 && rejectedCandidates.some(c => c.name.trim())) {
       report += `❌ *Rejected Candidates:*\n`;
       rejectedCandidates
+        .filter(c => c.name.trim())
+        .forEach(candidate => {
+          report += `• ${candidate.name}${candidate.reason ? ` - ${candidate.reason}` : ''}\n`;
+        });
+      report += `\n`;
+    }
+
+    // Rescheduled Candidates
+    if (rescheduledCandidates.length > 0 && rescheduledCandidates.some(c => c.name.trim())) {
+      report += `🔄 *Rescheduled Candidates:*\n`;
+      rescheduledCandidates
         .filter(c => c.name.trim())
         .forEach(candidate => {
           report += `• ${candidate.name}${candidate.reason ? ` - ${candidate.reason}` : ''}\n`;
@@ -395,6 +429,53 @@ export const SERReportModal: React.FC<SERReportModalProps> = ({
                       <button
                         onClick={() => removeRejectedCandidate(index)}
                         className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors shrink-0"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Rescheduled Candidates */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-5">
+            <div className="flex items-center justify-between mb-3 sm:mb-4">
+              <h4 className="text-xs sm:text-sm font-bold text-gray-700 uppercase tracking-wider flex items-center gap-2">
+                <RefreshCw className="w-4 h-4 text-orange-600" /> Rescheduled
+              </h4>
+              <button
+                onClick={addRescheduledCandidate}
+                className="px-2.5 sm:px-3 py-1.5 bg-orange-50 text-orange-700 rounded-lg text-xs font-bold hover:bg-orange-100 transition-colors border border-orange-200"
+              >
+                + Add
+              </button>
+            </div>
+            {rescheduledCandidates.length === 0 ? (
+              <p className="text-xs text-gray-400 italic">No rescheduled candidates</p>
+            ) : (
+              <div className="space-y-2 sm:space-y-3">
+                {rescheduledCandidates.map((candidate, index) => (
+                  <div key={index} className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      value={candidate.name}
+                      onChange={(e) => updateRescheduledCandidate(index, 'name', e.target.value)}
+                      placeholder="Candidate name"
+                      className="flex-1 p-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none text-sm"
+                    />
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={candidate.reason}
+                        onChange={(e) => updateRescheduledCandidate(index, 'reason', e.target.value)}
+                        placeholder="Reason (optional)"
+                        className="flex-1 p-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none text-sm"
+                      />
+                      <button
+                        onClick={() => removeRescheduledCandidate(index)}
+                        className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors shrink-0"
                       >
                         <X className="w-4 h-4" />
                       </button>
