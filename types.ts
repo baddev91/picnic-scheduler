@@ -21,6 +21,9 @@ export interface StaffMember {
   name: string;
   isSuperAdmin: boolean;
   isVisibleInPerformance?: boolean; // NEW: Controls visibility in recruitment performance section
+  isHiddenFromStats?: boolean; // Controls visibility in stats (legacy field)
+  pin?: string; // Personal PIN (4-6 digits) - overrides shared PIN
+  password?: string; // Personal password (min 6 chars) - alternative to PIN
 }
 
 export interface ShopperShift {

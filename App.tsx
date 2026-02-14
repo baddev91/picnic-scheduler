@@ -8,6 +8,7 @@ import { addDays, getDay, addWeeks } from 'date-fns';
 import startOfWeek from 'date-fns/startOfWeek';
 import { supabase } from './supabaseClient';
 import { AdminDataView } from './components/AdminDataView';
+import bcrypt from 'bcryptjs';
 
 // Imported Components
 import { AdminLogin } from './components/AdminLogin';
@@ -21,11 +22,13 @@ import { AccessLogViewer } from './components/AccessLogViewer'; // NEW
 import { FrozenList } from './components/FrozenList';
 import { CalendarView } from './components/CalendarView'; // NEW IMPORT FOR ADMIN PREVIEW
 import { TalksDashboard } from './components/Talks/TalksDashboard'; // NEW IMPORT
+import { SecurityUpdateModal } from './components/SecurityUpdateModal'; // Security update notification
 
 const STORAGE_KEYS = {
   TEMPLATE: 'picnic_admin_template',
   SHOPPER_SESSION: 'picnic_shopper_session',
   LOGIN_ATTEMPTS: 'picnic_login_attempts', // NEW KEY
+  SECURITY_UPDATE_SEEN: 'picnic_security_update_seen', // Track who has seen the security update modal
 };
 
 const WELCOME_MESSAGES = [
@@ -123,6 +126,9 @@ export default function App() {
   // Shopper Session State
   const [tempNameInput, setTempNameInput] = useState('');
   const [selectedRecruiter, setSelectedRecruiter] = useState('');
+
+  // Security Update Modal State
+  const [showSecurityUpdateModal, setShowSecurityUpdateModal] = useState(false);
 
   // Random Welcome Message & Color State (Memoized)
   const welcomeConfig = useMemo(() => {
@@ -457,7 +463,7 @@ export default function App() {
       }
   };
 
-  const handleLogin = async (pwd: string, staffName?: string) => { 
+  const handleLogin = async (pwd: string, staffName?: string) => {
       if (lockoutTime && Date.now() < lockoutTime) {
           return;
       } else if (lockoutTime && Date.now() >= lockoutTime) {
@@ -466,18 +472,46 @@ export default function App() {
       }
 
       let targetRole: 'ADMIN' | 'FROZEN' | 'UNKNOWN' = 'UNKNOWN';
-      
-      // Determine expected PIN based on selected staff role
-      let requiredAdminPin = adminPin;
+
+      // Check personal credentials first (if staff member has set them)
       if (staffName) {
           const member = staffList.find(s => s.name === staffName);
-          if (member && member.isSuperAdmin) {
-              requiredAdminPin = superAdminPin;
+          if (member) {
+              // If user has set personal credentials, ONLY accept those
+              if (member.pin || member.password) {
+                  // Personal credentials are set - shared PIN will NOT work
+                  // Use bcrypt to compare hashed credentials
+                  if (member.pin) {
+                      const pinMatches = await bcrypt.compare(pwd, member.pin);
+                      if (pinMatches) {
+                          targetRole = 'ADMIN';
+                      }
+                  } else if (member.password) {
+                      const passwordMatches = await bcrypt.compare(pwd, member.password);
+                      if (passwordMatches) {
+                          targetRole = 'ADMIN';
+                      }
+                  }
+                  // If neither matches, targetRole stays 'UNKNOWN' (login fails)
+              } else {
+                  // No personal credentials set - fallback to shared PIN
+                  const requiredAdminPin = member.isSuperAdmin ? superAdminPin : adminPin;
+                  if (pwd === requiredAdminPin) {
+                      targetRole = 'ADMIN';
+                  }
+              }
+          }
+      } else {
+          // No staff name selected - check shared PINs only
+          if (pwd === adminPin || pwd === superAdminPin) {
+              targetRole = 'ADMIN';
           }
       }
 
-      if (pwd === requiredAdminPin) targetRole = 'ADMIN';
-      else if (pwd === frozenPin) targetRole = 'FROZEN';
+      // Check frozen PIN (for Loek's frozen list access)
+      if (targetRole === 'UNKNOWN' && pwd === frozenPin) {
+          targetRole = 'FROZEN';
+      }
 
       if (targetRole !== 'UNKNOWN') { 
           localStorage.removeItem(STORAGE_KEYS.LOGIN_ATTEMPTS);
@@ -494,6 +528,15 @@ export default function App() {
               if (staffName) {
                   const member = staffList.find(s => s.name === staffName);
                   if (member?.isSuperAdmin) isSuper = true;
+
+                  // Check if user needs to see security update modal
+                  // Show modal if: user has NO personal credentials AND hasn't seen the modal before
+                  if (!member.pin && !member.password) {
+                      const seenUsers = JSON.parse(localStorage.getItem(STORAGE_KEYS.SECURITY_UPDATE_SEEN) || '[]');
+                      if (!seenUsers.includes(staffName)) {
+                          setShowSecurityUpdateModal(true);
+                      }
+                  }
               }
               setIsCurrentSuperAdmin(isSuper);
 
@@ -613,8 +656,9 @@ export default function App() {
               </div>
               <div className="flex-1 p-4 sm:p-6 overflow-y-auto">
                   {adminWizardStep === AdminWizardStep.DASHBOARD && (
-                      <AdminDashboard 
+                      <AdminDashboard
                           isSuperAdmin={isCurrentSuperAdmin} // PASS PERMISSION
+                          currentUserName={selectedRecruiter} // Pass current logged-in user
                           isShopperAuthEnabled={isShopperAuthEnabled} setIsShopperAuthEnabled={setIsShopperAuthEnabled}
                           adminShopperPinInput={adminShopperPinInput} setAdminShopperPinInput={setAdminShopperPinInput}
                           generateRandomPin={generateRandomPin} saveShopperAuthSettings={saveShopperAuthSettings}
@@ -623,7 +667,7 @@ export default function App() {
                           setTempTemplate={setTempTemplate} tempTemplate={tempTemplate}
                           adminPin={adminPin} updateAdminPin={updateAdminPin}
                           superAdminPin={superAdminPin} updateSuperAdminPin={updateSuperAdminPin}
-                          frozenPin={frozenPin} updateFrozenPin={updateFrozenPin} 
+                          frozenPin={frozenPin} updateFrozenPin={updateFrozenPin}
                           onGoToFrozen={() => setMode(AppMode.FROZEN_LIST)}
                           onGoToTalks={() => setMode(AppMode.TALKS_DASHBOARD)}
                           staffList={staffList} // Pass staff list
@@ -665,6 +709,21 @@ export default function App() {
               </div>
             </div>
         )}
+
+        {/* Security Update Modal */}
+        <SecurityUpdateModal
+          isOpen={showSecurityUpdateModal}
+          onContinue={() => {
+            // Mark this user as having seen the modal
+            const seenUsers = JSON.parse(localStorage.getItem(STORAGE_KEYS.SECURITY_UPDATE_SEEN) || '[]');
+            if (selectedRecruiter && !seenUsers.includes(selectedRecruiter)) {
+              seenUsers.push(selectedRecruiter);
+              localStorage.setItem(STORAGE_KEYS.SECURITY_UPDATE_SEEN, JSON.stringify(seenUsers));
+            }
+            setShowSecurityUpdateModal(false);
+          }}
+          userName={selectedRecruiter}
+        />
     </div>
   );
 }

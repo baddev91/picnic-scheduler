@@ -6,9 +6,11 @@ import { AdminWizardStep, WeeklyTemplate, StaffMember } from '../types';
 import { MIN_DAYS_TO_START } from '../constants';
 import { AvailabilityCheatSheet } from './AvailabilityCheatSheet';
 import { RecruiterStats } from './RecruiterStats';
+import { StaffSettingsModal } from './StaffSettingsModal';
 
 interface AdminDashboardProps {
   isSuperAdmin: boolean; // NEW PROP
+  currentUserName?: string; // NEW: Current logged-in user name
   isShopperAuthEnabled: boolean;
   setIsShopperAuthEnabled: (enabled: boolean) => void;
   adminShopperPinInput: string;
@@ -34,6 +36,7 @@ interface AdminDashboardProps {
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   isSuperAdmin,
+  currentUserName,
   isShopperAuthEnabled,
   setIsShopperAuthEnabled,
   adminShopperPinInput,
@@ -61,13 +64,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [newFrozenPin, setNewFrozenPin] = useState(frozenPin);
   const [showRules, setShowRules] = useState(false);
   const [pinError, setPinError] = useState<string | null>(null);
-  
+
   // Staff List local state
   const [newStaffName, setNewStaffName] = useState('');
   const [isNewStaffSuper, setIsNewStaffSuper] = useState(false);
-  
+
   // Cheat Sheet Modal State
   const [showCheatSheet, setShowCheatSheet] = useState(false);
+
+  // Settings Modal State
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
 
   const handleEditPattern = () => {
     if (savedCloudTemplate) {
@@ -168,16 +174,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
               </div>
               <div className="flex gap-2">
+                 {/* My Settings Button - Only show if user is logged in with a name */}
+                 {currentUserName && (
+                     <button
+                        onClick={() => setShowSettingsModal(true)}
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-50 text-blue-700 font-bold hover:bg-blue-100 transition-colors border border-blue-200 text-xs shadow-sm"
+                     >
+                         <Settings2 className="w-4 h-4" /> My Settings
+                     </button>
+                 )}
                  {isSuperAdmin && (
-                     <button 
+                     <button
                         onClick={onGoToFrozen}
                         className="flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-50 text-cyan-700 font-bold hover:bg-cyan-100 transition-colors border border-cyan-200 text-xs shadow-sm"
                      >
                          <Snowflake className="w-3 h-3" /> Frozen List View
                      </button>
                  )}
-                 <Button 
-                    variant="secondary" 
+                 <Button
+                    variant="secondary"
                     onClick={() => setAdminWizardStep(AdminWizardStep.VIEW_LOGS)}
                     className="flex items-center gap-2 border-gray-300 hover:border-black transition-colors text-xs"
                  >
@@ -185,8 +200,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                  </Button>
                  {/* NEW SECURITY LOGS BUTTON */}
                  {isSuperAdmin && (
-                     <Button 
-                        variant="secondary" 
+                     <Button
+                        variant="secondary"
                         onClick={() => setAdminWizardStep(AdminWizardStep.VIEW_ACCESS_LOGS)}
                         className="flex items-center gap-2 border-gray-300 hover:border-red-500 hover:text-red-600 transition-colors text-xs bg-red-50/50"
                      >
@@ -576,11 +591,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
           </div>
 
-          <AvailabilityCheatSheet 
-              isOpen={showCheatSheet} 
-              onClose={() => setShowCheatSheet(false)} 
-              weeklyTemplate={savedCloudTemplate || tempTemplate} 
+          <AvailabilityCheatSheet
+              isOpen={showCheatSheet}
+              onClose={() => setShowCheatSheet(false)}
+              weeklyTemplate={savedCloudTemplate || tempTemplate}
           />
+
+          {/* Staff Settings Modal */}
+          {currentUserName && (() => {
+              const currentUser = staffList.find(s => s.name === currentUserName);
+              return currentUser ? (
+                  <StaffSettingsModal
+                      isOpen={showSettingsModal}
+                      onClose={() => setShowSettingsModal(false)}
+                      currentUser={currentUser}
+                      onSave={async (updatedUser) => {
+                          const updatedList = staffList.map(s =>
+                              s.name === updatedUser.name ? updatedUser : s
+                          );
+                          await saveStaffList(updatedList);
+                      }}
+                  />
+              ) : null;
+          })()}
       </div>
   );
 };
