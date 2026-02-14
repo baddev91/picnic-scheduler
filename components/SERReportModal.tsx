@@ -295,8 +295,8 @@ export const SERReportModal: React.FC<SERReportModalProps> = ({
     report += `👥 *Candidates:*\n`;
     report += `• Scheduled: ${scheduled}\n`;
     report += `• Showed Up: ${showedUp}\n`;
-    report += `• Hired (Session): ${hired} ✅\n`;
-    report += `• Total Hired (Week): ${totalHiredThisWeek} ✅\n\n`;
+    report += `• Hired (Session): ${hired}\n`;
+    report += `• Total Hired (Week): ${totalHiredThisWeek}\n\n`;
 
     // Rejected Candidates
     if (rejectedCandidates.length > 0 && rejectedCandidates.some(c => c.name.trim())) {
@@ -454,14 +454,14 @@ export const SERReportModal: React.FC<SERReportModalProps> = ({
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-gray-500 mb-2">Hired (Session) ✅</label>
+                <label className="block text-xs font-bold text-gray-500 mb-2">Hired (Session)</label>
                 <div className="w-full p-2.5 sm:p-3 bg-green-50 border border-green-200 rounded-xl text-sm font-bold text-green-700 flex items-center justify-center gap-1.5 sm:gap-2">
                   <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
                   <span>{hired}</span>
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-bold text-gray-500 mb-2">Total Hired (Week) ✅</label>
+                <label className="block text-xs font-bold text-gray-500 mb-2">Total Hired (Week)</label>
                 <div className="w-full p-2.5 sm:p-3 bg-blue-50 border border-blue-200 rounded-xl text-sm font-bold text-blue-700 flex items-center justify-center gap-1.5 sm:gap-2">
                   <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
                   <span>{totalHiredThisWeek}</span>
