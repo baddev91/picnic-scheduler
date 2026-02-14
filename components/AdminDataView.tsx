@@ -150,7 +150,7 @@ export const AdminDataView: React.FC<AdminDataViewProps> = ({ currentUser, isSup
           .from('app_settings')
           .select('value')
           .eq('id', 'session_end_times')
-          .single();
+          .maybeSingle();
 
         if (endTimesData?.value) {
           setSessionEndTimes(endTimesData.value);
@@ -161,10 +161,13 @@ export const AdminDataView: React.FC<AdminDataViewProps> = ({ currentUser, isSup
           .from('app_settings')
           .select('value')
           .eq('id', 'session_start_times')
-          .single();
+          .maybeSingle();
 
         if (startTimesData?.value) {
           setSessionStartTimes(startTimesData.value);
+        } else {
+          // Initialize with empty object if not found
+          setSessionStartTimes({});
         }
       } catch (e) {
         console.error('Error loading session times:', e);
@@ -478,8 +481,8 @@ export const AdminDataView: React.FC<AdminDataViewProps> = ({ currentUser, isSup
     if (existingTime) {
       setTempStartTime(existingTime);
     } else {
-      // Default times
-      const defaultTime = sessionType === 'MORNING' ? '09:00' : '15:30';
+      // Default times: Morning = 09:00, Afternoon = 14:00 (but user can select up to 15:30)
+      const defaultTime = sessionType === 'MORNING' ? '09:00' : '14:00';
       setTempStartTime(defaultTime);
     }
     setEditingStartTime(sessionKey);
@@ -831,7 +834,7 @@ export const AdminDataView: React.FC<AdminDataViewProps> = ({ currentUser, isSup
                                     title={sessionStartTimes[fullGroupKey] ? `Start: ${sessionStartTimes[fullGroupKey]}` : 'Set start time'}
                                 >
                                     <Clock className="w-3.5 h-3.5 inline mr-1" />
-                                    {sessionStartTimes[fullGroupKey] || (fullGroupKey.includes('MORNING') ? '09:00' : '15:30')}
+                                    {sessionStartTimes[fullGroupKey] || (fullGroupKey.includes('MORNING') ? '09:00' : '14:00')}
                                 </button>
                             )}
 

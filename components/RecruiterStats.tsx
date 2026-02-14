@@ -61,7 +61,7 @@ export const RecruiterStats: React.FC<RecruiterStatsProps> = ({ staffList, isSup
         .from('app_settings')
         .select('value')
         .eq('id', 'session_end_times')
-        .single();
+        .maybeSingle();
 
       if (endTimesData?.value) {
         setSessionEndTimes(endTimesData.value);
@@ -72,10 +72,13 @@ export const RecruiterStats: React.FC<RecruiterStatsProps> = ({ staffList, isSup
         .from('app_settings')
         .select('value')
         .eq('id', 'session_start_times')
-        .single();
+        .maybeSingle();
 
       if (startTimesData?.value) {
         setSessionStartTimes(startTimesData.value);
+      } else {
+        // Initialize with empty object if not found
+        setSessionStartTimes({});
       }
 
       setLoading(false);
@@ -83,6 +86,30 @@ export const RecruiterStats: React.FC<RecruiterStatsProps> = ({ staffList, isSup
 
     fetchData();
   }, []);
+
+  // Helper function to calculate session duration in hours
+  const calculateSessionDuration = (sessionType: 'MORNING' | 'AFTERNOON', endTime: string, customStartTime?: string): number => {
+      // Use custom start time if provided, otherwise use defaults
+      let startHour: number;
+      let startMinute: number = 0;
+
+      if (customStartTime) {
+        // Parse custom start time (format: "HH:MM")
+        [startHour, startMinute] = customStartTime.split(':').map(Number);
+      } else {
+        // Default start times: Morning = 09:00, Afternoon = 14:00
+        startHour = sessionType === 'MORNING' ? 9 : 14;
+        startMinute = 0;
+      }
+
+      // Parse end time (format: "HH:MM")
+      const [endHour, endMinute] = endTime.split(':').map(Number);
+
+      // Calculate duration in hours
+      const duration = (endHour + endMinute / 60) - (startHour + startMinute / 60);
+
+      return duration > 0 ? duration : 0;
+  };
 
   // 2. Compute Available Weeks for Dropdown
   const availableWeeks = useMemo(() => {
@@ -182,14 +209,14 @@ export const RecruiterStats: React.FC<RecruiterStatsProps> = ({ staffList, isSup
 
               if (sessionEndTimes[morningKey]) {
                   const endTime = sessionEndTimes[morningKey];
-                  const startTime = sessionStartTimes[morningKey];
+                  const startTime = sessionStartTimes?.[morningKey];
                   const duration = calculateSessionDuration('MORNING', endTime, startTime);
                   if (duration > 0) sessionDurations.push(duration);
               }
 
               if (sessionEndTimes[afternoonKey]) {
                   const endTime = sessionEndTimes[afternoonKey];
-                  const startTime = sessionStartTimes[afternoonKey];
+                  const startTime = sessionStartTimes?.[afternoonKey];
                   const duration = calculateSessionDuration('AFTERNOON', endTime, startTime);
                   if (duration > 0) sessionDurations.push(duration);
               }
@@ -212,30 +239,6 @@ export const RecruiterStats: React.FC<RecruiterStatsProps> = ({ staffList, isSup
         .sort((a, b) => b.efficiencyScore - a.efficiencyScore); // Sort by Efficiency Score Descending
 
   }, [rawShoppers, staffList, selectedWeek, sessionEndTimes, sessionStartTimes]);
-
-  // Helper function to calculate session duration in hours
-  const calculateSessionDuration = (sessionType: 'MORNING' | 'AFTERNOON', endTime: string, customStartTime?: string): number => {
-      // Use custom start time if provided, otherwise use defaults
-      let startHour: number;
-      let startMinute: number = 0;
-
-      if (customStartTime) {
-        // Parse custom start time (format: "HH:MM")
-        [startHour, startMinute] = customStartTime.split(':').map(Number);
-      } else {
-        // Default start times: Morning = 09:00, Afternoon = 15:30
-        startHour = sessionType === 'MORNING' ? 9 : 15;
-        startMinute = sessionType === 'MORNING' ? 0 : 30;
-      }
-
-      // Parse end time (format: "HH:MM")
-      const [endHour, endMinute] = endTime.split(':').map(Number);
-
-      // Calculate duration in hours
-      const duration = (endHour + endMinute / 60) - (startHour + startMinute / 60);
-
-      return duration > 0 ? duration : 0;
-  };
 
   // 4. Calculate Total Hires for current view
   const totalHires = useMemo(() => {
