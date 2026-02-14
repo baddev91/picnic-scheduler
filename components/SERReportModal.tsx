@@ -172,10 +172,14 @@ export const SERReportModal: React.FC<SERReportModalProps> = ({
       setCustomItProblem('');
       setCopied(false);
 
-      // Auto-collect notes from submissions with names (using initial snapshot)
+      // Auto-collect notes from submissions with names
+      // Use noteHistory (latest note) instead of legacy notes field
       const notes = shoppers
         .map(s => {
-          const note = s.details?.notes?.trim();
+          // Get the most recent note from noteHistory
+          const latestNote = s.details?.noteHistory?.[0]?.content?.trim();
+          // Fallback to legacy notes field if noteHistory is empty
+          const note = latestNote || s.details?.notes?.trim();
           return note ? `${s.name}: ${note}` : '';
         })
         .filter(note => note !== '')

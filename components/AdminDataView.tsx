@@ -621,7 +621,9 @@ export const AdminDataView: React.FC<AdminDataViewProps> = ({ currentUser, isSup
       
       const aaShifts = item.shifts.filter(s => s.type === ShiftType.AA);
       const aaPattern = aaShifts.length ? Array.from(new Set(aaShifts.map(s => `${format(new Date(s.date), 'EEE')} ${s.time.split('(')[0]}`))).join(' & ') : 'None';
-      const notes = item.details?.notes ? item.details.notes.replace(/"/g, '""') : '';
+      // Get latest note from noteHistory, fallback to legacy notes field
+      const latestNote = item.details?.noteHistory?.[0]?.content || item.details?.notes || '';
+      const notes = latestNote ? latestNote.replace(/"/g, '""') : '';
 
       return [
         `"${item.name}"`, `"${item.details?.pnNumber || ''}"`, `"${format(new Date(item.created_at), 'yyyy-MM-dd HH:mm')}"`,

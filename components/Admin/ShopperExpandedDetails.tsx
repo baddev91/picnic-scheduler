@@ -38,13 +38,18 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
     const [emailResent, setEmailResent] = useState(false);
 
     // Reset pending status if shopper data updates externally
+    // NOTE: We don't reset notes here to avoid clearing user input when shopper updates
     useEffect(() => {
         setPendingStatus(null);
         setPendingFrozenToggle(false);
-        setNotes(shopper.details?.notes || '');
         setIsFrozenEligible(shopper.details?.isFrozenEligible || false);
         setEmailResent(false);
     }, [shopper.details?.firstDayStatus, shopper.id, shopper.details?.isFrozenEligible]);
+
+    // Separate effect to initialize notes only when shopper ID changes (new shopper loaded)
+    useEffect(() => {
+        setNotes(shopper.details?.notes || '');
+    }, [shopper.id]);
 
     const hasNoteChanged = notes !== (shopper.details?.notes || '');
 
@@ -151,10 +156,11 @@ export const ShopperExpandedDetails: React.FC<ShopperExpandedDetailsProps> = ({ 
             const updatedNoteHistory = [newNoteEntry, ...existingNoteHistory];
 
             // Update details with new note history
+            // Clear the legacy 'notes' field since we're using noteHistory now
             const newDetails = {
                 ...shopper.details,
                 noteHistory: updatedNoteHistory,
-                notes: notes.trim() // Keep legacy field for backward compatibility
+                notes: '' // Clear legacy field after saving to history
             };
 
             const { error } = await supabase
