@@ -7,6 +7,7 @@ import { MIN_DAYS_TO_START } from '../constants';
 import { AvailabilityCheatSheet } from './AvailabilityCheatSheet';
 import { RecruiterStats } from './RecruiterStats';
 import { StaffSettingsModal } from './StaffSettingsModal';
+import { DeleteStaffConfirmModal } from './DeleteStaffConfirmModal';
 
 interface AdminDashboardProps {
   isSuperAdmin: boolean; // NEW PROP
@@ -75,6 +76,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Settings Modal State
   const [showSettingsModal, setShowSettingsModal] = useState(false);
 
+  // Delete Staff Confirmation Modal State
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [staffToDelete, setStaffToDelete] = useState<StaffMember | null>(null);
+
   const handleEditPattern = () => {
     if (savedCloudTemplate) {
          setTempTemplate(savedCloudTemplate);
@@ -142,9 +147,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setIsNewStaffSuper(false);
   };
 
-  const handleRemoveStaff = (name: string) => {
-      const newList = staffList.filter(s => s.name !== name);
+  const handleRemoveStaff = (member: StaffMember) => {
+      // Open confirmation modal
+      setStaffToDelete(member);
+      setShowDeleteConfirm(true);
+  };
+
+  const confirmDeleteStaff = () => {
+      if (!staffToDelete || !currentUserName) return;
+
+      // Soft delete: mark as deleted instead of removing
+      const newList = staffList.map(s => {
+          if (s.name === staffToDelete.name) {
+              return {
+                  ...s,
+                  isDeleted: true,
+                  deletedAt: new Date().toISOString(),
+                  deletedBy: currentUserName
+              };
+          }
+          return s;
+      });
+
       saveStaffList(newList);
+      setShowDeleteConfirm(false);
+      setStaffToDelete(null);
   };
 
   const toggleStaffRole = (member: StaffMember) => {
@@ -454,12 +481,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </div>
 
                   <div className="flex flex-wrap gap-2">
-                      {staffList.length === 0 ? (
+                      {staffList.filter(m => !m.isDeleted).length === 0 ? (
                           <span className="text-xs text-gray-400 italic">No staff members added.</span>
                       ) : (
-                          staffList.map(member => (
+                          staffList.filter(m => !m.isDeleted).map(member => (
                               <div key={member.name} className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${member.isSuperAdmin ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-gray-100 text-gray-700 border-gray-200'}`}>
-                                  <button 
+                                  <button
                                       onClick={() => toggleStaffRole(member)}
                                       className={`p-0.5 rounded-full transition-colors ${member.isSuperAdmin ? 'hover:bg-purple-200' : 'hover:bg-gray-300 text-gray-400'}`}
                                       title="Toggle Super Admin"
@@ -467,13 +494,55 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                                       <Shield className={`w-3 h-3 ${member.isSuperAdmin ? 'fill-purple-700' : ''}`} />
                                   </button>
                                   {member.name}
-                                  <button onClick={() => handleRemoveStaff(member.name)} className="ml-1 p-0.5 hover:bg-black/10 rounded-full transition-colors text-current opacity-60 hover:opacity-100">
+                                  <button onClick={() => handleRemoveStaff(member)} className="ml-1 p-0.5 hover:bg-black/10 rounded-full transition-colors text-current opacity-60 hover:opacity-100">
                                       <Trash2 className="w-3 h-3" />
                                   </button>
                               </div>
                           ))
                       )}
                   </div>
+
+                  {/* DELETED STAFF SECTION (Super Admin Only) */}
+                  {staffList.filter(m => m.isDeleted).length > 0 && (
+                      <div className="bg-gray-50 border border-gray-200 rounded-xl p-5 mt-4">
+                          <div className="flex items-center gap-2 mb-3">
+                              <Box className="w-4 h-4 text-gray-500" />
+                              <h4 className="text-sm font-bold text-gray-700">Archived Staff</h4>
+                              <span className="text-xs text-gray-500 bg-gray-200 px-2 py-0.5 rounded-full">
+                                  {staffList.filter(m => m.isDeleted).length}
+                              </span>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                              {staffList.filter(m => m.isDeleted).map(member => (
+                                  <div key={member.name} className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border bg-gray-100 text-gray-500 border-gray-300">
+                                      {member.name}
+                                      <span className="text-[10px] opacity-60">
+                                          (deleted {member.deletedAt ? new Date(member.deletedAt).toLocaleDateString() : ''})
+                                      </span>
+                                      <button
+                                          onClick={() => {
+                                              if (!confirm(`Restore ${member.name}?\n\nAll their associated data (shoppers, statistics, etc.) will become visible again.`)) return;
+
+                                              // Restore staff member
+                                              const newList = staffList.map(s => {
+                                                  if (s.name === member.name) {
+                                                      const { isDeleted, deletedAt, deletedBy, ...rest } = s;
+                                                      return rest;
+                                                  }
+                                                  return s;
+                                              });
+                                              saveStaffList(newList);
+                                          }}
+                                          className="ml-1 p-0.5 hover:bg-green-100 rounded-full transition-colors text-green-600 opacity-60 hover:opacity-100"
+                                          title="Restore staff member"
+                                      >
+                                          <RefreshCw className="w-3 h-3" />
+                                      </button>
+                                  </div>
+                              ))}
+                          </div>
+                      </div>
+                  )}
               </div>
           )}
 
@@ -611,6 +680,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           );
                           await saveStaffList(updatedList);
                       }}
+                  />
+              ) : null;
+          })()}
+
+          {/* Delete Staff Confirmation Modal */}
+          {currentUserName && staffToDelete && (() => {
+              const currentUser = staffList.find(s => s.name === currentUserName);
+              return currentUser ? (
+                  <DeleteStaffConfirmModal
+                      isOpen={showDeleteConfirm}
+                      onClose={() => {
+                          setShowDeleteConfirm(false);
+                          setStaffToDelete(null);
+                      }}
+                      onConfirm={confirmDeleteStaff}
+                      staffName={staffToDelete.name}
+                      superAdminPin={superAdminPin}
+                      currentUserPin={currentUser.pin}
+                      currentUserPassword={currentUser.password}
                   />
               ) : null;
           })()}

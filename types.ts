@@ -24,6 +24,9 @@ export interface StaffMember {
   isHiddenFromStats?: boolean; // Controls visibility in stats (legacy field)
   pin?: string; // Personal PIN (4-6 digits) - overrides shared PIN
   password?: string; // Personal password (min 6 chars) - alternative to PIN
+  isDeleted?: boolean; // Soft delete flag
+  deletedAt?: string; // ISO timestamp of deletion
+  deletedBy?: string; // Name of super admin who deleted
 }
 
 export interface ShopperShift {

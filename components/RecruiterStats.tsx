@@ -143,8 +143,8 @@ export const RecruiterStats: React.FC<RecruiterStatsProps> = ({ staffList, isSup
       const hiresWithEndTime: Record<string, number> = {}; // Track hires that have session end times
 
       staffList.forEach(member => {
-          // Only include staff members that should be visible in performance section
-          const isVisible = member.isVisibleInPerformance !== false; // Default to true if not set
+          // Only include staff members that should be visible in performance section and not deleted
+          const isVisible = member.isVisibleInPerformance !== false && !member.isDeleted; // Default to true if not set, exclude deleted
           if (isVisible) {
               map[member.name] = {
                   name: member.name,
@@ -179,13 +179,13 @@ export const RecruiterStats: React.FC<RecruiterStatsProps> = ({ staffList, isSup
           let matchKey = Object.keys(map).find(k => k.toLowerCase() === rawName.trim().toLowerCase());
           
           if (!matchKey) {
-              // If recruiter not in staff list, only add if visible in settings
+              // If recruiter not in staff list, only add if visible in settings and not deleted
               // Since they're not in staff list, we'll check if there's a matching visible member
-              const visibleMember = staffList.find(m => m.name.toLowerCase() === rawName.trim().toLowerCase() && m.isVisibleInPerformance !== false);
+              const visibleMember = staffList.find(m => m.name.toLowerCase() === rawName.trim().toLowerCase() && m.isVisibleInPerformance !== false && !m.isDeleted);
               if (visibleMember) {
                   matchKey = visibleMember.name;
               } else {
-                  // Don't add recruiters not in staff list or not marked as visible
+                  // Don't add recruiters not in staff list or not marked as visible or deleted
                   return;
               }
           }
@@ -257,7 +257,7 @@ export const RecruiterStats: React.FC<RecruiterStatsProps> = ({ staffList, isSup
 
       // Convert to array and sort by efficiency score (C-Score)
       return Object.values(map)
-        .filter(item => item.hires > 0 || staffList.some(s => s.name === item.name && s.isVisibleInPerformance !== false))
+        .filter(item => item.hires > 0 || staffList.some(s => s.name === item.name && s.isVisibleInPerformance !== false && !s.isDeleted))
         .sort((a, b) => b.efficiencyScore - a.efficiencyScore); // Sort by Efficiency Score Descending
 
   }, [rawShoppers, staffList, selectedWeek, sessionEndTimes, sessionStartTimes]);

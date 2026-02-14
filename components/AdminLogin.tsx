@@ -81,14 +81,14 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin, onCancel, authE
           {isStaffSelectionRequired && (
              <div className="relative">
                  <UserCheck className={`absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 ${isSuperAdmin ? 'text-purple-500' : 'text-gray-400'}`} />
-                 <select 
+                 <select
                      value={selectedStaffName}
                      onChange={(e) => setSelectedStaffName(e.target.value)}
                      className="w-full pl-10 pr-8 py-3 rounded-xl border-2 border-gray-200 focus:border-gray-500 focus:ring-4 focus:ring-gray-100 outline-none transition-all appearance-none cursor-pointer bg-white text-gray-800 font-medium"
                      disabled={isLocked}
                  >
                      <option value="" disabled>Select your name...</option>
-                     {staffList.map(member => (
+                     {staffList.filter(m => !m.isDeleted).map(member => (
                          <option key={member.name} value={member.name}>
                              {member.name}
                          </option>
