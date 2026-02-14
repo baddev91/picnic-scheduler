@@ -246,3 +246,49 @@ export const isWeeklyDaysViolation = (dateStr: string, currentShifts: ShopperShi
     // If more than 5 distinct days in a week, it's a violation
     return workingDaysSet.size > 5;
 };
+
+// --- FIRST WORKING DAY CAPACITY CHECK ---
+// This function counts how many workers have a specific date as their first working day
+// and are scheduled for a specific shift time. Used to enforce the 5 FWD workers per shift limit.
+export const countFirstWorkingDayWorkers = async (
+    date: string,
+    time: ShiftTime,
+    excludeShopperId?: string
+): Promise<number> => {
+    // Import supabase dynamically to avoid circular dependencies
+    const { supabase } = await import('../supabaseClient');
+
+    // A. Find all shoppers who have this date as their First Working Day
+    const { data: shoppers, error: shoppersError } = await supabase
+        .from('shoppers')
+        .select('id')
+        .eq('details->>firstWorkingDay', date);
+
+    if (shoppersError || !shoppers || shoppers.length === 0) {
+        return 0;
+    }
+
+    // Filter out the current shopper if we're editing (to avoid counting them twice)
+    const shopperIds = shoppers
+        .map(s => s.id)
+        .filter(id => !excludeShopperId || id !== excludeShopperId);
+
+    if (shopperIds.length === 0) {
+        return 0;
+    }
+
+    // B. Count how many of these shoppers have a shift on this date and time
+    const { count, error: countError } = await supabase
+        .from('shifts')
+        .select('*', { count: 'exact', head: true })
+        .in('shopper_id', shopperIds)
+        .eq('date', date)
+        .eq('time', time);
+
+    if (countError) {
+        console.error('Error counting FWD workers:', countError);
+        return 0;
+    }
+
+    return count || 0;
+};

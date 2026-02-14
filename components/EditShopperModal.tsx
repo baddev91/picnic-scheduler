@@ -6,6 +6,7 @@ import { supabase } from '../supabaseClient';
 import { Button } from './Button';
 import { ShopperRecord, ShiftTime, ShiftType } from '../types';
 import { SHIFT_TIMES } from '../constants';
+import { countFirstWorkingDayWorkers } from '../utils/validation';
 
 interface EditShopperModalProps {
   shopper: ShopperRecord | null;
@@ -113,6 +114,33 @@ export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onC
 
   const handleSaveShiftConfiguration = async () => {
     try {
+        // --- VALIDATION: Check First Working Day Capacity ---
+        // For each shift that matches the shopper's First Working Day, check if adding/modifying
+        // this shift would exceed the 5 FWD workers per shift limit
+        const firstWorkingDay = details.firstWorkingDay || shopper.details?.firstWorkingDay;
+
+        if (firstWorkingDay) {
+            // Find shifts that match the First Working Day
+            const fwdShifts = shifts.filter(s => s.date === firstWorkingDay);
+
+            for (const fwdShift of fwdShifts) {
+                // Count existing FWD workers for this date/time (excluding current shopper)
+                const currentCount = await countFirstWorkingDayWorkers(
+                    fwdShift.date,
+                    fwdShift.time,
+                    shopper.id
+                );
+
+                if (currentCount >= 5) {
+                    alert(
+                        `Cannot save: The shift on ${fwdShift.date} at ${fwdShift.time} already has 5 first-day workers. ` +
+                        `Please choose a different time or date for the first working day shift.`
+                    );
+                    return;
+                }
+            }
+        }
+
         const updates = shifts.map(s => ({
             id: s.id,
             date: s.date,
@@ -128,7 +156,7 @@ export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onC
 
         if (onRefresh) onRefresh();
         else onUpdate({ ...shopper, shifts: shifts });
-        
+
         setHasUnsavedShiftChanges(false);
         alert("Shift configuration saved successfully!");
     } catch (e: any) {
@@ -157,6 +185,32 @@ export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onC
   const handleAddShift = async () => {
     if (!newShiftDate) return;
     try {
+        // --- VALIDATION: Check First Working Day Capacity ---
+        // If this new shift would become the First Working Day (earliest shift),
+        // or if it matches the current First Working Day, check the 5 FWD workers limit
+        const firstWorkingDay = details.firstWorkingDay || shopper.details?.firstWorkingDay;
+
+        // Check if the new shift date would be the new FWD (earliest date)
+        const allShiftDates = [...shifts.map(s => s.date), newShiftDate].sort();
+        const wouldBeNewFWD = allShiftDates[0] === newShiftDate;
+
+        // If this shift matches the current or would-be FWD, validate capacity
+        if ((firstWorkingDay && newShiftDate === firstWorkingDay) || wouldBeNewFWD) {
+            const currentCount = await countFirstWorkingDayWorkers(
+                newShiftDate,
+                newShiftTime,
+                shopper.id
+            );
+
+            if (currentCount >= 5) {
+                alert(
+                    `Cannot add shift: The shift on ${newShiftDate} at ${newShiftTime} already has 5 first-day workers. ` +
+                    `Please choose a different time or date.`
+                );
+                return;
+            }
+        }
+
         const payload = {
             date: newShiftDate,
             time: newShiftTime,
@@ -165,19 +219,19 @@ export const EditShopperModal: React.FC<EditShopperModalProps> = ({ shopper, onC
         };
         const { data: newShift, error } = await supabase.from('shifts').insert([payload]).select().single();
         if (error) throw error;
-        
+
         const updatedShifts = [...shifts, newShift];
         setShifts(updatedShifts);
-        
+
         // Perform FWD Sync
         await syncFWDWithShifts(updatedShifts);
 
         if (onRefresh) {
-            onRefresh(); 
+            onRefresh();
         } else {
             onUpdate({ ...shopper, shifts: updatedShifts });
         }
-        
+
         resetShiftForm();
     } catch (e: any) {
         alert("Error adding shift: " + e.message);
