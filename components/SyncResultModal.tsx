@@ -112,21 +112,26 @@ export const SyncResultModal: React.FC<SyncResultModalProps> = ({ result, onClos
                 </div>
             )}
 
-            {/* Debug Info - Always show if present */}
-            {result.debugInfo && result.debugInfo.length > 0 && (
-                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-xl p-4 text-left shadow-sm">
-                    <p className="font-black text-sm mb-3 flex items-center gap-2 text-blue-900">
-                        <AlertCircle className="w-4 h-4" /> Sync Details
-                    </p>
-                    <div className="space-y-1.5 text-xs text-blue-900 max-h-64 overflow-y-auto bg-white/50 rounded-lg p-3">
-                        {result.debugInfo.map((info, idx) => (
+            {/* Debug Info - ALWAYS SHOW (for testing) */}
+            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-xl p-4 text-left shadow-sm">
+                <p className="font-black text-sm mb-3 flex items-center gap-2 text-blue-900">
+                    <AlertCircle className="w-4 h-4" /> Sync Details
+                </p>
+                <div className="space-y-1.5 text-xs text-blue-900 max-h-64 overflow-y-auto bg-white/50 rounded-lg p-3">
+                    {result.debugInfo && result.debugInfo.length > 0 ? (
+                        result.debugInfo.map((info, idx) => (
                             <div key={idx} className="leading-relaxed font-medium">
                                 {info}
                             </div>
-                        ))}
-                    </div>
+                        ))
+                    ) : (
+                        <div className="text-red-600 font-bold">
+                            ⚠️ DEBUG INFO NOT AVAILABLE<br/>
+                            debugInfo is: {result.debugInfo ? `array with ${result.debugInfo.length} items` : 'null/undefined'}
+                        </div>
+                    )}
                 </div>
-            )}
+            </div>
         </div>
 
         {/* Footer */}
