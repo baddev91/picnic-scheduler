@@ -51,13 +51,16 @@ export const SyncResultModal: React.FC<SyncResultModalProps> = ({ result, onClos
             {/* Title Section */}
             <div>
                 <h3 className="text-2xl font-black text-gray-900 leading-tight">
-                    {result.isError ? 'Sync Failed' : 
-                     hasChanges ? 'Sync Complete!' : 'Up to Date'}
+                    {result.isError ? 'Sync Failed' :
+                     hasChanges ? 'Sync Complete! ✨' : 'Up to Date'}
                 </h3>
                 <p className="text-sm text-gray-500 mt-2 font-medium">
-                    {result.isError ? result.errorMessage : 
-                     hasChanges ? 'The database has been successfully updated.' : 
+                    {result.isError ? result.errorMessage :
+                     hasChanges ? 'The database has been successfully updated.' :
                      'No new changes found in the spreadsheet.'}
+                </p>
+                <p className="text-xs text-blue-600 mt-1 font-bold">
+                    🔄 Build v2.0 - Debug Enabled
                 </p>
             </div>
 
