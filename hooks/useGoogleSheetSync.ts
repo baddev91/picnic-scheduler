@@ -299,14 +299,22 @@ export const useGoogleSheetSync = () => {
       modules: row[33], // AH
     }));
 
-    // Track which shoppers are in the sheet (by ID)
-    const shoppersInSheet = new Set<string>();
+    // Track which shoppers are in the sheet (by PN Number)
+    // PN Number is unique and more reliable than name matching
+    const pnNumbersInSheet = new Set<string>();
 
     for (const rowData of sheetData) {
       if (!rowData.name) continue;
 
-      // Match shopper (Case Insensitive) against DB Data
-      const shopper = referenceShoppers.find(s => s.name.trim().toLowerCase() === rowData.name.toLowerCase());
+      // Track this shopper's PN Number as being in the sheet
+      if (rowData.pnNumber) {
+        pnNumbersInSheet.add(rowData.pnNumber.trim().toUpperCase());
+      }
+
+      // Match shopper by PN Number (more reliable) or fallback to name
+      const shopper = rowData.pnNumber
+        ? referenceShoppers.find(s => s.details?.pnNumber?.trim().toUpperCase() === rowData.pnNumber.trim().toUpperCase())
+        : referenceShoppers.find(s => s.name.trim().toLowerCase() === rowData.name.toLowerCase());
 
       const performanceMetrics = {
         activeWeeks: rowData.activeWeeks ? Number(rowData.activeWeeks) : undefined,
@@ -332,8 +340,6 @@ export const useGoogleSheetSync = () => {
 
       if (shopper) {
         // --- UPDATE EXISTING ---
-        shoppersInSheet.add(shopper.id); // Track this shopper as being in the sheet
-
         const currentDetails = shopper.details || {};
         const currentPerformance = currentDetails.performance || {};
 
@@ -402,9 +408,12 @@ export const useGoogleSheetSync = () => {
     const { data: allShoppers } = await supabase.from('shoppers').select('id, details');
 
     if (allShoppers) {
-        const shoppersToReset = allShoppers.filter(s =>
-            s.details?.isOnSheet === true && !shoppersInSheet.has(s.id)
-        );
+        const shoppersToReset = allShoppers.filter(s => {
+            const isMarkedOnSheet = s.details?.isOnSheet === true;
+            const pnNumber = s.details?.pnNumber?.trim().toUpperCase();
+            const isInCurrentSheet = pnNumber && pnNumbersInSheet.has(pnNumber);
+            return isMarkedOnSheet && !isInCurrentSheet;
+        });
 
         if (shoppersToReset.length > 0) {
             console.log(`Resetting isOnSheet for ${shoppersToReset.length} shoppers not in current sheet`);
