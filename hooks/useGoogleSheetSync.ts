@@ -250,21 +250,6 @@ export const useGoogleSheetSync = () => {
 
     const referenceShoppers = dbShoppers || [];
 
-    // RESET isOnSheet flag for ALL shoppers before sync
-    // This ensures only shoppers currently in the sheet will have isOnSheet=true
-    const resetPromises = referenceShoppers.map(shopper => {
-        if (shopper.details?.isOnSheet === true) {
-            const updatedDetails = { ...shopper.details, isOnSheet: false };
-            return supabase
-                .from('shoppers')
-                .update({ details: updatedDetails })
-                .eq('id', shopper.id);
-        }
-        return Promise.resolve();
-    });
-
-    await Promise.all(resetPromises);
-
     // --- DASHBOARD Z37 MAPPING ---
     // Column Mapping based on Spreadsheet Screenshot:
     // A=0, B=1, C=2 (Name), ...
@@ -288,7 +273,7 @@ export const useGoogleSheetSync = () => {
     const sheetData = rows.map(row => ({
       pnNumber: row[1] ? String(row[1]).trim() : '',
       name: row[2] ? String(row[2]).trim() : '',
-      
+
       // General
       activeWeeks: row[6],
       shiftsCount: row[10],
@@ -300,7 +285,7 @@ export const useGoogleSheetSync = () => {
       absenceAA: row[15],
       nsnc: row[16],
       nswc: row[17],
-      
+
       // Behavior
       behaviorScore: row[18],
       compliments: row[19],
@@ -313,6 +298,9 @@ export const useGoogleSheetSync = () => {
       reps: row[32], // AG
       modules: row[33], // AH
     }));
+
+    // Track which shoppers are in the sheet (by ID)
+    const shoppersInSheet = new Set<string>();
 
     for (const rowData of sheetData) {
       if (!rowData.name) continue;
@@ -344,6 +332,8 @@ export const useGoogleSheetSync = () => {
 
       if (shopper) {
         // --- UPDATE EXISTING ---
+        shoppersInSheet.add(shopper.id); // Track this shopper as being in the sheet
+
         const currentDetails = shopper.details || {};
         const currentPerformance = currentDetails.performance || {};
 
@@ -353,7 +343,7 @@ export const useGoogleSheetSync = () => {
           isOnSheet: true, // MARK AS ON SHEET
           performance: {
             ...currentPerformance,
-            ...performanceMetrics 
+            ...performanceMetrics
           }
         };
 
@@ -404,6 +394,23 @@ export const useGoogleSheetSync = () => {
             setIsSyncing(false);
             return;
         }
+    }
+
+    // RESET isOnSheet flag for shoppers NOT in the current sheet
+    // This ensures only shoppers currently in the sheet will have isOnSheet=true
+    const shoppersToReset = referenceShoppers.filter(s =>
+        s.details?.isOnSheet === true && !shoppersInSheet.has(s.id)
+    );
+
+    if (shoppersToReset.length > 0) {
+        const resetPromises = shoppersToReset.map(shopper => {
+            const updatedDetails = { ...shopper.details, isOnSheet: false };
+            return supabase
+                .from('shoppers')
+                .update({ details: updatedDetails })
+                .eq('id', shopper.id);
+        });
+        await Promise.all(resetPromises);
     }
 
     setIsSyncing(false);
