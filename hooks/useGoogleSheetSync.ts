@@ -234,7 +234,7 @@ export const useGoogleSheetSync = () => {
 
     // CRITICAL FIX: Fetch fresh DB data
     const { data: dbShoppers, error: fetchError } = await supabase.from('shoppers').select('*');
-    
+
     if (fetchError) {
         setSyncResult({
             isOpen: true,
@@ -249,6 +249,21 @@ export const useGoogleSheetSync = () => {
     }
 
     const referenceShoppers = dbShoppers || [];
+
+    // RESET isOnSheet flag for ALL shoppers before sync
+    // This ensures only shoppers currently in the sheet will have isOnSheet=true
+    const resetPromises = referenceShoppers.map(shopper => {
+        if (shopper.details?.isOnSheet === true) {
+            const updatedDetails = { ...shopper.details, isOnSheet: false };
+            return supabase
+                .from('shoppers')
+                .update({ details: updatedDetails })
+                .eq('id', shopper.id);
+        }
+        return Promise.resolve();
+    });
+
+    await Promise.all(resetPromises);
 
     // --- DASHBOARD Z37 MAPPING ---
     // Column Mapping based on Spreadsheet Screenshot:
