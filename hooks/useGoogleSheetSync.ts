@@ -398,19 +398,25 @@ export const useGoogleSheetSync = () => {
 
     // RESET isOnSheet flag for shoppers NOT in the current sheet
     // This ensures only shoppers currently in the sheet will have isOnSheet=true
-    const shoppersToReset = referenceShoppers.filter(s =>
-        s.details?.isOnSheet === true && !shoppersInSheet.has(s.id)
-    );
+    // We need to fetch ALL shoppers again to get the current state after updates
+    const { data: allShoppers } = await supabase.from('shoppers').select('id, details');
 
-    if (shoppersToReset.length > 0) {
-        const resetPromises = shoppersToReset.map(shopper => {
-            const updatedDetails = { ...shopper.details, isOnSheet: false };
-            return supabase
-                .from('shoppers')
-                .update({ details: updatedDetails })
-                .eq('id', shopper.id);
-        });
-        await Promise.all(resetPromises);
+    if (allShoppers) {
+        const shoppersToReset = allShoppers.filter(s =>
+            s.details?.isOnSheet === true && !shoppersInSheet.has(s.id)
+        );
+
+        if (shoppersToReset.length > 0) {
+            console.log(`Resetting isOnSheet for ${shoppersToReset.length} shoppers not in current sheet`);
+            const resetPromises = shoppersToReset.map(shopper => {
+                const updatedDetails = { ...shopper.details, isOnSheet: false };
+                return supabase
+                    .from('shoppers')
+                    .update({ details: updatedDetails })
+                    .eq('id', shopper.id);
+            });
+            await Promise.all(resetPromises);
+        }
     }
 
     setIsSyncing(false);
