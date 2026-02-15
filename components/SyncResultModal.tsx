@@ -10,6 +10,7 @@ export interface SyncResultData {
   totalRowsProcessed: number;
   isError?: boolean;
   errorMessage?: string;
+  debugInfo?: string[];
 }
 
 interface SyncResultModalProps {
@@ -107,6 +108,20 @@ export const SyncResultModal: React.FC<SyncResultModalProps> = ({ result, onClos
                         <li>We checked <strong>{result.totalRowsProcessed} rows</strong>.</li>
                         <li>Verify "Name" is in Column C (Index 2).</li>
                         <li>Ensure names in sheet match database exactly.</li>
+                    </ul>
+                </div>
+            )}
+
+            {/* Debug Info - Always show if present */}
+            {result.debugInfo && result.debugInfo.length > 0 && (
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-left text-xs text-blue-900 max-h-48 overflow-y-auto">
+                    <p className="font-bold mb-2 flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3" /> Debug Info:
+                    </p>
+                    <ul className="space-y-1 font-mono text-[10px]">
+                        {result.debugInfo.map((info, idx) => (
+                            <li key={idx} className="border-b border-blue-100 pb-1">{info}</li>
+                        ))}
                     </ul>
                 </div>
             )}

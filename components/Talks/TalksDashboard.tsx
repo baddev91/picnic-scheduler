@@ -192,7 +192,7 @@ export const TalksDashboard: React.FC<TalksDashboardProps> = ({ onBack }) => {
   };
 
   const filteredShoppers = shoppers.filter(s => {
-      const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                             s.details?.pnNumber?.toLowerCase().includes(searchTerm.toLowerCase());
       if (!matchesSearch) return false;
       return viewMode === 'SHEET' ? s.details?.isOnSheet === true : true;

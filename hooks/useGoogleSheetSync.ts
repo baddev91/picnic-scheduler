@@ -302,6 +302,7 @@ export const useGoogleSheetSync = () => {
     // Track which shoppers are in the sheet (by PN Number)
     // PN Number is unique and more reliable than name matching
     const pnNumbersInSheet = new Set<string>();
+    const debugInfo: string[] = [];
 
     for (const rowData of sheetData) {
       if (!rowData.name) continue;
@@ -309,6 +310,9 @@ export const useGoogleSheetSync = () => {
       // Track this shopper's PN Number as being in the sheet
       if (rowData.pnNumber) {
         pnNumbersInSheet.add(rowData.pnNumber.trim().toUpperCase());
+        debugInfo.push(`✓ Tracked: ${rowData.name} (${rowData.pnNumber})`);
+      } else {
+        debugInfo.push(`⚠ No PN: ${rowData.name}`);
       }
 
       // Match shopper by PN Number (more reliable) or fallback to name
@@ -405,18 +409,29 @@ export const useGoogleSheetSync = () => {
     // RESET isOnSheet flag for shoppers NOT in the current sheet
     // This ensures only shoppers currently in the sheet will have isOnSheet=true
     // We need to fetch ALL shoppers again to get the current state after updates
-    const { data: allShoppers } = await supabase.from('shoppers').select('id, details');
+    debugInfo.push(`\n--- RESET PHASE ---`);
+    debugInfo.push(`PN Numbers in sheet: ${pnNumbersInSheet.size}`);
+
+    const { data: allShoppers } = await supabase.from('shoppers').select('id, name, details');
 
     if (allShoppers) {
+        debugInfo.push(`Total shoppers in DB: ${allShoppers.length}`);
+
         const shoppersToReset = allShoppers.filter(s => {
             const isMarkedOnSheet = s.details?.isOnSheet === true;
             const pnNumber = s.details?.pnNumber?.trim().toUpperCase();
             const isInCurrentSheet = pnNumber && pnNumbersInSheet.has(pnNumber);
+
+            if (isMarkedOnSheet && !isInCurrentSheet) {
+                debugInfo.push(`❌ Reset: ${s.name} (${pnNumber || 'NO PN'})`);
+            }
+
             return isMarkedOnSheet && !isInCurrentSheet;
         });
 
+        debugInfo.push(`Shoppers to reset: ${shoppersToReset.length}`);
+
         if (shoppersToReset.length > 0) {
-            console.log(`Resetting isOnSheet for ${shoppersToReset.length} shoppers not in current sheet`);
             const resetPromises = shoppersToReset.map(shopper => {
                 const updatedDetails = { ...shopper.details, isOnSheet: false };
                 return supabase
@@ -426,17 +441,32 @@ export const useGoogleSheetSync = () => {
             });
             await Promise.all(resetPromises);
         }
+
+        // Final verification
+        const { data: finalCheck } = await supabase
+            .from('shoppers')
+            .select('name, details')
+            .eq('details->>isOnSheet', 'true');
+
+        debugInfo.push(`\n--- FINAL CHECK ---`);
+        debugInfo.push(`Shoppers with isOnSheet=true: ${finalCheck?.length || 0}`);
+        if (finalCheck) {
+            finalCheck.forEach(s => {
+                debugInfo.push(`✓ ${s.name} (${s.details?.pnNumber || 'NO PN'})`);
+            });
+        }
     }
 
     setIsSyncing(false);
-    
+
     // SUCCESS MODAL STATE
     setSyncResult({
         isOpen: true,
         updatedCount,
         createdCount,
         totalRowsProcessed: rows.length,
-        isError: false
+        isError: false,
+        debugInfo: debugInfo
     });
 
     if (onCompleteRef) onCompleteRef();
