@@ -614,10 +614,10 @@ export default function App() {
             />
         )}
 
-        {/* NEW TALKS SECTION */}
-        {mode === AppMode.TALKS_DASHBOARD && (
-            <TalksDashboard 
-                onBack={() => setMode(AppMode.ADMIN)} 
+        {/* ONBOARDING SECTION */}
+        {mode === AppMode.ONBOARDING_DASHBOARD && (
+            <TalksDashboard
+                onBack={() => setMode(AppMode.ADMIN)}
             />
         )}
         
@@ -669,7 +669,7 @@ export default function App() {
                           superAdminPin={superAdminPin} updateSuperAdminPin={updateSuperAdminPin}
                           frozenPin={frozenPin} updateFrozenPin={updateFrozenPin}
                           onGoToFrozen={() => setMode(AppMode.FROZEN_LIST)}
-                          onGoToTalks={() => setMode(AppMode.TALKS_DASHBOARD)}
+                          onGoToTalks={() => setMode(AppMode.ONBOARDING_DASHBOARD)}
                           staffList={staffList} // Pass staff list
                           saveStaffList={saveStaffListToSupabase} // Pass save handler
                       />

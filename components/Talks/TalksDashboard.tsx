@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../supabaseClient';
 import { ShopperRecord } from '../../types';
-import { Search, MessageSquare, ArrowLeft, RefreshCw, User, CalendarCheck, CloudDownload, Filter, Layers, X, Settings2, Check } from 'lucide-react';
+import { Search, MessageSquare, ArrowLeft, RefreshCw, User, CalendarCheck, CloudDownload, Filter, Layers, X, Settings2, Check, Users } from 'lucide-react';
 import { Button } from '../Button';
 import { TalkModal } from './TalkModal';
 import { useGoogleSheetSync } from '../../hooks/useGoogleSheetSync';
@@ -32,8 +32,8 @@ const AVAILABLE_COLUMNS = [
     { id: 'PICKING_SCORE', label: 'Pick %', group: 'Performance' },
     { id: 'REPS', label: 'Reps', group: 'Performance' },
     { id: 'MODULES', label: 'Modules', group: 'Performance' },
-    { id: 'PIPELINE', label: 'Pipeline', group: 'Talks' },
-    { id: 'TODAY', label: 'Checked In', group: 'Talks' },
+    { id: 'PIPELINE', label: 'Pipeline', group: 'Onboarding' },
+    { id: 'TODAY', label: 'Checked In', group: 'Onboarding' },
 ];
 
 const DEFAULT_COLUMNS = ['LATE', 'ABSENCE', 'SPEED_AM', 'PIPELINE', 'TODAY'];
@@ -133,14 +133,14 @@ export const TalksDashboard: React.FC<TalksDashboardProps> = ({ onBack }) => {
   
   // Columns State - Persisted in LocalStorage
   const [visibleColumns, setVisibleColumns] = useState<string[]>(() => {
-      const saved = localStorage.getItem('talks_visible_columns');
+      const saved = localStorage.getItem('onboarding_visible_columns');
       return saved ? JSON.parse(saved) : DEFAULT_COLUMNS;
   });
 
   const { isSyncing, syncShoppers, syncResult, closeSyncModal } = useGoogleSheetSync();
 
   useEffect(() => {
-      localStorage.setItem('talks_visible_columns', JSON.stringify(visibleColumns));
+      localStorage.setItem('onboarding_visible_columns', JSON.stringify(visibleColumns));
   }, [visibleColumns]);
 
   useEffect(() => {
@@ -206,10 +206,10 @@ export const TalksDashboard: React.FC<TalksDashboardProps> = ({ onBack }) => {
             <div className="max-w-7xl mx-auto flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
                 <div className="flex items-center gap-3 w-full lg:w-auto">
                     <button onClick={onBack} className="p-2 hover:bg-gray-100 rounded-full transition-colors lg:hidden"><ArrowLeft className="w-5 h-5 text-gray-500" /></button>
-                    <div className="p-2 bg-blue-600 text-white rounded-lg hidden md:block shadow-md"><MessageSquare className="w-6 h-6" /></div>
+                    <div className="p-2 bg-indigo-600 text-white rounded-lg hidden md:block shadow-md"><Users className="w-6 h-6" /></div>
                     <div>
-                        <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none">Shopper Talks</h1>
-                        <p className="text-xs text-gray-500 font-medium mt-0.5">Dynamic Performance Dashboard</p>
+                        <h1 className="text-xl font-black text-gray-900 tracking-tight leading-none">Shopper Onboarding</h1>
+                        <p className="text-xs text-gray-500 font-medium mt-0.5">Track Progress & Performance</p>
                     </div>
                 </div>
 
@@ -236,12 +236,12 @@ export const TalksDashboard: React.FC<TalksDashboardProps> = ({ onBack }) => {
                                 <div className="absolute right-0 mt-3 w-64 bg-white rounded-2xl shadow-2xl border border-gray-200 z-50 p-4 animate-in slide-in-from-top-2">
                                     <h4 className="text-[10px] font-black uppercase text-gray-400 tracking-widest mb-4 border-b pb-2">Toggle Columns</h4>
                                     <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                                        {['Attendance', 'Discipline', 'Performance', 'Talks'].map(group => (
+                                        {['Attendance', 'Discipline', 'Performance', 'Onboarding'].map(group => (
                                             <div key={group} className="space-y-1.5">
                                                 <div className="text-[9px] font-bold text-blue-600/60 uppercase">{group}</div>
                                                 {AVAILABLE_COLUMNS.filter(c => c.group === group).map(col => (
-                                                    <button 
-                                                        key={col.id} 
+                                                    <button
+                                                        key={col.id}
                                                         onClick={() => toggleColumn(col.id)}
                                                         className="w-full flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-gray-50 transition-colors"
                                                     >

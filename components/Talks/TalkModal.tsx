@@ -13,7 +13,7 @@ interface TalkModalProps {
 }
 
 const TALK_TYPES: { id: TalkType; label: string; color: string }[] = [
-    { id: 'WELCOME', label: 'Welcome Talk', color: 'bg-green-100 text-green-700' },
+    { id: 'WELCOME', label: 'Welcome Session', color: 'bg-green-100 text-green-700' },
     { id: 'MID_TERM', label: 'Mid-Term Eval', color: 'bg-blue-100 text-blue-700' },
     { id: 'PROMOTION', label: 'Promotion', color: 'bg-purple-100 text-purple-700' },
     { id: 'END_TRIAL', label: 'End of Trial', color: 'bg-orange-100 text-orange-700' },
@@ -219,11 +219,11 @@ export const TalkModal: React.FC<TalkModalProps> = ({ shopper, onClose, onUpdate
                     Checked In
                 </button>
                 <div className="w-px h-6 bg-gray-300 mx-1"></div>
-                <button 
+                <button
                     onClick={() => { setActiveTab('LOG_TALK'); setNewLogType('WELCOME'); }}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 text-white shadow-blue-200 shadow-md hover:bg-blue-700 active:scale-95 transition-all whitespace-nowrap ml-auto md:ml-0"
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 text-white shadow-indigo-200 shadow-md hover:bg-indigo-700 active:scale-95 transition-all whitespace-nowrap ml-auto md:ml-0"
                 >
-                    <MessageSquare className="w-4 h-4" /> Log Talk
+                    <MessageSquare className="w-4 h-4" /> Log Session
                 </button>
                 {hasMetricChanges && (
                     <button onClick={saveMetrics} className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-gray-900 text-white shadow-lg animate-in zoom-in ml-auto">
@@ -237,17 +237,17 @@ export const TalkModal: React.FC<TalkModalProps> = ({ shopper, onClose, onUpdate
                 
                 {/* TABS */}
                 <div className="flex bg-white px-6 sticky top-0 z-20 shadow-sm">
-                    <button 
+                    <button
                         onClick={() => setActiveTab('OVERVIEW')}
-                        className={`py-4 text-sm font-bold border-b-2 px-4 transition-colors ${activeTab === 'OVERVIEW' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
+                        className={`py-4 text-sm font-bold border-b-2 px-4 transition-colors ${activeTab === 'OVERVIEW' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
                     >
                         Dashboard
                     </button>
-                    <button 
+                    <button
                         onClick={() => setActiveTab('LOG_TALK')}
-                        className={`py-4 text-sm font-bold border-b-2 px-4 transition-colors ${activeTab === 'LOG_TALK' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
+                        className={`py-4 text-sm font-bold border-b-2 px-4 transition-colors ${activeTab === 'LOG_TALK' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
                     >
-                        Talk History
+                        Session History
                     </button>
                 </div>
 
@@ -339,15 +339,15 @@ export const TalkModal: React.FC<TalkModalProps> = ({ shopper, onClose, onUpdate
                                     <h3 className="text-sm font-bold text-gray-800 mb-4">New Entry</h3>
                                     <div className="space-y-4">
                                         <div>
-                                            <label className="block text-xs font-bold text-gray-500 mb-2 uppercase">Talk Type</label>
+                                            <label className="block text-xs font-bold text-gray-500 mb-2 uppercase">Session Type</label>
                                             <div className="grid grid-cols-2 gap-2">
                                                 {TALK_TYPES.map(t => (
                                                     <button
                                                         key={t.id}
                                                         onClick={() => setNewLogType(t.id)}
                                                         className={`p-2 rounded-lg text-[10px] font-bold border text-center transition-all ${
-                                                            newLogType === t.id 
-                                                            ? `ring-2 ring-offset-1 ring-blue-500 ${t.color} border-transparent` 
+                                                            newLogType === t.id
+                                                            ? `ring-2 ring-offset-1 ring-indigo-500 ${t.color} border-transparent`
                                                             : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'
                                                         }`}
                                                     >
@@ -358,27 +358,27 @@ export const TalkModal: React.FC<TalkModalProps> = ({ shopper, onClose, onUpdate
                                         </div>
 
                                         <div>
-                                            <label className="block text-xs font-bold text-gray-500 mb-2 uppercase">Lead Shopper</label>
-                                            <input 
+                                            <label className="block text-xs font-bold text-gray-500 mb-2 uppercase">Lead Staff Member</label>
+                                            <input
                                                 value={leadName}
                                                 onChange={(e) => setLeadName(e.target.value)}
-                                                placeholder="Name..."
-                                                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold"
+                                                placeholder="Staff name..."
+                                                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-bold"
                                             />
                                         </div>
 
                                         <div>
                                             <label className="block text-xs font-bold text-gray-500 mb-2 uppercase">Notes</label>
-                                            <textarea 
+                                            <textarea
                                                 value={newLogNotes}
                                                 onChange={(e) => setNewLogNotes(e.target.value)}
-                                                placeholder="Summary of conversation..."
-                                                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm min-h-[120px] resize-none font-medium"
+                                                placeholder="Summary of session..."
+                                                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm min-h-[120px] resize-none font-medium"
                                             />
                                         </div>
 
-                                        <Button onClick={submitLog} fullWidth className="py-3 text-sm bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-100">
-                                            <Send className="w-4 h-4 mr-2" /> Save Log
+                                        <Button onClick={submitLog} fullWidth className="py-3 text-sm bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-100">
+                                            <Send className="w-4 h-4 mr-2" /> Save Session
                                         </Button>
                                     </div>
                                 </div>
@@ -386,10 +386,10 @@ export const TalkModal: React.FC<TalkModalProps> = ({ shopper, onClose, onUpdate
 
                             {/* RIGHT: HISTORY */}
                             <div className="lg:col-span-2">
-                                <h3 className="text-sm font-bold text-gray-800 mb-4 px-2">History ({logs.length})</h3>
+                                <h3 className="text-sm font-bold text-gray-800 mb-4 px-2">Session History ({logs.length})</h3>
                                 {logs.length === 0 ? (
                                     <div className="text-center py-12 text-gray-400 border-2 border-dashed border-gray-200 rounded-2xl">
-                                        <p className="text-sm">No talks recorded yet.</p>
+                                        <p className="text-sm">No sessions recorded yet.</p>
                                     </div>
                                 ) : (
                                     <div className="space-y-4">

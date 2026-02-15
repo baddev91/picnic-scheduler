@@ -238,11 +238,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
           </div>
 
-          {/* NEW LAYOUT: SUBMISSIONS FOCUSED */}
+          {/* NEW LAYOUT: PRIMARY ACTIONS */}
           <div className="space-y-6">
-              
-              {/* PRIMARY ACTION: SUBMISSIONS */}
-              <button 
+
+              {/* PRIMARY ACTION: RECRUITMENT */}
+              <button
                 onClick={() => setAdminWizardStep(AdminWizardStep.VIEW_SUBMISSIONS)}
                 className="group relative w-full bg-white border-2 border-gray-100 hover:border-blue-500 rounded-3xl p-6 sm:p-8 text-left transition-all hover:shadow-xl overflow-hidden"
               >
@@ -268,9 +268,36 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-blue-50 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
               </button>
 
+              {/* PRIMARY ACTION: ONBOARDING */}
+              <button
+                onClick={onGoToTalks}
+                className="group relative w-full bg-white border-2 border-gray-100 hover:border-indigo-500 rounded-3xl p-6 sm:p-8 text-left transition-all hover:shadow-xl overflow-hidden"
+              >
+                  <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                      <div className="flex items-center gap-5">
+                          <div className="bg-indigo-50 w-16 h-16 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300 border border-indigo-100 group-hover:bg-indigo-600 group-hover:border-indigo-600">
+                              <Users className="w-8 h-8 sm:w-10 sm:h-10 text-indigo-600 group-hover:text-white transition-colors" />
+                          </div>
+                          <div>
+                              <h3 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight group-hover:text-indigo-700 transition-colors">
+                                  ONBOARDING
+                              </h3>
+                              <p className="text-gray-500 text-sm sm:text-base font-medium mt-1 max-w-xl">
+                                  Track shopper progress, log check-ins, monitor performance metrics, and manage onboarding sessions.
+                              </p>
+                          </div>
+                      </div>
+                      <div className="bg-gray-50 rounded-full p-3 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-all self-end md:self-center">
+                          <ArrowRight className="w-6 h-6 text-gray-400 group-hover:text-indigo-600" />
+                      </div>
+                  </div>
+                  {/* Subtle Background Decoration */}
+                  <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-indigo-50 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
+              </button>
+
               {/* SECONDARY ACTIONS GRID */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+
                   {/* 1. WEEKLY PATTERN (LOCKED for Regular Admins) */}
                   <div className={`flex flex-col h-full bg-white border border-gray-200 rounded-2xl overflow-hidden transition-all group ${isSuperAdmin ? 'hover:border-red-500 hover:shadow-lg' : 'opacity-80'}`}>
                       <div className={`p-5 flex-1 relative z-10 ${isSuperAdmin ? 'cursor-pointer' : 'cursor-not-allowed'}`} onClick={isSuperAdmin ? handleEditPattern : undefined}>
@@ -287,7 +314,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </div>
                       {/* ACTION BUTTONS */}
                       <div className="px-5 pb-4">
-                          <button 
+                          <button
                               onClick={(e) => { e.stopPropagation(); setShowCheatSheet(true); }}
                               className="w-full flex items-center justify-center gap-2 py-2 bg-gray-50 hover:bg-red-50 text-gray-600 hover:text-red-600 rounded-xl text-xs font-bold transition-colors border border-gray-200 hover:border-red-200"
                           >
@@ -296,36 +323,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </div>
                   </div>
 
-                  {/* 2. TALKS (VISIBLE TO ALL, DISABLED FOR REGULAR) */}
-                  <button 
-                    disabled={!isSuperAdmin}
-                    onClick={isSuperAdmin ? onGoToTalks : undefined}
-                    className={`flex flex-col justify-between h-full bg-white border border-gray-200 p-5 rounded-2xl text-left transition-all group relative ${isSuperAdmin ? 'hover:bg-white hover:border-orange-300 hover:border-solid hover:shadow-lg' : 'opacity-60 cursor-not-allowed bg-gray-50'}`}
-                  >
-                      {isSuperAdmin && (
-                          <div className="absolute top-3 right-3">
-                              <span className="bg-yellow-100 text-yellow-800 text-[10px] font-bold px-2 py-1 rounded-full border border-yellow-200 flex items-center gap-1 shadow-sm">
-                                  <Construction className="w-3 h-3" /> WIP
-                              </span>
-                          </div>
-                      )}
-
-                      <div>
-                          <div className="flex items-center justify-between mb-3">
-                              <div className="flex items-center gap-3">
-                                  <div className={`p-2 rounded-lg transition-colors ${isSuperAdmin ? 'bg-orange-50 text-orange-600 group-hover:bg-orange-600 group-hover:text-white' : 'bg-gray-100 text-gray-400'}`}>
-                                      <MessageSquare className="w-5 h-5" />
-                                  </div>
-                                  <h3 className={`font-bold transition-colors ${isSuperAdmin ? 'text-gray-900 group-hover:text-orange-800' : 'text-gray-500'}`}>TALKS</h3>
-                              </div>
-                              {!isSuperAdmin && <Lock className="w-4 h-4 text-gray-400" />}
-                          </div>
-                          <p className="text-xs text-gray-500 font-medium">Logs, Check-ins & Performance.</p>
-                      </div>
-                  </button>
-
-                  {/* 3. BUS SCHEDULE */}
-                  <button 
+                  {/* 2. BUS SCHEDULE */}
+                  <button
                     onClick={() => setAdminWizardStep(AdminWizardStep.BUS_CONFIG)}
                     className="flex flex-col justify-between h-full bg-white border border-gray-200 p-5 rounded-2xl text-left hover:border-purple-500 hover:shadow-lg transition-all group"
                   >
@@ -340,8 +339,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       </div>
                   </button>
 
-                  {/* 4. BOXES CHECK (VISIBLE TO ALL, DISABLED FOR REGULAR) */}
-                  <button 
+                  {/* 3. BOXES CHECK (VISIBLE TO ALL, DISABLED FOR REGULAR) */}
+                  <button
                     disabled={!isSuperAdmin}
                     onClick={() => {}}
                     className={`flex flex-col justify-between h-full bg-white border border-gray-200 p-5 rounded-2xl text-left transition-all group ${isSuperAdmin ? 'hover:border-teal-500 hover:shadow-lg' : 'opacity-60 cursor-not-allowed bg-gray-50'}`}
